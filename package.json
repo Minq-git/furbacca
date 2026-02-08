@@ -4,6 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/nervous_system.js",
+    "dev": "ts-node nervous_system.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
