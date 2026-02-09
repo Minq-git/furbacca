@@ -1,0 +1,8 @@
+node_modules
+dist
+instruction.md
+vision/pi-eyes-gc9a01a/
+.pi_eyes_extract/
+vision/waveshare-lcd-code/
+LCD_Module_RPI_code.7z
+vision/graphics/
