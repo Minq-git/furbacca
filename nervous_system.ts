@@ -3,7 +3,7 @@ import { execSync } from "child_process";
 // BCM GPIO 17 (physical pin 11) and 22 (physical pin 15)
 const HEAD_TOUCH_GPIO = 17;
 const BELLY_TOUCH_GPIO = 22;
-const POLL_MS = 20;
+const POLL_MS = 100;
 
 // Pi 5 uses chip 4 for the 40-pin header; older Pi use chip 0.
 // gpiod 2.x uses: gpioget -c <chip> <line>...
