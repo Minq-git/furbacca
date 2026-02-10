@@ -13,26 +13,23 @@ An AI-powered, Matter-enabled animatronic build based on the 2012 Hasbro Furby, 
 ## 🚀 Getting Started
 
 ### 1. The Vision System (Python)
-Eyes are driven by **vision/eyes.py** (UDP listener on port 5005) using [russhughes/gc9a01py](https://github.com/russhughes/gc9a01py) via a thin CPython compat layer (**vision/machine_compat**). Pinout: **vision/config.h** (GC9A01 240×240, DC=25, RST=27, CS_L=8, CS_R=7). SPI setup: **vision/BOOT_CONFIG.md**.
+Eyes are driven by **vision/eyes.py** (UDP listener on port 5005) using [russhughes/gc9a01py](https://github.com/russhughes/gc9a01py) via a thin CPython compat layer (**vision/machine_compat**). Pinout: **vision/config.h** (GC9A01 240×240, DC=25, RST=27, CS_L=8, CS_R=7). SPI setup: **vision/BOOT_CONFIG.md**. **Pixel format:** eye/iris image uses **big-endian** RGB565 (`>H`) for correct colours; gradient/rainbow use little-endian (`<H`). See **instruction.md** for details.
 
-**Setup:**
+**Setup (manual or one-shot):**
 ```bash
 cd ~/furbacca
-python3 -m venv env
+# One-shot: venv + pip + gc9a01py + Pi_Eyes graphics
+bash scripts/setup-fresh.sh
 source env/bin/activate
-# SPI + GPIO (Raspberry Pi)
-pip install spidev RPi.GPIO
-# Eye image loading
-pip install pillow
-# Fetch gc9a01py driver (pure-Python GC9A01)
-bash scripts/fetch-gc9a01py.sh
 ```
+Or manually: `python3 -m venv env`, `source env/bin/activate`, `pip install spidev RPi.GPIO pillow`, `bash scripts/fetch-gc9a01py.sh`, `bash scripts/fetch-pi-eyes-graphics.sh`.
 
 **Optional env:**  
 - `SWAP_LEFT_RIGHT_SPI=1` — swap which physical display is "left" vs "right".  
 - `EYES_SOLID_COLORS=1` — show only red/blue (no eye image).  
 - `EYES_GRADIENT=1` — show XY gradient on both displays (test pattern, no image file).  
 - `EYES_RAINBOW=1` — show circular rainbow (pinwheel) on both displays (test pattern).
+- `EYES_ANIMATED=1` — **headless animated eyes** (no monitor): iris + moving pupil + blink, driven by PIL; UDP `blink` and `look` with `x`/`y` (-1..1) for pupil target. For smart toys.
 
 **Display test modes (for later testing):**
 ```bash
@@ -44,6 +41,9 @@ EYES_GRADIENT=1 python vision/eyes.py
 
 # Rainbow pinwheel (radial hue by angle)
 EYES_RAINBOW=1 python vision/eyes.py
+
+# Animated eyes (headless: iris + pupil + blink; UDP look x/y)
+EYES_ANIMATED=1 python vision/eyes.py
 ```
 
 **Optional — Pi_Eyes-style image on both eyes:**  
@@ -52,6 +52,15 @@ Copy Adafruit Pi_Eyes graphics so eyes show an image instead of the red/blue tes
 ./scripts/fetch-pi-eyes-graphics.sh
 ```
 Then run eyes as usual; **vision/eyes.py** will use **vision/graphics/iris.jpg** (or **eye.png** if present) on both displays. See **vision/graphics/README.md**.
+
+**Optional — Pi_Eyes (animated eyes on HDMI/fb):**  
+[Adafruit Pi_Eyes](https://github.com/adafruit/Pi_Eyes) renders animated eyes with pi3d. To try it (renders to default display, not the GC9A01s):
+```bash
+bash scripts/setup-pi-eyes.sh
+pip install pi3d adafruit-blinka svg.path Pillow
+cd vision/pi_eyes && python eyes.py
+```
+To drive Furbacca’s GC9A01 displays with Pi_Eyes you’d need a custom fbx2; see **vision/PI_EYES_FURBACCA.md**.
 
 **Run:**
 ```bash
