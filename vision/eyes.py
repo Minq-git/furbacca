@@ -557,23 +557,27 @@ def run_eyes():
         MOVE_DURATION_MIN, MOVE_DURATION_MAX = 0.072, 0.144
         HOLD_DURATION_MAX = 3.0
         # Blink: open 2–5 s, then closed (one duration), then open. Draw: closing = outside-in, opening = inside-out.
-        blink_phase = None  # None (open) | 'closed'
-        draw_closed_outside_in = False  # first closed frame: refresh outside-in
         blit_open_bottom_to_top = False  # first open frame after blink: refresh inside-out
         next_auto_blink = time.monotonic() + random.uniform(2.0, 5.0)  # open 2–5 s between blinks
         ANIM_FPS = 60
         frame_dt = 1.0 / ANIM_FPS
         PUPIL_EASE = 0.48
-        blink_closed_frames = 0   # number of frames to hold closed before opening (1 = open next frame)
         BLINK_DEBOUNCE_S = 0.2
         last_blink_end = 0.0
         last_look_time = 0.0
+        # Two-phase blink like C: closing (2–4 frames) then closed hold (1–2 frames) then open; opening ~2x closing feel via hold
+        blink_phase = None  # None | "closing" | "closed"
+        closing_frames_remaining = 0
+        closed_hold_frames_remaining = 0
+        blink_start_time = 0.0
+        CLOSING_FRAMES_MIN, CLOSING_FRAMES_MAX = 2, 4
+        CLOSED_HOLD_FRAMES_MIN, CLOSED_HOLD_FRAMES_MAX = 1, 2
 
         def do_blink():
-            nonlocal blink_phase, draw_closed_outside_in, blink_closed_frames
-            blink_phase = "closed"
-            blink_closed_frames = 0
-            draw_closed_outside_in = True
+            nonlocal blink_phase, closing_frames_remaining, blink_start_time
+            blink_phase = "closing"
+            closing_frames_remaining = random.randint(CLOSING_FRAMES_MIN, CLOSING_FRAMES_MAX)
+            blink_start_time = time.monotonic()
 
         while True:
             now = time.monotonic()
@@ -601,18 +605,24 @@ def run_eyes():
                 except json.JSONDecodeError:
                     pass
 
-            # Auto blink: stay open 2–5 s then run blink sequence
+            # Auto blink: next time = 3 * last blink duration + 0–4 s (ported from C)
             if blink_phase is None and now >= next_auto_blink:
                 do_blink()
                 next_auto_blink = now + random.uniform(2.0, 5.0)
 
-            # Advance blink phase: after 1 frame of closed, open (frame-based so opening triggers immediately)
-            if blink_phase == "closed":
-                blink_closed_frames += 1
-                if blink_closed_frames > 1:  # drawn closed for 1 frame, now open
+            # Advance blink phase: closing (2–4 frames) -> closed hold (1–2 frames) -> open (inside_out)
+            if blink_phase == "closing":
+                closing_frames_remaining -= 1
+                if closing_frames_remaining <= 0:
+                    blink_phase = "closed"
+                    closed_hold_frames_remaining = random.randint(CLOSED_HOLD_FRAMES_MIN, CLOSED_HOLD_FRAMES_MAX)
+            elif blink_phase == "closed":
+                closed_hold_frames_remaining -= 1
+                if closed_hold_frames_remaining <= 0:
                     blink_phase = None
-                    next_auto_blink = now + random.uniform(2.0, 5.0)
-                    blit_open_bottom_to_top = True  # first open frame: draw inside-out
+                    blit_open_bottom_to_top = True
+                    total_blink_s = now - blink_start_time
+                    next_auto_blink = now + (total_blink_s * 3.0) + random.uniform(0.0, 4.0)
 
             # Map phase to visual state for render
             blink_state = "open" if blink_phase is None else "closed"
@@ -662,16 +672,17 @@ def run_eyes():
             if blit_open_bottom_to_top:
                 _blit_pil_to_both(eye_frame, reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
                 blit_open_bottom_to_top = False
-            else:
-                _blit_pil_to_both(eye_frame, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
-
-            # Blink layer: separate overlay (black + eyelid line). outside_in when closing (first closed frame).
-            if blink_state == "closed":
+            elif blink_state == "closed":
+                # Composite eye + overlay in memory, then one blit (outside_in) so no flicker from two blits with different row orders.
                 overlay = render_blink_overlay()
                 if overlay is not None:
-                    _blit_pil_to_both(overlay, reverse_rows=False, outside_in=draw_closed_outside_in, inside_out=False, partial_rows=None)
-                if draw_closed_outside_in:
-                    draw_closed_outside_in = False
+                    composite = eye_frame.copy()
+                    composite.paste(overlay, (0, 0))
+                    _blit_pil_to_both(composite, reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
+                else:
+                    _blit_pil_to_both(eye_frame, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+            else:
+                _blit_pil_to_both(eye_frame, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
             time.sleep(max(0.0, frame_dt - (time.monotonic() - now)))
         return
 
