@@ -31,7 +31,7 @@ EYES_GRADIENT = os.environ.get("EYES_GRADIENT", "").strip().lower() in ("1", "tr
 EYES_RAINBOW = os.environ.get("EYES_RAINBOW", "").strip().lower() in ("1", "true", "yes")
 # Optional: headless animated eyes (PIL-rendered, no monitor) — iris + pupil + blink
 EYES_ANIMATED = os.environ.get("EYES_ANIMATED", "").strip().lower() in ("1", "true", "yes")
-# Optional: eye configuration — default, human (inverted: bottom=outside), dragon (dragon-*), demon (dragon-* + inverted)
+# Optional: eye configuration — default, human (inverted + smaller iris), dragon (dragon-* + inverted), demon (dragon-* normal)
 _eye_type_raw = os.environ.get("EYE_TYPE", "").strip().lower()
 def get_eye_type():
     if _eye_type_raw in ("human", "dragon", "demon"):
@@ -383,7 +383,7 @@ def _sample_texture_spherical(tex, cx, cy, r_max, x, y, invert_v=False):
 def build_eye_base_sclera_iris():
     """
     Build open-eye base: sclera (background) + iris (circular region), per eye.svg / PI_Eyes.
-    Uses EYE_TYPE: default (normal), human (inverted), dragon (dragon-*), demon (dragon-* + inverted). Cached per eye type.
+    Uses EYE_TYPE: default (normal), human (inverted + smaller iris), dragon (dragon-* + inverted), demon (dragon-* normal). Cached per eye type.
     """
     global _eye_base_sclera_iris_by_type
     eye_type = get_eye_type()
@@ -396,10 +396,12 @@ def build_eye_base_sclera_iris():
     if sclera is None:
         _eye_base_sclera_iris_by_type[eye_type] = load_iris_image(eye_type)  # fallback: iris only
         return _eye_base_sclera_iris_by_type[eye_type]
-    invert_v = eye_type in ("human", "demon")
+    invert_v = eye_type in ("human", "dragon")
+    iris_scale = 0.8 if eye_type in ("human", "dragon") else 1.0
+    sclera_scale = 1.2 if eye_type == "human" else 1.0
     cx, cy = EYE_SIZE // 2, EYE_SIZE // 2
-    R_eye = int((EYE_SIZE // 2) * EYE_LAYER_VIEWPORT_SCALE)
-    iris_r_scaled = int(IRIS_R * EYE_LAYER_VIEWPORT_SCALE)
+    R_eye = int((EYE_SIZE // 2) * EYE_LAYER_VIEWPORT_SCALE * sclera_scale)
+    iris_r_scaled = int(IRIS_R * iris_scale * EYE_LAYER_VIEWPORT_SCALE)
     base = Image.new("RGB", (EYE_SIZE, EYE_SIZE), (0, 0, 0))
     sclera_pix = sclera.load()
     base_pix = base.load()
@@ -427,13 +429,15 @@ def build_eye_base_sclera_iris_at_center(pole_x, pole_y):
     if not HAS_PIL:
         return None
     eye_type = get_eye_type()
-    invert_v = eye_type in ("human", "demon")
+    invert_v = eye_type in ("human", "dragon")
+    iris_scale = 0.8 if eye_type in ("human", "dragon") else 1.0
+    sclera_scale = 1.2 if eye_type in ("human", "demon") else 1.0
     sclera = load_sclera_image(eye_type)
     iris = load_iris_image(eye_type)
     if sclera is None:
         return load_iris_image(eye_type)  # fallback: iris only, flat (no spherical at center)
-    R_eye = int((EYE_SIZE // 2) * EYE_LAYER_VIEWPORT_SCALE)
-    iris_r_scaled = int(IRIS_R * EYE_LAYER_VIEWPORT_SCALE)
+    R_eye = int((EYE_SIZE // 2) * EYE_LAYER_VIEWPORT_SCALE * sclera_scale)
+    iris_r_scaled = int(IRIS_R * iris_scale * EYE_LAYER_VIEWPORT_SCALE)
     base = Image.new("RGB", (EYE_SIZE, EYE_SIZE), (0, 0, 0))
     sclera_pix = sclera.load()
     base_pix = base.load()
