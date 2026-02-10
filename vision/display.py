@@ -47,8 +47,9 @@ def init_displays(swap_left_right=False):
         sys.path.insert(0, _vision_dir)
         from machine_compat.machine import SPI, Pin
 
-    spi_left = SPI(0, 0, baudrate=10_000_000)
-    spi_right = SPI(0, 1, baudrate=10_000_000)
+    baud = int(os.environ.get("SPI_BAUDRATE", "10000000"))
+    spi_left = SPI(0, 0, baudrate=baud)
+    spi_right = SPI(0, 1, baudrate=baud)
     dc = Pin(25, Pin.OUT)
     reset = Pin(27, Pin.OUT)
     backlight = Pin(18, Pin.OUT)

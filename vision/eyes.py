@@ -331,17 +331,19 @@ def run_eyes():
         blink_until = 0.0
         blink_close = 0.0
         next_auto_blink = time.monotonic() + random.uniform(2.0, 5.0)
-        ANIM_FPS = 30
+        next_dart = 0.0  # nervous dart: pick new random target
+        ANIM_FPS = 45
         frame_dt = 1.0 / ANIM_FPS
-        PUPIL_EASE = 0.12
-        BLINK_DURATION = 0.12
-        BLINK_DEBOUNCE_S = 0.25
+        PUPIL_EASE = 0.48  # fast snap for nervous dart
+        BLINK_DURATION = 0.07  # short so blink is visible even at modest frame rate
+        BLINK_DEBOUNCE_S = 0.2
         last_blink_end = 0.0
+        last_look_time = 0.0  # UDP "look" overrides dart for a moment
 
         def do_blink():
-            nonlocal blink_until, blink_close
+            nonlocal blink_until
             blink_until = time.monotonic() + BLINK_DURATION
-            blink_close = 1.0
+            # blink_close is computed from elapsed in the loop; don't set it here or first frame overwrites
 
         while True:
             now = time.monotonic()
@@ -362,6 +364,7 @@ def run_eyes():
                         target_x = max(-1.0, min(1.0, float(tx)))
                     if ty is not None:
                         target_y = max(-1.0, min(1.0, float(ty)))
+                    last_look_time = now
             except BlockingIOError:
                 pass
             except json.JSONDecodeError:
@@ -372,20 +375,25 @@ def run_eyes():
                 do_blink()
                 next_auto_blink = now + random.uniform(2.0, 5.0)
 
-            # Blink state
+            # Blink state (blink_close from elapsed; don't set in do_blink or first frame overwrites)
             if blink_until > now:
                 elapsed = BLINK_DURATION - (blink_until - now)
                 if elapsed < BLINK_DURATION * 0.4:
-                    blink_close = elapsed / (BLINK_DURATION * 0.4)
+                    blink_close = elapsed / (BLINK_DURATION * 0.4)  # closing 0 -> 1
                 else:
                     blink_close = (BLINK_DURATION - elapsed) / (BLINK_DURATION * 0.6)
-                    blink_close = max(0.0, min(1.0, blink_close))
+                blink_close = max(0.0, min(1.0, blink_close))
             else:
                 blink_close = 0.0
 
-            # Ease pupil toward target + idle drift
-            pupil_x += (target_x - pupil_x) * PUPIL_EASE + random.uniform(-0.02, 0.02)
-            pupil_y += (target_y - pupil_y) * PUPIL_EASE + random.uniform(-0.02, 0.02)
+            # Nervous dart: when idle (no recent UDP look), pick new random target often
+            if now >= next_dart and (now - last_look_time) > 0.2:
+                target_x = random.uniform(-0.85, 0.85)
+                target_y = random.uniform(-0.85, 0.85)
+                next_dart = now + random.uniform(0.06, 0.22)
+            # Ease pupil toward target (fast for dart)
+            pupil_x += (target_x - pupil_x) * PUPIL_EASE
+            pupil_y += (target_y - pupil_y) * PUPIL_EASE
             pupil_x = max(-1.0, min(1.0, pupil_x))
             pupil_y = max(-1.0, min(1.0, pupil_y))
 
