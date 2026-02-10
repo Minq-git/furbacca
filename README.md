@@ -39,7 +39,7 @@ bash scripts/fetch-gc9a01py.sh
 # Default: eye image (e.g. vision/graphics/iris.jpg) on both displays
 python vision/eyes.py
 
-# XY gradient (red/green sweep, like test-fb1-gradient)
+# XY gradient (red/green sweep)
 EYES_GRADIENT=1 python vision/eyes.py
 
 # Rainbow pinwheel (radial hue by angle)

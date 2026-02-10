@@ -80,7 +80,7 @@ FB1_PATH = "/dev/fb1"
 _fb1_warned = False
 
 def _write_fb1(row_buf_or_full_buffer):
-    """Write buffer (row or full frame) to /dev/fb1. Same format as test-fb1-gradient.py (LE RGB565). Needs sudo for /dev/fb1."""
+    """Write buffer (row or full frame) to /dev/fb1. LE RGB565. Needs sudo for /dev/fb1."""
     global _fb1_warned
     try:
         with open(FB1_PATH, "wb") as fb:
@@ -97,7 +97,7 @@ def _write_fb1(row_buf_or_full_buffer):
         print(f"⚠ fb1 write error: {e}")
 
 def show_eye_image_fb1():
-    """Draw eye image to /dev/fb1 (left eye when overlay is used). Same format as test-fb1-gradient.py."""
+    """Draw eye image to /dev/fb1 (left eye when overlay is used). LE RGB565."""
     img = load_eye_image()
     if img is None:
         return
@@ -131,7 +131,7 @@ def _rgb565_le(r, g, b):
 
 
 def show_gradient(display):
-    """Draw XY gradient (same as test-fb1-gradient) to display. No image file; same blit path as show_eye_image."""
+    """Draw XY gradient (red/green sweep) to display. No image file; same blit path as show_eye_image."""
     if display is None:
         return
     try:

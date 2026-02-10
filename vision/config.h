@@ -6,7 +6,7 @@
 #define HEIGHT 240
 
 // --- FURBACCA GC9A01 PINOUT (BCM / GPIO) ---
-// Single source of truth for vision/eyes.py, setup-fbx2-gc9a01.sh, and C builds.
+// Single source of truth for vision/eyes.py pinout.
 // Physical pin numbers (40-pin header) per instruction.md:
 //
 //   Signal      GPIO  Physical   Linux SPI device
