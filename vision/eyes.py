@@ -273,6 +273,16 @@ def _blit_buffer_row_by_row(display, buf):
         display.blit_buffer(buf[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2], 0, y, EYE_SIZE, 1)
 
 
+def _blit_buffer_full_frame_both(buf):
+    """Blit full 240x240 buffer to both displays in one call per display. Reduces visible scanline by updating the whole frame at once (vsync-like)."""
+    if buf is None or len(buf) < EYE_SIZE * EYE_SIZE * 2:
+        return
+    if left_eye is not None:
+        left_eye.blit_buffer(buf, 0, 0, EYE_SIZE, EYE_SIZE)
+    if right_eye is not None:
+        right_eye.blit_buffer(buf, 0, 0, EYE_SIZE, EYE_SIZE)
+
+
 def _blit_buffer_row_by_row_both(buf, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
     """Blit same buffer row-by-row. partial_rows=(y0,y1)=only those rows (faster when only pupil/eyelid changes)."""
     if buf is None:
@@ -316,11 +326,14 @@ def _blit_pil_to_display(display, img):
 
 
 def _blit_pil_to_both(img, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
-    """Blit same PIL image to both displays. partial_rows=(y0,y1)=only those rows (update only pixels that change for fluid 60fps)."""
+    """Blit same PIL image to both displays. Full-frame top-down uses single blit per display (vsync-like, no scanline)."""
     if img is None:
         return
     buf = _pil_to_rgb565_be_buffer(img)
-    _blit_buffer_row_by_row_both(buf, reverse_rows=reverse_rows, outside_in=outside_in, inside_out=inside_out, partial_rows=partial_rows)
+    if not reverse_rows and not outside_in and not inside_out and partial_rows is None:
+        _blit_buffer_full_frame_both(buf)
+    else:
+        _blit_buffer_row_by_row_both(buf, reverse_rows=reverse_rows, outside_in=outside_in, inside_out=inside_out, partial_rows=partial_rows)
 
 
 _eye_base_sclera_iris = None
@@ -513,7 +526,6 @@ def run_eyes():
         target_x, target_y = 0.0, 0.0
         # Blink: open 2–5 s, then closed (one duration), then open. Draw: closing = outside-in, opening = inside-out.
         blink_phase = None  # None (open) | 'closed'
-        blink_phase_start = 0.0
         draw_closed_outside_in = False  # first closed frame: refresh outside-in
         blit_open_bottom_to_top = False  # first open frame after blink: refresh inside-out
         next_auto_blink = time.monotonic() + random.uniform(2.0, 5.0)  # open 2–5 s between blinks
@@ -521,15 +533,15 @@ def run_eyes():
         ANIM_FPS = 60
         frame_dt = 1.0 / ANIM_FPS
         PUPIL_EASE = 0.48
-        BLINK_CLOSED_MS = 0.075   # 75 ms fully closed
+        blink_closed_frames = 0   # number of frames to hold closed before opening (1 = open next frame)
         BLINK_DEBOUNCE_S = 0.2
         last_blink_end = 0.0
         last_look_time = 0.0
 
         def do_blink():
-            nonlocal blink_phase, blink_phase_start, draw_closed_outside_in
+            nonlocal blink_phase, draw_closed_outside_in, blink_closed_frames
             blink_phase = "closed"
-            blink_phase_start = time.monotonic()
+            blink_closed_frames = 0
             draw_closed_outside_in = True
 
         while True:
@@ -562,12 +574,13 @@ def run_eyes():
                 do_blink()
                 next_auto_blink = now + random.uniform(2.0, 5.0)
 
-            # Advance blink phase: closed (BLINK_CLOSED_MS) -> open
-            elapsed = now - blink_phase_start
-            if blink_phase == "closed" and elapsed >= BLINK_CLOSED_MS:
-                blink_phase = None
-                next_auto_blink = now + random.uniform(2.0, 5.0)
-                blit_open_bottom_to_top = True  # first open frame: draw inside-out
+            # Advance blink phase: after 1 frame of closed, open (frame-based so opening triggers immediately)
+            if blink_phase == "closed":
+                blink_closed_frames += 1
+                if blink_closed_frames > 1:  # drawn closed for 1 frame, now open
+                    blink_phase = None
+                    next_auto_blink = now + random.uniform(2.0, 5.0)
+                    blit_open_bottom_to_top = True  # first open frame: draw inside-out
 
             # Map phase to visual state for render
             blink_state = "open" if blink_phase is None else "closed"
