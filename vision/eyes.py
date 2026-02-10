@@ -227,11 +227,12 @@ def _blit_buffer_row_by_row(display, buf):
         display.blit_buffer(buf[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2], 0, y, EYE_SIZE, 1)
 
 
-def _blit_buffer_row_by_row_both(buf):
-    """Blit same buffer to both displays row-by-row, interleaved: each row to left then right so they stay in sync."""
+def _blit_buffer_row_by_row_both(buf, reverse_rows=False):
+    """Blit same buffer to both displays row-by-row, interleaved. reverse_rows=True = bottom-to-top (for opening frame)."""
     if buf is None:
         return
-    for y in range(EYE_SIZE):
+    ys = range(EYE_SIZE - 1, -1, -1) if reverse_rows else range(EYE_SIZE)
+    for y in ys:
         row = buf[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2]
         if left_eye is not None:
             left_eye.blit_buffer(row, 0, y, EYE_SIZE, 1)
@@ -247,12 +248,12 @@ def _blit_pil_to_display(display, img):
     _blit_buffer_row_by_row(display, buf)
 
 
-def _blit_pil_to_both(img):
-    """Blit same PIL image to both displays. Interleaved row-by-row so left and right update in sync (blink/iris)."""
+def _blit_pil_to_both(img, reverse_rows=False):
+    """Blit same PIL image to both displays. reverse_rows=True = draw bottom-to-top (e.g. first open frame after blink)."""
     if img is None:
         return
     buf = _pil_to_rgb565_be_buffer(img)
-    _blit_buffer_row_by_row_both(buf)
+    _blit_buffer_row_by_row_both(buf, reverse_rows=reverse_rows)
 
 
 def render_animated_frame(cached_iris_240, pupil_x, pupil_y, blink_state="open"):
@@ -285,27 +286,28 @@ def render_animated_frame(cached_iris_240, pupil_x, pupil_y, blink_state="open")
     draw.ellipse((px - pupil_radius, py - pupil_radius, px + pupil_radius, py + pupil_radius), fill=(0, 0, 0))
 
     if blink_state == "half":
-        # Squinting eyes: smooth curved eyelids (no diagonals). Top lid = flat at y=0, curved edge
-        # bulging down; bottom lid = flat at y=EYE_SIZE, curved edge bulging up. Visible slit = horizontal oval.
-        ry = 14  # vertical radius of slit (half the slit height)
-        step = 6  # sample step for smooth curve
-        # Top lid: bottom edge = ellipse arc from (0,0) to (EYE_SIZE,0), center (cx, ry), radii (cx, ry)
-        # y = ry - ry*sqrt(1 - (x-cx)^2/cx^2)
+        # Centered horizontal slit (smooth curved lids). Slit from y=cy-ry to y=cy+ry.
+        slit_half = 14  # slit height at center = 2*slit_half
+        step = 6
+        # Top lid: flat at y=0, curved edge bulging down to y=cy-slit_half at center
+        top_radius = (cy - slit_half) // 2  # ellipse radius so arc reaches cy-slit_half
+        top_cy = top_radius
         top_arc = []
         for x in range(EYE_SIZE, -1, -step):
             t = (x - cx) / cx
             t = max(-1.0, min(1.0, t))
-            y = ry - ry * math.sqrt(1.0 - t * t)
+            y = top_cy - top_radius * math.sqrt(1.0 - t * t)
             top_arc.append((x, int(y)))
         top_poly = [(0, 0), (EYE_SIZE, 0)] + top_arc[1:]
         draw.polygon(top_poly, fill=(0, 0, 0))
-        # Bottom lid: top edge = ellipse arc from (0,EYE_SIZE) to (EYE_SIZE,EYE_SIZE), center (cx, EYE_SIZE-ry)
-        # y = (EYE_SIZE-ry) + ry*sqrt(1 - (x-cx)^2/cx^2)
+        # Bottom lid: flat at y=EYE_SIZE, curved top edge bulging up to y=cy+slit_half at center
+        bot_radius = (EYE_SIZE - (cy + slit_half)) // 2  # 53 so arc reaches 134 at center
+        bot_cy = cy + slit_half + bot_radius  # ellipse center 187
         bot_arc = []
         for x in range(EYE_SIZE, -1, -step):
             t = (x - cx) / cx
             t = max(-1.0, min(1.0, t))
-            y = (EYE_SIZE - ry) + ry * math.sqrt(1.0 - t * t)
+            y = bot_cy - bot_radius * math.sqrt(1.0 - t * t)  # top half of ellipse
             bot_arc.append((x, int(y)))
         bot_poly = [(0, EYE_SIZE), (EYE_SIZE, EYE_SIZE)] + bot_arc[1:]
         draw.polygon(bot_poly, fill=(0, 0, 0))
@@ -376,6 +378,7 @@ def run_eyes():
         # Blink: three states, fixed timings — Half (50ms) -> Closed (100ms) -> Half (50ms) -> Open
         blink_phase = None  # None | 'half_closing' | 'closed' | 'half_opening'
         blink_phase_start = 0.0
+        blit_open_bottom_to_top = False  # set True on first open frame after blink; draw bottom-to-top so lid opens upward
         next_auto_blink = time.monotonic() + random.uniform(2.0, 5.0)  # open 2–5 s between blinks
         next_dart = 0.0
         ANIM_FPS = 55
@@ -430,9 +433,11 @@ def run_eyes():
             elif blink_phase == "closed" and elapsed >= BLINK_CLOSED_MS:
                 blink_phase = "half_opening"
                 blink_phase_start = now
+                blit_open_bottom_to_top = True  # partially open frame: draw bottom-to-top so lid opens upward
             elif blink_phase == "half_opening" and elapsed >= BLINK_HALF_MS:
                 blink_phase = None
                 next_auto_blink = now + random.uniform(2.0, 5.0)
+                blit_open_bottom_to_top = True  # next frame = first open; draw bottom-to-top so lid appears to open upward
 
             # Map phase to visual state for render
             if blink_phase is None:
@@ -454,7 +459,9 @@ def run_eyes():
             pupil_y = max(-1.0, min(1.0, pupil_y))
 
             frame = render_animated_frame(cached_iris_240, pupil_x, pupil_y, blink_state)
-            _blit_pil_to_both(frame)
+            _blit_pil_to_both(frame, reverse_rows=blit_open_bottom_to_top)
+            if blit_open_bottom_to_top:
+                blit_open_bottom_to_top = False
             time.sleep(max(0.0, frame_dt - (time.monotonic() - now)))
         return
 
