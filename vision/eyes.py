@@ -17,6 +17,8 @@ except ImportError:
 EYE_SIZE = 240
 # Iris circle radius in pixels (from eye.svg: iris path radius 17.7 in 68px viewBox, eye radius 34 → 120*17.7/34 ≈ 62)
 IRIS_R = int((EYE_SIZE // 2) * 17.7 / 34)
+# Eye layer drawn 10% larger than viewport so when the eye moves we don't see black edges around the sclera
+EYE_LAYER_VIEWPORT_SCALE = 1.10
 left_eye = None
 right_eye = None
 
@@ -377,7 +379,8 @@ def build_eye_base_sclera_iris():
         _eye_base_sclera_iris = load_iris_image()  # fallback: iris only
         return _eye_base_sclera_iris
     cx, cy = EYE_SIZE // 2, EYE_SIZE // 2
-    R_eye = EYE_SIZE // 2
+    R_eye = int((EYE_SIZE // 2) * EYE_LAYER_VIEWPORT_SCALE)
+    iris_r_scaled = int(IRIS_R * EYE_LAYER_VIEWPORT_SCALE)
     base = Image.new("RGB", (EYE_SIZE, EYE_SIZE), (0, 0, 0))
     sclera_pix = sclera.load()
     base_pix = base.load()
@@ -390,7 +393,7 @@ def build_eye_base_sclera_iris():
         iris_pix = iris.load()
         for y in range(EYE_SIZE):
             for x in range(EYE_SIZE):
-                pt = _sample_texture_spherical(iris, cx, cy, IRIS_R, x, y)
+                pt = _sample_texture_spherical(iris, cx, cy, iris_r_scaled, x, y)
                 if pt is not None:
                     base_pix[x, y] = iris_pix[pt[0], pt[1]]
     _eye_base_sclera_iris = base
@@ -408,7 +411,8 @@ def build_eye_base_sclera_iris_at_center(pole_x, pole_y):
     iris = load_iris_image()
     if sclera is None:
         return load_iris_image()  # fallback: iris only, flat (no spherical at center)
-    R_eye = EYE_SIZE // 2
+    R_eye = int((EYE_SIZE // 2) * EYE_LAYER_VIEWPORT_SCALE)
+    iris_r_scaled = int(IRIS_R * EYE_LAYER_VIEWPORT_SCALE)
     base = Image.new("RGB", (EYE_SIZE, EYE_SIZE), (0, 0, 0))
     sclera_pix = sclera.load()
     base_pix = base.load()
@@ -421,7 +425,7 @@ def build_eye_base_sclera_iris_at_center(pole_x, pole_y):
         iris_pix = iris.load()
         for y in range(EYE_SIZE):
             for x in range(EYE_SIZE):
-                pt = _sample_texture_spherical(iris, pole_x, pole_y, IRIS_R, x, y)
+                pt = _sample_texture_spherical(iris, pole_x, pole_y, iris_r_scaled, x, y)
                 if pt is not None:
                     base_pix[x, y] = iris_pix[pt[0], pt[1]]
     return base
@@ -469,6 +473,19 @@ def render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, blink_state="op
     return base
 
 
+def show_constructed_eye():
+    """Show the static constructed eyeball (sclera + iris + pupil at center) on both displays. No animation."""
+    frame = render_animated_frame(build_eye_base_sclera_iris(), 0.0, 0.0, "open")
+    if frame is not None:
+        _blit_pil_to_both(frame, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+    else:
+        # Fallback: single image if no sclera/iris
+        show_eye_image(left_eye)
+        if right_eye is not None:
+            time.sleep(0.02)
+            show_eye_image(right_eye)
+
+
 def show_eye_image(display):
     """Send PIL image to gc9a01py display. Big-endian RGB565 row-by-row (PACK_FMT >H — known-good for iris on this hardware)."""
     img = load_eye_image()
@@ -496,7 +513,9 @@ def run_eyes():
     use_gradient = EYES_GRADIENT
     use_rainbow = EYES_RAINBOW
     use_animated = EYES_ANIMATED and HAS_PIL and build_eye_base_sclera_iris() is not None
-    use_image = not EYES_SOLID_COLORS and not use_gradient and not use_rainbow and not use_animated and load_eye_image() is not None
+    use_image = not EYES_SOLID_COLORS and not use_gradient and not use_rainbow and not use_animated and (
+        build_eye_base_sclera_iris() is not None or load_eye_image() is not None
+    )
 
     def _show_idle():
         if use_gradient:
@@ -508,9 +527,7 @@ def run_eyes():
             time.sleep(0.05)
             show_rainbow(right_eye)
         elif use_image:
-            show_eye_image(left_eye)
-            time.sleep(0.05)
-            show_eye_image(right_eye)
+            show_constructed_eye()
         else:
             if left_eye:
                 left_eye.fill(0xF800)
