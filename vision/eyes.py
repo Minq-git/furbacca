@@ -460,7 +460,7 @@ def render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, blink_state="op
     """
     from PIL import ImageDraw
     cx, cy = EYE_SIZE // 2, EYE_SIZE // 2
-    pupil_radius = 18
+    pupil_radius = 22
     px = int(cx + pupil_x * 35)
     py = int(cy + pupil_y * 35)
 
@@ -565,19 +565,20 @@ def run_eyes():
         BLINK_DEBOUNCE_S = 0.2
         last_blink_end = 0.0
         last_look_time = 0.0
-        # Two-phase blink like C: closing (2–4 frames) then closed hold (1–2 frames) then open; opening ~2x closing feel via hold
+        # Time-based blink: short close so it feels natural regardless of frame rate (humans don't hold closed long).
         blink_phase = None  # None | "closing" | "closed"
-        closing_frames_remaining = 0
-        closed_hold_frames_remaining = 0
         blink_start_time = 0.0
-        CLOSING_FRAMES_MIN, CLOSING_FRAMES_MAX = 2, 4
-        CLOSED_HOLD_FRAMES_MIN, CLOSED_HOLD_FRAMES_MAX = 1, 2
+        closing_duration_s = 0.05   # ~50 ms closing
+        closed_hold_until = 0.0    # when to leave "closed" (now + brief hold)
+        CLOSING_S_MIN, CLOSING_S_MAX = 0.04, 0.07   # 40–70 ms
+        CLOSED_HOLD_S_MIN, CLOSED_HOLD_S_MAX = 0.01, 0.025  # 10–25 ms
 
         def do_blink():
-            nonlocal blink_phase, closing_frames_remaining, blink_start_time
+            nonlocal blink_phase, blink_start_time, closing_duration_s, closed_hold_until
             blink_phase = "closing"
-            closing_frames_remaining = random.randint(CLOSING_FRAMES_MIN, CLOSING_FRAMES_MAX)
             blink_start_time = time.monotonic()
+            closing_duration_s = random.uniform(CLOSING_S_MIN, CLOSING_S_MAX)
+            closed_hold_until = 0.0
 
         while True:
             now = time.monotonic()
@@ -610,15 +611,13 @@ def run_eyes():
                 do_blink()
                 next_auto_blink = now + random.uniform(2.0, 5.0)
 
-            # Advance blink phase: closing (2–4 frames) -> closed hold (1–2 frames) -> open (inside_out)
+            # Advance blink phase: closing (40–70 ms) -> closed hold (10–25 ms) -> open (inside_out)
             if blink_phase == "closing":
-                closing_frames_remaining -= 1
-                if closing_frames_remaining <= 0:
+                if (now - blink_start_time) >= closing_duration_s:
                     blink_phase = "closed"
-                    closed_hold_frames_remaining = random.randint(CLOSED_HOLD_FRAMES_MIN, CLOSED_HOLD_FRAMES_MAX)
+                    closed_hold_until = now + random.uniform(CLOSED_HOLD_S_MIN, CLOSED_HOLD_S_MAX)
             elif blink_phase == "closed":
-                closed_hold_frames_remaining -= 1
-                if closed_hold_frames_remaining <= 0:
+                if now >= closed_hold_until:
                     blink_phase = None
                     blit_open_bottom_to_top = True
                     total_blink_s = now - blink_start_time
