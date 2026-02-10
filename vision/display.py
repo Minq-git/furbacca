@@ -47,7 +47,7 @@ def init_displays(swap_left_right=False):
         sys.path.insert(0, _vision_dir)
         from machine_compat.machine import SPI, Pin
 
-    baud = int(os.environ.get("SPI_BAUDRATE", "20000000"))  # 20 MHz; higher can cause screen tearing
+    baud = int(os.environ.get("SPI_BAUDRATE", "60000000"))  # 60 MHz; higher can cause screen blackout
     spi_left = SPI(0, 0, baudrate=baud)
     spi_right = SPI(0, 1, baudrate=baud)
     dc = Pin(25, Pin.OUT)
