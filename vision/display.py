@@ -47,10 +47,8 @@ def init_displays(swap_left_right=False):
         sys.path.insert(0, _vision_dir)
         from machine_compat.machine import SPI, Pin
 
-    # Lower baudrate helps with long jumper wires (snow/static from signal integrity). Default 4 MHz; set SPI_BAUDRATE env for override (e.g. 2000000).
-    _baud = int(os.environ.get("SPI_BAUDRATE", "4000000"))
-    spi_left = SPI(0, 0, baudrate=_baud)
-    spi_right = SPI(0, 1, baudrate=_baud)
+    spi_left = SPI(0, 0, baudrate=10_000_000)
+    spi_right = SPI(0, 1, baudrate=10_000_000)
     dc = Pin(25, Pin.OUT)
     reset = Pin(27, Pin.OUT)
     backlight = Pin(18, Pin.OUT)

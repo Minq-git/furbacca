@@ -60,5 +60,3 @@ Optional params: `dtoverlay=gc9a01,speed=40000000,rotate=0,width=240,height=240,
 | Right eye SPI     | `/dev/spidev0.1` (CE1 = GPIO 7) |
 | Python driver     | `vision/eyes.py` |
 | C driver (fbx2)   | `scripts/setup-fbx2-gc9a01.sh` (needs legacy VideoCore on 32-bit Pi OS) |
-
-**Long jumper wires:** If both eyes show synchronized snow/static, lower SPI speed for better signal integrity. Default is 4 MHz; try `SPI_BAUDRATE=2000000 python vision/eyes.py` (2 MHz) for very long wires.

@@ -22,9 +22,6 @@ right_eye = None
 SWAP_LEFT_RIGHT_SPI = os.environ.get("SWAP_LEFT_RIGHT_SPI", "").strip().lower() in ("1", "true", "yes")
 # Optional: only show solid red/blue (no eye image)
 EYES_SOLID_COLORS = os.environ.get("EYES_SOLID_COLORS", "").strip().lower() in ("1", "true", "yes")
-# Optional: show gradient/rainbow instead of image (same blit path; useful to test SPI without PIL/image file)
-EYES_GRADIENT = os.environ.get("EYES_GRADIENT", "").strip().lower() in ("1", "true", "yes")
-EYES_RAINBOW = os.environ.get("EYES_RAINBOW", "").strip().lower() in ("1", "true", "yes")
 
 # --- Display: gc9a01py via compat layer ---
 _vision_dir = os.path.dirname(os.path.abspath(__file__))
@@ -122,86 +119,15 @@ def fill_fb1(color_565):
     row = struct.pack("<H", color_565) * EYE_SIZE
     _write_fb1([row] * EYE_SIZE)
 
-def _rgb565_le(r, g, b):
-    """Pack R,G,B (0-255) to little-endian RGB565 (same as overlay/fb1)."""
-    import struct
-    c565 = (r & 0xF8) << 8 | (g & 0xFC) << 3 | (b >> 3)
-    return struct.pack("<H", c565)
-
-
-def show_gradient(display):
-    """Draw XY gradient (same as test-fb1-gradient) to display. No image file; same blit path as show_eye_image."""
-    if display is None:
-        return
-    try:
-        row_buf = bytearray(EYE_SIZE * 2)
-        for y in range(EYE_SIZE):
-            for x in range(EYE_SIZE):
-                r = x * 255 // (EYE_SIZE - 1) if EYE_SIZE > 1 else 0
-                g = y * 255 // (EYE_SIZE - 1) if EYE_SIZE > 1 else 0
-                b = 128
-                row_buf[x * 2 : x * 2 + 2] = _rgb565_le(r, g, b)
-            display.blit_buffer(row_buf, 0, y, EYE_SIZE, 1)
-    except Exception as e:
-        print(f"⚠ Gradient error: {e}")
-
-
-def _hsv_to_rgb(h, s, v):
-    """H,S,V in [0,1] -> (r,g,b) 0-255."""
-    if s <= 0:
-        return (int(v * 255), int(v * 255), int(v * 255))
-    h = (h % 1.0) * 6
-    i = int(h)
-    f = h - i
-    p = v * (1 - s)
-    q = v * (1 - s * f)
-    t = v * (1 - s * (1 - f))
-    i %= 6
-    if i == 0:
-        r, g, b = v, t, p
-    elif i == 1:
-        r, g, b = q, v, p
-    elif i == 2:
-        r, g, b = p, v, t
-    elif i == 3:
-        r, g, b = p, q, v
-    elif i == 4:
-        r, g, b = t, p, v
-    else:
-        r, g, b = v, p, q
-    return (int(r * 255), int(g * 255), int(b * 255))
-
-
-def show_rainbow(display):
-    """Draw circular rainbow (hue by angle from center) to display. Same blit path as show_eye_image."""
-    if display is None:
-        return
-    try:
-        import math
-        cx = (EYE_SIZE - 1) / 2.0
-        cy = (EYE_SIZE - 1) / 2.0
-        row_buf = bytearray(EYE_SIZE * 2)
-        for y in range(EYE_SIZE):
-            for x in range(EYE_SIZE):
-                dx, dy = x - cx, y - cy
-                angle = math.atan2(dy, dx)
-                hue = (angle / (2 * math.pi) + 0.5) % 1.0
-                r, g, b = _hsv_to_rgb(hue, 1.0, 1.0)
-                row_buf[x * 2 : x * 2 + 2] = _rgb565_le(r, g, b)
-            display.blit_buffer(row_buf, 0, y, EYE_SIZE, 1)
-    except Exception as e:
-        print(f"⚠ Rainbow error: {e}")
-
-
 def show_eye_image(display):
-    """Send PIL image to gc9a01py display. Use little-endian (<H) to match overlay/fb1; if colors look swapped try >H."""
+    """Send PIL image to gc9a01py display. SPI typically expects big-endian (>H); if colors look inverted, try <H."""
     img = load_eye_image()
     if img is None or display is None:
         return
     try:
         import struct
-        # Little-endian RGB565 matches overlay/fb1 and fixes streaky noise on these panels
-        PACK_FMT = "<H"
+        # gc9a01py / raw SPI usually expects big-endian RGB565; framebuffer overlay uses little-endian (<H)
+        PACK_FMT = ">H"
         img = img.rotate(180)
         row_buf = bytearray(EYE_SIZE * 2)
         for y in range(EYE_SIZE):
@@ -220,38 +146,12 @@ def run_eyes():
         return
 
     print("👀 Furbacca Vision Online (gc9a01py).")
-    use_gradient = EYES_GRADIENT
-    use_rainbow = EYES_RAINBOW
-    use_image = not EYES_SOLID_COLORS and not use_gradient and not use_rainbow and load_eye_image() is not None
-
-    def _show_idle():
-        if use_gradient:
-            show_gradient(left_eye)
-            time.sleep(0.05)
-            show_gradient(right_eye)
-        elif use_rainbow:
-            show_rainbow(left_eye)
-            time.sleep(0.05)
-            show_rainbow(right_eye)
-        elif use_image:
-            show_eye_image(left_eye)
-            time.sleep(0.05)
-            show_eye_image(right_eye)
-        else:
-            if left_eye:
-                left_eye.fill(0xF800)
-            if right_eye:
-                right_eye.fill(0x001F)
-
-    if use_gradient:
-        print("  Showing XY gradient on both displays (EYES_GRADIENT=1).")
-        _show_idle()
-    elif use_rainbow:
-        print("  Showing rainbow on both displays (EYES_RAINBOW=1).")
-        _show_idle()
-    elif use_image:
+    use_image = not EYES_SOLID_COLORS and load_eye_image() is not None
+    if use_image:
         print("  Showing eye image on both displays...")
-        _show_idle()
+        show_eye_image(left_eye)
+        time.sleep(0.02)
+        show_eye_image(right_eye)
     else:
         if EYES_SOLID_COLORS:
             print("  Solid colors only (EYES_SOLID_COLORS=1).")
@@ -262,7 +162,15 @@ def run_eyes():
             right_eye.fill(0x001F)
 
     def restore_idle():
-        _show_idle()
+        if use_image:
+            show_eye_image(left_eye)
+            time.sleep(0.02)
+            show_eye_image(right_eye)
+        else:
+            if left_eye:
+                left_eye.fill(0xF800)
+            if right_eye:
+                right_eye.fill(0x001F)
 
     def do_blink():
         for disp in (left_eye, right_eye):
