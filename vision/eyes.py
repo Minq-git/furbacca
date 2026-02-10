@@ -227,6 +227,18 @@ def _blit_buffer_row_by_row(display, buf):
         display.blit_buffer(buf[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2], 0, y, EYE_SIZE, 1)
 
 
+def _blit_buffer_row_by_row_both(buf):
+    """Blit same buffer to both displays row-by-row, interleaved: each row to left then right so they stay in sync."""
+    if buf is None:
+        return
+    for y in range(EYE_SIZE):
+        row = buf[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2]
+        if left_eye is not None:
+            left_eye.blit_buffer(row, 0, y, EYE_SIZE, 1)
+        if right_eye is not None:
+            right_eye.blit_buffer(row, 0, y, EYE_SIZE, 1)
+
+
 def _blit_pil_to_display(display, img):
     """Blit a 240x240 PIL RGB image to one display. Big-endian RGB565 row-by-row (same path as show_eye_image)."""
     if display is None or img is None:
@@ -236,35 +248,68 @@ def _blit_pil_to_display(display, img):
 
 
 def _blit_pil_to_both(img):
-    """Blit same PIL image to both displays. One buffer, row-by-row blits (same path as static image)."""
+    """Blit same PIL image to both displays. Interleaved row-by-row so left and right update in sync (blink/iris)."""
     if img is None:
         return
     buf = _pil_to_rgb565_be_buffer(img)
-    if left_eye is not None:
-        _blit_buffer_row_by_row(left_eye, buf)
-    if right_eye is not None:
-        _blit_buffer_row_by_row(right_eye, buf)
+    _blit_buffer_row_by_row_both(buf)
 
 
-def render_animated_frame(cached_iris_240, pupil_x, pupil_y, blink_close_ratio=0.0):
-    """Render one 240x240 frame. cached_iris_240 = pre-sized RGB 240x240 (no resize per frame). Pupil -1..1, blink 0=open 1=closed."""
+def render_animated_frame(cached_iris_240, pupil_x, pupil_y, blink_state="open"):
+    """
+    Three visual states:
+    - open: full eye (large circle)
+    - half: horizontal oval slit (lidded)
+    - closed: black with single horizontal line (eyelid line)
+    """
+    from PIL import ImageDraw
+    import math
+    cx, cy = EYE_SIZE // 2, EYE_SIZE // 2
+
+    if blink_state == "closed":
+        base = Image.new("RGB", (EYE_SIZE, EYE_SIZE), (0, 0, 0))
+        draw = ImageDraw.Draw(base)
+        line_y = cy
+        for dy in (-1, 0, 1):
+            draw.line([(0, line_y + dy), (EYE_SIZE, line_y + dy)], fill=(28, 28, 28), width=1)
+        return base
+
     if cached_iris_240 is None:
         base = Image.new("RGB", (EYE_SIZE, EYE_SIZE), (32, 32, 48))
     else:
         base = cached_iris_240.copy()
-    if blink_close_ratio >= 0.99:
-        return Image.new("RGB", (EYE_SIZE, EYE_SIZE), (0, 0, 0))
-    cx, cy = EYE_SIZE // 2, EYE_SIZE // 2
+    draw = ImageDraw.Draw(base)
     pupil_radius = 18
     px = int(cx + pupil_x * 35)
     py = int(cy + pupil_y * 35)
-    from PIL import ImageDraw
-    draw = ImageDraw.Draw(base)
     draw.ellipse((px - pupil_radius, py - pupil_radius, px + pupil_radius, py + pupil_radius), fill=(0, 0, 0))
-    if blink_close_ratio > 0.01:
-        h = int(EYE_SIZE * blink_close_ratio * 0.55)
-        draw.rectangle((0, 0, EYE_SIZE, h), fill=(0, 0, 0))
-        draw.rectangle((0, EYE_SIZE - h, EYE_SIZE, EYE_SIZE), fill=(0, 0, 0))
+
+    if blink_state == "half":
+        # Squinting eyes: smooth curved eyelids (no diagonals). Top lid = flat at y=0, curved edge
+        # bulging down; bottom lid = flat at y=EYE_SIZE, curved edge bulging up. Visible slit = horizontal oval.
+        ry = 14  # vertical radius of slit (half the slit height)
+        step = 6  # sample step for smooth curve
+        # Top lid: bottom edge = ellipse arc from (0,0) to (EYE_SIZE,0), center (cx, ry), radii (cx, ry)
+        # y = ry - ry*sqrt(1 - (x-cx)^2/cx^2)
+        top_arc = []
+        for x in range(EYE_SIZE, -1, -step):
+            t = (x - cx) / cx
+            t = max(-1.0, min(1.0, t))
+            y = ry - ry * math.sqrt(1.0 - t * t)
+            top_arc.append((x, int(y)))
+        top_poly = [(0, 0), (EYE_SIZE, 0)] + top_arc[1:]
+        draw.polygon(top_poly, fill=(0, 0, 0))
+        # Bottom lid: top edge = ellipse arc from (0,EYE_SIZE) to (EYE_SIZE,EYE_SIZE), center (cx, EYE_SIZE-ry)
+        # y = (EYE_SIZE-ry) + ry*sqrt(1 - (x-cx)^2/cx^2)
+        bot_arc = []
+        for x in range(EYE_SIZE, -1, -step):
+            t = (x - cx) / cx
+            t = max(-1.0, min(1.0, t))
+            y = (EYE_SIZE - ry) + ry * math.sqrt(1.0 - t * t)
+            bot_arc.append((x, int(y)))
+        bot_poly = [(0, EYE_SIZE), (EYE_SIZE, EYE_SIZE)] + bot_arc[1:]
+        draw.polygon(bot_poly, fill=(0, 0, 0))
+
     return base
 
 
@@ -328,22 +373,24 @@ def run_eyes():
         import random
         pupil_x, pupil_y = 0.0, 0.0
         target_x, target_y = 0.0, 0.0
-        blink_until = 0.0
-        blink_close = 0.0
-        next_auto_blink = time.monotonic() + random.uniform(2.0, 5.0)
-        next_dart = 0.0  # nervous dart: pick new random target
-        ANIM_FPS = 45
+        # Blink: three states, fixed timings — Half (50ms) -> Closed (100ms) -> Half (50ms) -> Open
+        blink_phase = None  # None | 'half_closing' | 'closed' | 'half_opening'
+        blink_phase_start = 0.0
+        next_auto_blink = time.monotonic() + random.uniform(2.0, 5.0)  # open 2–5 s between blinks
+        next_dart = 0.0
+        ANIM_FPS = 55
         frame_dt = 1.0 / ANIM_FPS
-        PUPIL_EASE = 0.48  # fast snap for nervous dart
-        BLINK_DURATION = 0.07  # short so blink is visible even at modest frame rate
+        PUPIL_EASE = 0.48
+        BLINK_HALF_MS = 0.05   # 50 ms half-closed
+        BLINK_CLOSED_MS = 0.1  # 100 ms fully closed
         BLINK_DEBOUNCE_S = 0.2
         last_blink_end = 0.0
-        last_look_time = 0.0  # UDP "look" overrides dart for a moment
+        last_look_time = 0.0
 
         def do_blink():
-            nonlocal blink_until
-            blink_until = time.monotonic() + BLINK_DURATION
-            # blink_close is computed from elapsed in the loop; don't set it here or first frame overwrites
+            nonlocal blink_phase, blink_phase_start
+            blink_phase = "half_closing"
+            blink_phase_start = time.monotonic()
 
         while True:
             now = time.monotonic()
@@ -370,21 +417,30 @@ def run_eyes():
             except json.JSONDecodeError:
                 pass
 
-            # Auto blink
-            if now >= next_auto_blink and blink_until <= now:
+            # Auto blink: stay open 2–5 s then run blink sequence
+            if blink_phase is None and now >= next_auto_blink:
                 do_blink()
                 next_auto_blink = now + random.uniform(2.0, 5.0)
 
-            # Blink state (blink_close from elapsed; don't set in do_blink or first frame overwrites)
-            if blink_until > now:
-                elapsed = BLINK_DURATION - (blink_until - now)
-                if elapsed < BLINK_DURATION * 0.4:
-                    blink_close = elapsed / (BLINK_DURATION * 0.4)  # closing 0 -> 1
-                else:
-                    blink_close = (BLINK_DURATION - elapsed) / (BLINK_DURATION * 0.6)
-                blink_close = max(0.0, min(1.0, blink_close))
+            # Advance blink phase: half_closing (50ms) -> closed (100ms) -> half_opening (50ms) -> open
+            elapsed = now - blink_phase_start
+            if blink_phase == "half_closing" and elapsed >= BLINK_HALF_MS:
+                blink_phase = "closed"
+                blink_phase_start = now
+            elif blink_phase == "closed" and elapsed >= BLINK_CLOSED_MS:
+                blink_phase = "half_opening"
+                blink_phase_start = now
+            elif blink_phase == "half_opening" and elapsed >= BLINK_HALF_MS:
+                blink_phase = None
+                next_auto_blink = now + random.uniform(2.0, 5.0)
+
+            # Map phase to visual state for render
+            if blink_phase is None:
+                blink_state = "open"
+            elif blink_phase == "closed":
+                blink_state = "closed"
             else:
-                blink_close = 0.0
+                blink_state = "half"
 
             # Nervous dart: when idle (no recent UDP look), pick new random target often
             if now >= next_dart and (now - last_look_time) > 0.2:
@@ -397,7 +453,7 @@ def run_eyes():
             pupil_x = max(-1.0, min(1.0, pupil_x))
             pupil_y = max(-1.0, min(1.0, pupil_y))
 
-            frame = render_animated_frame(cached_iris_240, pupil_x, pupil_y, blink_close)
+            frame = render_animated_frame(cached_iris_240, pupil_x, pupil_y, blink_state)
             _blit_pil_to_both(frame)
             time.sleep(max(0.0, frame_dt - (time.monotonic() - now)))
         return
