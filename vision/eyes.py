@@ -18,7 +18,7 @@ EYE_SIZE = 240
 # Iris circle radius in pixels (from eye.svg: iris path radius 17.7 in 68px viewBox, eye radius 34 → 120*17.7/34 ≈ 62)
 IRIS_R = int((EYE_SIZE // 2) * 17.7 / 34)
 # Eye layer drawn 10% larger than viewport so when the eye moves we don't see black edges around the sclera
-EYE_LAYER_VIEWPORT_SCALE = 1.10
+EYE_LAYER_VIEWPORT_SCALE = 1.25
 left_eye = None
 right_eye = None
 
@@ -536,17 +536,31 @@ def run_eyes():
 
     if use_animated:
         print("  Animated eyes (headless, no monitor). UDP: blink, look x/y.")
-        # Sclera = background, iris = circular layer on top (per eye.svg / PI_Eyes). Cached once.
         cached_eye_base_240 = build_eye_base_sclera_iris()
         import random
+        import math
+        # Ease curve 3*t^2 - 2*t^3 (smooth start/end, fast middle) ported from C; 256 entries 0..255
+        EASE_TABLE = tuple(
+            int(255.0 * (3.0 * (i / 255.0) ** 2 - 2.0 * (i / 255.0) ** 3))
+            for i in range(256)
+        )
         pupil_x, pupil_y = 0.0, 0.0
         target_x, target_y = 0.0, 0.0
+        # Autonomous saccade-and-hold (like C: move to random point with ease curve, then hold)
+        eye_in_motion = False
+        eye_old_x, eye_old_y = 0.0, 0.0
+        eye_new_x, eye_new_y = 0.0, 0.0
+        eye_move_start = 0.0
+        eye_move_duration = 0.0
+        eye_hold_until = 0.0
+        IDLE_LOOK_TIMEOUT = 0.2
+        MOVE_DURATION_MIN, MOVE_DURATION_MAX = 0.072, 0.144
+        HOLD_DURATION_MAX = 3.0
         # Blink: open 2–5 s, then closed (one duration), then open. Draw: closing = outside-in, opening = inside-out.
         blink_phase = None  # None (open) | 'closed'
         draw_closed_outside_in = False  # first closed frame: refresh outside-in
         blit_open_bottom_to_top = False  # first open frame after blink: refresh inside-out
         next_auto_blink = time.monotonic() + random.uniform(2.0, 5.0)  # open 2–5 s between blinks
-        next_dart = 0.0
         ANIM_FPS = 60
         frame_dt = 1.0 / ANIM_FPS
         PUPIL_EASE = 0.48
@@ -563,28 +577,29 @@ def run_eyes():
 
         while True:
             now = time.monotonic()
-            # UDP
-            try:
-                data, _ = sock.recvfrom(1024)
-                msg = json.loads(data.decode())
-                action = msg.get("action")
-                if action == "blink":
-                    if now - last_blink_end >= BLINK_DEBOUNCE_S:
-                        do_blink()
-                        last_blink_end = now
-                        print("🐾 Logic: Blinked both eyes.")
-                elif action == "look":
-                    tx = msg.get("x")
-                    ty = msg.get("y")
-                    if tx is not None:
-                        target_x = max(-1.0, min(1.0, float(tx)))
-                    if ty is not None:
-                        target_y = max(-1.0, min(1.0, float(ty)))
-                    last_look_time = now
-            except BlockingIOError:
-                pass
-            except json.JSONDecodeError:
-                pass
+            # UDP: drain all pending packets so head-trigger blink is not missed
+            while True:
+                try:
+                    data, _ = sock.recvfrom(1024)
+                    msg = json.loads(data.decode())
+                    action = msg.get("action")
+                    if action == "blink":
+                        if now - last_blink_end >= BLINK_DEBOUNCE_S:
+                            do_blink()
+                            last_blink_end = now
+                            print("🐾 Logic: Blinked both eyes.")
+                    elif action == "look":
+                        tx = msg.get("x")
+                        ty = msg.get("y")
+                        if tx is not None:
+                            target_x = max(-1.0, min(1.0, float(tx)))
+                        if ty is not None:
+                            target_y = max(-1.0, min(1.0, float(ty)))
+                        last_look_time = now
+                except BlockingIOError:
+                    break
+                except json.JSONDecodeError:
+                    pass
 
             # Auto blink: stay open 2–5 s then run blink sequence
             if blink_phase is None and now >= next_auto_blink:
@@ -602,16 +617,45 @@ def run_eyes():
             # Map phase to visual state for render
             blink_state = "open" if blink_phase is None else "closed"
 
-            # Nervous dart: when idle (no recent UDP look), pick new random target often
-            if now >= next_dart and (now - last_look_time) > 0.2:
-                target_x = random.uniform(-0.85, 0.85)
-                target_y = random.uniform(-0.85, 0.85)
-                next_dart = now + random.uniform(0.06, 0.22)
-            # Ease pupil toward target (fast for dart)
-            pupil_x += (target_x - pupil_x) * PUPIL_EASE
-            pupil_y += (target_y - pupil_y) * PUPIL_EASE
-            pupil_x = max(-1.0, min(1.0, pupil_x))
-            pupil_y = max(-1.0, min(1.0, pupil_y))
+            # Pupil motion: UDP look drives target; when idle use saccade-and-hold with ease curve (ported from C)
+            if (now - last_look_time) <= IDLE_LOOK_TIMEOUT:
+                # Recent UDP look: ease toward target (same as before)
+                pupil_x += (target_x - pupil_x) * PUPIL_EASE
+                pupil_y += (target_y - pupil_y) * PUPIL_EASE
+                pupil_x = max(-1.0, min(1.0, pupil_x))
+                pupil_y = max(-1.0, min(1.0, pupil_y))
+            else:
+                # Idle: saccade-and-hold with 3*t^2 - 2*t^3 ease (smooth start/end, fast middle)
+                if eye_in_motion:
+                    elapsed = now - eye_move_start
+                    if elapsed >= eye_move_duration:
+                        eye_in_motion = False
+                        pupil_x = eye_old_x = eye_new_x
+                        pupil_y = eye_old_y = eye_new_y
+                        eye_hold_until = now + random.uniform(0.0, HOLD_DURATION_MAX)
+                    else:
+                        t = elapsed / eye_move_duration
+                        idx = min(255, int(t * 255))
+                        e = (EASE_TABLE[idx] + 1) / 256.0
+                        pupil_x = eye_old_x + (eye_new_x - eye_old_x) * e
+                        pupil_y = eye_old_y + (eye_new_y - eye_old_y) * e
+                else:
+                    pupil_x = eye_old_x
+                    pupil_y = eye_old_y
+                    if now >= eye_hold_until:
+                        # Pick new random point in unit circle (like C)
+                        while True:
+                            dx = random.uniform(-1.0, 1.0)
+                            dy = random.uniform(-1.0, 1.0)
+                            if dx * dx + dy * dy <= 1.0:
+                                break
+                        eye_old_x, eye_old_y = pupil_x, pupil_y
+                        eye_new_x, eye_new_y = dx * 0.85, dy * 0.85
+                        eye_move_start = now
+                        eye_move_duration = random.uniform(MOVE_DURATION_MIN, MOVE_DURATION_MAX)
+                        eye_in_motion = True
+                pupil_x = max(-1.0, min(1.0, pupil_x))
+                pupil_y = max(-1.0, min(1.0, pupil_y))
 
             # Eye layer: open eye (sclera + iris + pupil). Top-down normally; inside_out on first frame after blink (lid opens from center).
             eye_frame = render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, "open")
@@ -652,36 +696,48 @@ def run_eyes():
     def restore_idle():
         _show_idle()
 
-    def do_blink():
-        for disp in (left_eye, right_eye):
-            if disp:
-                disp.fill(0x0000)
-        time.sleep(0.05)
-        restore_idle()
-
-    BLINK_DEBOUNCE_S = 0.25
+    # Static blink: same two-layer animation as animated. Cache eye frame once so blink is instant (no rebuild delay).
+    _static_eye_frame = render_animated_frame(build_eye_base_sclera_iris(), 0.0, 0.0, "open")
+    BLINK_DEBOUNCE_S = 0.2
     last_blink_end = 0.0
+    blink_phase = None  # None | "closing" | "closed" | "opening"
+    closed_start = 0.0
+    BLINK_CLOSED_HOLD_S = 0.05
 
     while True:
-        try:
-            data, _ = sock.recvfrom(1024)
-            msg = json.loads(data.decode())
-            action = msg.get("action")
-            if action == "blink":
-                now = time.monotonic()
-                if now - last_blink_end < BLINK_DEBOUNCE_S:
-                    pass
-                else:
-                    do_blink()
-                    last_blink_end = time.monotonic()
+        now = time.monotonic()
+        # Drain UDP so we see the head trigger immediately (no missed packets)
+        while True:
+            try:
+                data, _ = sock.recvfrom(1024)
+                msg = json.loads(data.decode())
+                action = msg.get("action")
+                if action == "blink" and (now - last_blink_end) >= BLINK_DEBOUNCE_S:
+                    blink_phase = "closing"
+                    last_blink_end = now
                     print("🐾 Logic: Blinked both eyes.")
-            elif action == "look":
+            except BlockingIOError:
+                break
+            except json.JSONDecodeError:
                 pass
-        except BlockingIOError:
-            pass
-        except json.JSONDecodeError:
-            pass
-        time.sleep(0.01)
+
+        if blink_phase == "closing":
+            if _static_eye_frame is not None:
+                _blit_pil_to_both(_static_eye_frame, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+            overlay = render_blink_overlay()
+            if overlay is not None:
+                _blit_pil_to_both(overlay, reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
+            blink_phase = "closed"
+            closed_start = now
+        elif blink_phase == "closed":
+            if now - closed_start >= BLINK_CLOSED_HOLD_S:
+                blink_phase = "opening"
+        elif blink_phase == "opening":
+            if _static_eye_frame is not None:
+                _blit_pil_to_both(_static_eye_frame, reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
+            blink_phase = None
+
+        time.sleep(0.02)
 
 
 if __name__ == "__main__":
