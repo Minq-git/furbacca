@@ -30,7 +30,21 @@ bash scripts/fetch-gc9a01py.sh
 
 **Optional env:**  
 - `SWAP_LEFT_RIGHT_SPI=1` — swap which physical display is "left" vs "right".  
-- `EYES_SOLID_COLORS=1` — show only red/blue (no eye image).
+- `EYES_SOLID_COLORS=1` — show only red/blue (no eye image).  
+- `EYES_GRADIENT=1` — show XY gradient on both displays (test pattern, no image file).  
+- `EYES_RAINBOW=1` — show circular rainbow (pinwheel) on both displays (test pattern).
+
+**Display test modes (for later testing):**
+```bash
+# Default: eye image (e.g. vision/graphics/iris.jpg) on both displays
+python vision/eyes.py
+
+# XY gradient (red/green sweep, like test-fb1-gradient)
+EYES_GRADIENT=1 python vision/eyes.py
+
+# Rainbow pinwheel (radial hue by angle)
+EYES_RAINBOW=1 python vision/eyes.py
+```
 
 **Optional — Pi_Eyes-style image on both eyes:**  
 Copy Adafruit Pi_Eyes graphics so eyes show an image instead of the red/blue test:
