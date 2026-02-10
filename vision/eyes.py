@@ -227,11 +227,31 @@ def _blit_buffer_row_by_row(display, buf):
         display.blit_buffer(buf[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2], 0, y, EYE_SIZE, 1)
 
 
-def _blit_buffer_row_by_row_both(buf, reverse_rows=False):
-    """Blit same buffer to both displays row-by-row, interleaved. reverse_rows=True = bottom-to-top (for opening frame)."""
+def _blit_buffer_row_by_row_both(buf, reverse_rows=False, outside_in=False, inside_out=False):
+    """Blit same buffer row-by-row. outside_in=edges toward center (closing); inside_out=center toward edges (opening)."""
     if buf is None:
         return
-    ys = range(EYE_SIZE - 1, -1, -1) if reverse_rows else range(EYE_SIZE)
+    if outside_in:
+        # Closing: draw from both ends toward center: 239, 0, 238, 1, 237, 2, ...
+        ys = []
+        for i in range(EYE_SIZE):
+            if i % 2 == 0:
+                ys.append(EYE_SIZE - 1 - (i // 2))
+            else:
+                ys.append(i // 2)
+    elif inside_out:
+        # Opening: draw from center toward top and bottom: 120, 119, 121, 118, 122, ...
+        center = EYE_SIZE // 2
+        ys = [center]
+        for offset in range(1, center + 1):
+            if center - offset >= 0:
+                ys.append(center - offset)
+            if center + offset < EYE_SIZE:
+                ys.append(center + offset)
+    elif reverse_rows:
+        ys = range(EYE_SIZE - 1, -1, -1)
+    else:
+        ys = range(EYE_SIZE)
     for y in ys:
         row = buf[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2]
         if left_eye is not None:
@@ -248,12 +268,12 @@ def _blit_pil_to_display(display, img):
     _blit_buffer_row_by_row(display, buf)
 
 
-def _blit_pil_to_both(img, reverse_rows=False):
-    """Blit same PIL image to both displays. reverse_rows=True = draw bottom-to-top (e.g. first open frame after blink)."""
+def _blit_pil_to_both(img, reverse_rows=False, outside_in=False, inside_out=False):
+    """Blit same PIL image to both displays. outside_in=closing; inside_out=opening (center toward edges)."""
     if img is None:
         return
     buf = _pil_to_rgb565_be_buffer(img)
-    _blit_buffer_row_by_row_both(buf, reverse_rows=reverse_rows)
+    _blit_buffer_row_by_row_both(buf, reverse_rows=reverse_rows, outside_in=outside_in, inside_out=inside_out)
 
 
 def render_animated_frame(cached_iris_240, pupil_x, pupil_y, blink_state="open"):
@@ -286,28 +306,33 @@ def render_animated_frame(cached_iris_240, pupil_x, pupil_y, blink_state="open")
     draw.ellipse((px - pupil_radius, py - pupil_radius, px + pupil_radius, py + pupil_radius), fill=(0, 0, 0))
 
     if blink_state == "half":
-        # Centered horizontal slit (smooth curved lids). Slit from y=cy-ry to y=cy+ry.
-        slit_half = 14  # slit height at center = 2*slit_half
+        # Curved lids with edges further down (reversed curve): lid edge dips at sides.
+        slit_half = 14
+        edge_drop = 4   # lid edge at sides this many px lower than at center
         step = 6
-        # Top lid: flat at y=0, curved edge bulging down to y=cy-slit_half at center
-        top_radius = (cy - slit_half) // 2  # ellipse radius so arc reaches cy-slit_half
-        top_cy = top_radius
+        # Top lid: bottom edge at center y=106, at sides y=106+edge_drop (110)
+        top_center_y = cy - slit_half
+        top_edge_y = top_center_y + edge_drop
+        top_cy = (top_center_y + top_edge_y) / 2.0
+        top_radius = (top_edge_y - top_center_y) / 2.0
         top_arc = []
         for x in range(EYE_SIZE, -1, -step):
             t = (x - cx) / cx
             t = max(-1.0, min(1.0, t))
-            y = top_cy - top_radius * math.sqrt(1.0 - t * t)
+            y = top_cy - top_radius * math.sqrt(1.0 - t * t)  # center 106, edges 110 (lower)
             top_arc.append((x, int(y)))
         top_poly = [(0, 0), (EYE_SIZE, 0)] + top_arc[1:]
         draw.polygon(top_poly, fill=(0, 0, 0))
-        # Bottom lid: flat at y=EYE_SIZE, curved top edge bulging up to y=cy+slit_half at center
-        bot_radius = (EYE_SIZE - (cy + slit_half)) // 2  # 53 so arc reaches 134 at center
-        bot_cy = cy + slit_half + bot_radius  # ellipse center 187
+        # Bottom lid: top edge at center y=134, at sides y=134+edge_drop (138)
+        bot_center_y = cy + slit_half
+        bot_edge_y = bot_center_y + edge_drop
+        bot_cy = (bot_center_y + bot_edge_y) / 2.0
+        bot_radius = (bot_edge_y - bot_center_y) / 2.0
         bot_arc = []
         for x in range(EYE_SIZE, -1, -step):
             t = (x - cx) / cx
             t = max(-1.0, min(1.0, t))
-            y = bot_cy - bot_radius * math.sqrt(1.0 - t * t)  # top half of ellipse
+            y = bot_cy - bot_radius * math.sqrt(1.0 - t * t)  # center 134, edges 138 (lower)
             bot_arc.append((x, int(y)))
         bot_poly = [(0, EYE_SIZE), (EYE_SIZE, EYE_SIZE)] + bot_arc[1:]
         draw.polygon(bot_poly, fill=(0, 0, 0))
@@ -384,8 +409,8 @@ def run_eyes():
         ANIM_FPS = 55
         frame_dt = 1.0 / ANIM_FPS
         PUPIL_EASE = 0.48
-        BLINK_HALF_MS = 0.05   # 50 ms half-closed
-        BLINK_CLOSED_MS = 0.1  # 100 ms fully closed
+        BLINK_HALF_MS = 0.35   # 350 ms half-closed (each side)
+        BLINK_CLOSED_MS = 0.3  # 300 ms fully closed; total blink ~1 s
         BLINK_DEBOUNCE_S = 0.2
         last_blink_end = 0.0
         last_look_time = 0.0
@@ -459,7 +484,9 @@ def run_eyes():
             pupil_y = max(-1.0, min(1.0, pupil_y))
 
             frame = render_animated_frame(cached_iris_240, pupil_x, pupil_y, blink_state)
-            _blit_pil_to_both(frame, reverse_rows=blit_open_bottom_to_top)
+            # Closing: outside_in (half_closing). Opening: inside_out (half_opening + first open frame).
+            opening = (blink_state == "half" and blink_phase == "half_opening") or blit_open_bottom_to_top
+            _blit_pil_to_both(frame, reverse_rows=False, outside_in=(blink_state == "half" and blink_phase == "half_closing"), inside_out=opening)
             if blit_open_bottom_to_top:
                 blit_open_bottom_to_top = False
             time.sleep(max(0.0, frame_dt - (time.monotonic() - now)))
