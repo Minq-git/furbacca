@@ -227,20 +227,19 @@ def _blit_buffer_row_by_row(display, buf):
         display.blit_buffer(buf[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2], 0, y, EYE_SIZE, 1)
 
 
-def _blit_buffer_row_by_row_both(buf, reverse_rows=False, outside_in=False, inside_out=False):
-    """Blit same buffer row-by-row. outside_in=edges toward center (closing); inside_out=center toward edges (opening)."""
+def _blit_buffer_row_by_row_both(buf, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
+    """Blit same buffer row-by-row. partial_rows=(y0,y1)=only those rows (faster when only pupil/eyelid changes)."""
     if buf is None:
         return
+    y_lo, y_hi = (partial_rows if partial_rows else (0, EYE_SIZE - 1))
+    y_lo = max(0, min(EYE_SIZE - 1, y_lo))
+    y_hi = max(y_lo, min(EYE_SIZE - 1, y_hi))
     if outside_in:
-        # Closing: draw from both ends toward center: 239, 0, 238, 1, 237, 2, ...
         ys = []
         for i in range(EYE_SIZE):
-            if i % 2 == 0:
-                ys.append(EYE_SIZE - 1 - (i // 2))
-            else:
-                ys.append(i // 2)
+            y = (EYE_SIZE - 1 - (i // 2)) if i % 2 == 0 else (i // 2)
+            ys.append(y)
     elif inside_out:
-        # Opening: draw from center toward top and bottom: 120, 119, 121, 118, 122, ...
         center = EYE_SIZE // 2
         ys = [center]
         for offset in range(1, center + 1):
@@ -249,9 +248,11 @@ def _blit_buffer_row_by_row_both(buf, reverse_rows=False, outside_in=False, insi
             if center + offset < EYE_SIZE:
                 ys.append(center + offset)
     elif reverse_rows:
-        ys = range(EYE_SIZE - 1, -1, -1)
+        ys = list(range(EYE_SIZE - 1, -1, -1))
     else:
-        ys = range(EYE_SIZE)
+        ys = list(range(EYE_SIZE))
+    if partial_rows is not None:
+        ys = [y for y in ys if y_lo <= y <= y_hi]
     for y in ys:
         row = buf[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2]
         if left_eye is not None:
@@ -268,23 +269,20 @@ def _blit_pil_to_display(display, img):
     _blit_buffer_row_by_row(display, buf)
 
 
-def _blit_pil_to_both(img, reverse_rows=False, outside_in=False, inside_out=False):
-    """Blit same PIL image to both displays. outside_in=closing; inside_out=opening (center toward edges)."""
+def _blit_pil_to_both(img, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
+    """Blit same PIL image to both displays. partial_rows=(y0,y1)=only those rows (update only pixels that change for fluid 60fps)."""
     if img is None:
         return
     buf = _pil_to_rgb565_be_buffer(img)
-    _blit_buffer_row_by_row_both(buf, reverse_rows=reverse_rows, outside_in=outside_in, inside_out=inside_out)
+    _blit_buffer_row_by_row_both(buf, reverse_rows=reverse_rows, outside_in=outside_in, inside_out=inside_out, partial_rows=partial_rows)
 
 
 def render_animated_frame(cached_iris_240, pupil_x, pupil_y, blink_state="open"):
     """
-    Three visual states:
-    - open: full eye (large circle)
-    - half: horizontal oval slit (lidded)
-    - closed: black with single horizontal line (eyelid line)
+    Two visual states: open (full eye) and closed (black with eyelid line).
+    Draw order: closing = outside-in, opening = inside-out.
     """
     from PIL import ImageDraw
-    import math
     cx, cy = EYE_SIZE // 2, EYE_SIZE // 2
 
     if blink_state == "closed":
@@ -304,39 +302,6 @@ def render_animated_frame(cached_iris_240, pupil_x, pupil_y, blink_state="open")
     px = int(cx + pupil_x * 35)
     py = int(cy + pupil_y * 35)
     draw.ellipse((px - pupil_radius, py - pupil_radius, px + pupil_radius, py + pupil_radius), fill=(0, 0, 0))
-
-    if blink_state == "half":
-        # Curved lids with edges further down (reversed curve): lid edge dips at sides.
-        slit_half = 14
-        edge_drop = 4   # lid edge at sides this many px lower than at center
-        step = 6
-        # Top lid: bottom edge at center y=106, at sides y=106+edge_drop (110)
-        top_center_y = cy - slit_half
-        top_edge_y = top_center_y + edge_drop
-        top_cy = (top_center_y + top_edge_y) / 2.0
-        top_radius = (top_edge_y - top_center_y) / 2.0
-        top_arc = []
-        for x in range(EYE_SIZE, -1, -step):
-            t = (x - cx) / cx
-            t = max(-1.0, min(1.0, t))
-            y = top_cy - top_radius * math.sqrt(1.0 - t * t)  # center 106, edges 110 (lower)
-            top_arc.append((x, int(y)))
-        top_poly = [(0, 0), (EYE_SIZE, 0)] + top_arc[1:]
-        draw.polygon(top_poly, fill=(0, 0, 0))
-        # Bottom lid: top edge at center y=134, at sides y=134+edge_drop (138)
-        bot_center_y = cy + slit_half
-        bot_edge_y = bot_center_y + edge_drop
-        bot_cy = (bot_center_y + bot_edge_y) / 2.0
-        bot_radius = (bot_edge_y - bot_center_y) / 2.0
-        bot_arc = []
-        for x in range(EYE_SIZE, -1, -step):
-            t = (x - cx) / cx
-            t = max(-1.0, min(1.0, t))
-            y = bot_cy - bot_radius * math.sqrt(1.0 - t * t)  # center 134, edges 138 (lower)
-            bot_arc.append((x, int(y)))
-        bot_poly = [(0, EYE_SIZE), (EYE_SIZE, EYE_SIZE)] + bot_arc[1:]
-        draw.polygon(bot_poly, fill=(0, 0, 0))
-
     return base
 
 
@@ -400,25 +365,26 @@ def run_eyes():
         import random
         pupil_x, pupil_y = 0.0, 0.0
         target_x, target_y = 0.0, 0.0
-        # Blink: three states, fixed timings — Half (50ms) -> Closed (100ms) -> Half (50ms) -> Open
-        blink_phase = None  # None | 'half_closing' | 'closed' | 'half_opening'
+        # Blink: open 2–5 s, then closed (one duration), then open. Draw: closing = outside-in, opening = inside-out.
+        blink_phase = None  # None (open) | 'closed'
         blink_phase_start = 0.0
-        blit_open_bottom_to_top = False  # set True on first open frame after blink; draw bottom-to-top so lid opens upward
+        draw_closed_outside_in = False  # first closed frame: refresh outside-in
+        blit_open_bottom_to_top = False  # first open frame after blink: refresh inside-out
         next_auto_blink = time.monotonic() + random.uniform(2.0, 5.0)  # open 2–5 s between blinks
         next_dart = 0.0
-        ANIM_FPS = 55
+        ANIM_FPS = 60
         frame_dt = 1.0 / ANIM_FPS
         PUPIL_EASE = 0.48
-        BLINK_HALF_MS = 0.35   # 350 ms half-closed (each side)
-        BLINK_CLOSED_MS = 0.3  # 300 ms fully closed; total blink ~1 s
+        BLINK_CLOSED_MS = 0.075   # 75 ms fully closed
         BLINK_DEBOUNCE_S = 0.2
         last_blink_end = 0.0
         last_look_time = 0.0
 
         def do_blink():
-            nonlocal blink_phase, blink_phase_start
-            blink_phase = "half_closing"
+            nonlocal blink_phase, blink_phase_start, draw_closed_outside_in
+            blink_phase = "closed"
             blink_phase_start = time.monotonic()
+            draw_closed_outside_in = True
 
         while True:
             now = time.monotonic()
@@ -450,27 +416,15 @@ def run_eyes():
                 do_blink()
                 next_auto_blink = now + random.uniform(2.0, 5.0)
 
-            # Advance blink phase: half_closing (50ms) -> closed (100ms) -> half_opening (50ms) -> open
+            # Advance blink phase: closed (BLINK_CLOSED_MS) -> open
             elapsed = now - blink_phase_start
-            if blink_phase == "half_closing" and elapsed >= BLINK_HALF_MS:
-                blink_phase = "closed"
-                blink_phase_start = now
-            elif blink_phase == "closed" and elapsed >= BLINK_CLOSED_MS:
-                blink_phase = "half_opening"
-                blink_phase_start = now
-                blit_open_bottom_to_top = True  # partially open frame: draw bottom-to-top so lid opens upward
-            elif blink_phase == "half_opening" and elapsed >= BLINK_HALF_MS:
+            if blink_phase == "closed" and elapsed >= BLINK_CLOSED_MS:
                 blink_phase = None
                 next_auto_blink = now + random.uniform(2.0, 5.0)
-                blit_open_bottom_to_top = True  # next frame = first open; draw bottom-to-top so lid appears to open upward
+                blit_open_bottom_to_top = True  # first open frame: draw inside-out
 
             # Map phase to visual state for render
-            if blink_phase is None:
-                blink_state = "open"
-            elif blink_phase == "closed":
-                blink_state = "closed"
-            else:
-                blink_state = "half"
+            blink_state = "open" if blink_phase is None else "closed"
 
             # Nervous dart: when idle (no recent UDP look), pick new random target often
             if now >= next_dart and (now - last_look_time) > 0.2:
@@ -484,9 +438,15 @@ def run_eyes():
             pupil_y = max(-1.0, min(1.0, pupil_y))
 
             frame = render_animated_frame(cached_iris_240, pupil_x, pupil_y, blink_state)
-            # Closing: outside_in (half_closing). Opening: inside_out (half_opening + first open frame).
-            opening = (blink_state == "half" and blink_phase == "half_opening") or blit_open_bottom_to_top
-            _blit_pil_to_both(frame, reverse_rows=False, outside_in=(blink_state == "half" and blink_phase == "half_closing"), inside_out=opening)
+            # Closing: outside_in (first closed frame). Opening: inside_out (first open frame). Open: partial pupil band.
+            partial = None
+            if blink_state == "open" and not blit_open_bottom_to_top:
+                py = int(EYE_SIZE // 2 + pupil_y * 35)
+                margin = 40  # rows around pupil to redraw
+                partial = (max(0, py - margin), min(EYE_SIZE - 1, py + margin))
+            _blit_pil_to_both(frame, reverse_rows=False, outside_in=draw_closed_outside_in, inside_out=blit_open_bottom_to_top, partial_rows=partial)
+            if draw_closed_outside_in:
+                draw_closed_outside_in = False
             if blit_open_bottom_to_top:
                 blit_open_bottom_to_top = False
             time.sleep(max(0.0, frame_dt - (time.monotonic() - now)))

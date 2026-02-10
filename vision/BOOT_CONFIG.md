@@ -58,4 +58,4 @@ Optional params: `dtoverlay=gc9a01,speed=40000000,rotate=0,width=240,height=240,
 | Left eye SPI      | `/dev/spidev0.0` (CE0 = GPIO 8) |
 | Right eye SPI     | `/dev/spidev0.1` (CE1 = GPIO 7) |
 | Python driver     | `vision/eyes.py` |
-| SPI speed         | Default 10 MHz; set env `SPI_BAUDRATE=20000000` or `32000000` for faster animated eyes (32M on short wires). |
+| SPI speed         | Default **20 MHz** (higher can tear); set env `SPI_BAUDRATE` to override. |

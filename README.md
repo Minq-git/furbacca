@@ -30,7 +30,7 @@ Or manually: `python3 -m venv env`, `source env/bin/activate`, `pip install spid
 - `EYES_GRADIENT=1` — show XY gradient on both displays (test pattern, no image file).  
 - `EYES_RAINBOW=1` — show circular rainbow (pinwheel) on both displays (test pattern).
 - `EYES_ANIMATED=1` — **headless animated eyes** (no monitor): iris + moving pupil + blink, driven by PIL; UDP `blink` and `look` with `x`/`y` (-1..1) for pupil target. For smart toys.
-- `SPI_BAUDRATE=20000000` or `32000000` — higher SPI speed (default 10M) for faster, smoother animated refresh; use if wiring allows (32M on short wires).
+- `SPI_BAUDRATE` — default **20 MHz** (higher can cause screen tearing); override if needed.
 
 **Display test modes (for later testing):**
 ```bash
