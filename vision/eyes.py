@@ -31,10 +31,10 @@ EYES_GRADIENT = os.environ.get("EYES_GRADIENT", "").strip().lower() in ("1", "tr
 EYES_RAINBOW = os.environ.get("EYES_RAINBOW", "").strip().lower() in ("1", "true", "yes")
 # Optional: headless animated eyes (PIL-rendered, no monitor) — iris + pupil + blink
 EYES_ANIMATED = os.environ.get("EYES_ANIMATED", "").strip().lower() in ("1", "true", "yes")
-# Optional: eye configuration — default (current), human (inverted iris/sclera: bottom=outside), dragon (dragon-* assets)
+# Optional: eye configuration — default, human (inverted: bottom=outside), dragon (dragon-*), demon (dragon-* + inverted)
 _eye_type_raw = os.environ.get("EYE_TYPE", "").strip().lower()
 def get_eye_type():
-    if _eye_type_raw in ("human", "dragon"):
+    if _eye_type_raw in ("human", "dragon", "demon"):
         return _eye_type_raw
     return "default"
 EYE_TYPE = get_eye_type()
@@ -101,7 +101,7 @@ def load_sclera_image(eye_type=None):
     if not HAS_PIL:
         return None
     gdir = _graphics_dir()
-    names = ("dragon-sclera.png",) if eye_type == "dragon" else ("sclera.png",)
+    names = ("dragon-sclera.png",) if eye_type in ("dragon", "demon") else ("sclera.png",)
     for name in names:
         path = os.path.join(gdir, name)
         if os.path.isfile(path):
@@ -126,7 +126,7 @@ def load_iris_image(eye_type=None):
     if not HAS_PIL:
         return None
     gdir = _graphics_dir()
-    names = ("dragon-iris.jpg",) if eye_type == "dragon" else ("iris.png", "iris.jpg")
+    names = ("dragon-iris.jpg",) if eye_type in ("dragon", "demon") else ("iris.png", "iris.jpg")
     for name in names:
         path = os.path.join(gdir, name)
         if os.path.isfile(path):
@@ -383,7 +383,7 @@ def _sample_texture_spherical(tex, cx, cy, r_max, x, y, invert_v=False):
 def build_eye_base_sclera_iris():
     """
     Build open-eye base: sclera (background) + iris (circular region), per eye.svg / PI_Eyes.
-    Uses EYE_TYPE: default (normal mapping), human (inverted: bottom=outside), dragon (dragon-* assets). Cached per eye type.
+    Uses EYE_TYPE: default (normal), human (inverted), dragon (dragon-*), demon (dragon-* + inverted). Cached per eye type.
     """
     global _eye_base_sclera_iris_by_type
     eye_type = get_eye_type()
@@ -396,7 +396,7 @@ def build_eye_base_sclera_iris():
     if sclera is None:
         _eye_base_sclera_iris_by_type[eye_type] = load_iris_image(eye_type)  # fallback: iris only
         return _eye_base_sclera_iris_by_type[eye_type]
-    invert_v = eye_type == "human"
+    invert_v = eye_type in ("human", "demon")
     cx, cy = EYE_SIZE // 2, EYE_SIZE // 2
     R_eye = int((EYE_SIZE // 2) * EYE_LAYER_VIEWPORT_SCALE)
     iris_r_scaled = int(IRIS_R * EYE_LAYER_VIEWPORT_SCALE)
@@ -422,12 +422,12 @@ def build_eye_base_sclera_iris():
 def build_eye_base_sclera_iris_at_center(pole_x, pole_y):
     """
     Build open-eye base with spherical mapping centered at (pole_x, pole_y).
-    Sclera and iris follow the pupil (eyeball follows gaze). Uses EYE_TYPE (default/human/dragon). Returns 240x240 RGB or None.
+    Sclera and iris follow the pupil (eyeball follows gaze). Uses EYE_TYPE (default/human/dragon/demon). Returns 240x240 RGB or None.
     """
     if not HAS_PIL:
         return None
     eye_type = get_eye_type()
-    invert_v = eye_type == "human"
+    invert_v = eye_type in ("human", "demon")
     sclera = load_sclera_image(eye_type)
     iris = load_iris_image(eye_type)
     if sclera is None:
@@ -477,13 +477,12 @@ def render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, blink_state="op
     """
     Renders the EYE LAYER only (sclera + iris + pupil). Always the open eye.
     Blink is drawn on a separate layer (render_blink_overlay) and blit with outside_in/inside_out.
-    pupil_radius: optional; if None uses PUPIL_RADIUS_RELAXED (focus effect can pass smaller value).
+    pupil_radius: optional float; if None uses 22. Uses float radius for smooth dilation (no integer snap).
     """
-    from PIL import ImageDraw
     cx, cy = EYE_SIZE // 2, EYE_SIZE // 2
     if pupil_radius is None:
-        pupil_radius = 22
-    pupil_radius = max(8, min(40, int(round(pupil_radius))))
+        pupil_radius = 22.0
+    r = max(8.0, min(40.0, float(pupil_radius)))
     px = int(cx + pupil_x * 35)
     py = int(cy + pupil_y * 35)
 
@@ -491,8 +490,17 @@ def render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, blink_state="op
     base = build_eye_base_sclera_iris_at_center(px, py)
     if base is None:
         base = Image.new("RGB", (EYE_SIZE, EYE_SIZE), (32, 32, 48)) if cached_eye_base_240 is None else cached_eye_base_240.copy()
-    draw = ImageDraw.Draw(base)
-    draw.ellipse((px - pupil_radius, py - pupil_radius, px + pupil_radius, py + pupil_radius), fill=(0, 0, 0))
+    # Draw pupil with float radius (distance check) so dilation animates smoothly without integer stepping
+    base_pix = base.load()
+    r_sq = r * r
+    x0 = max(0, int(px - r - 1))
+    y0 = max(0, int(py - r - 1))
+    x1 = min(EYE_SIZE, int(px + r + 2))
+    y1 = min(EYE_SIZE, int(py + r + 2))
+    for y in range(y0, y1):
+        for x in range(x0, x1):
+            if (x - px) * (x - px) + (y - py) * (y - py) <= r_sq:
+                base_pix[x, y] = (0, 0, 0)
     return base
 
 
@@ -596,7 +604,7 @@ def run_eyes():
         wide_until = 0.0
         next_wide_at = 0.0
         FOCUS_HOLD_S = 0.35
-        PUPIL_TRANSITION_S = 0.2
+        PUPIL_TRANSITION_S = 0.5   # longer so dilation feels gradual, not a snap
         pupil_radius_current = float(PUPIL_RADIUS_RELAXED)
         pupil_radius_target = PUPIL_RADIUS_RELAXED
         radius_transition_start = 0.0
@@ -724,7 +732,7 @@ def run_eyes():
                 pupil_radius_current = radius_transition_from + (radius_transition_to - radius_transition_from) * e
             pupil_radius = pupil_radius_current
 
-            # Eye layer: open eye (sclera + iris + pupil). Top-down normally; inside_out on first frame after blink (lid opens from center).
+            # Eye layer: open eye (sclera + iris + pupil). Always full-frame blit (no inside_out/outside_in — that's only for blink overlay).
             eye_frame = render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, "open", pupil_radius=pupil_radius)
             if blit_open_bottom_to_top:
                 _blit_pil_to_both(eye_frame, reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)

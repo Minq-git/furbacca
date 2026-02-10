@@ -30,7 +30,7 @@ Or manually: `python3 -m venv env`, `source env/bin/activate`, `pip install spid
 - `EYES_GRADIENT=1` — show XY gradient on both displays (test pattern, no image file).  
 - `EYES_RAINBOW=1` — show circular rainbow (pinwheel) on both displays (test pattern).
 - `EYES_ANIMATED=1` — **headless animated eyes** (no monitor): iris + moving pupil + blink, driven by PIL; UDP `blink` and `look` with `x`/`y` (-1..1) for pupil target. For smart toys.
-- `EYE_TYPE` — eye texture/mapping: **default** (current), `human` (iris & sclera inverted: bottom of image = outside of eyeball), `dragon` (uses **vision/graphics/dragon-iris.jpg** and **dragon-sclera.png**).
+- `EYE_TYPE` — eye texture/mapping: **default** (current), `human` (inverted: bottom = outside), `dragon` (dragon-iris + dragon-sclera), `demon` (dragon assets + inverted mapping).
 - `SPI_BAUDRATE` — default **20 MHz** (higher can cause screen tearing); override if needed.
 
 **Display test modes (for later testing):**
@@ -52,6 +52,9 @@ EYE_TYPE=dragon python vision/eyes.py
 
 # Human-style mapping (texture bottom = outside of eyeball)
 EYE_TYPE=human EYES_ANIMATED=1 python vision/eyes.py
+
+# Demon eyes (dragon textures with inverted mapping)
+EYE_TYPE=demon python vision/eyes.py
 ```
 
 **Optional — Pi_Eyes-style image on both eyes:**  
