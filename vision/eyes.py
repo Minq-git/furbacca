@@ -1,84 +1,37 @@
 """
 Furbacca vision: dual GC9A01 eyes using russhughes/gc9a01py (CPython compat layer).
+Orchestrates display init, UDP bridge, and run loop; delegates to config, assets, render, blit, test_patterns.
 """
-import socket
 import json
-import time
 import os
+import socket
 import sys
+import time
 
-# Optional: PIL for image-based eyes
-try:
-    from PIL import Image
-    HAS_PIL = True
-except ImportError:
-    HAS_PIL = False
-
-EYE_SIZE = 240
-# Iris circle radius in pixels (from eye.svg: iris path radius 17.7 in 68px viewBox, eye radius 34 → 120*17.7/34 ≈ 62)
-IRIS_R = int((EYE_SIZE // 2) * 17.7 / 34)
-# Eye layer drawn 25% larger than viewport so when the eye moves we don't see black edges around the sclera
-EYE_LAYER_VIEWPORT_SCALE = 1.25
-left_eye = None
-right_eye = None
-
-# Optional: swap which SPI device is "left" vs "right"
-SWAP_LEFT_RIGHT_SPI = os.environ.get("SWAP_LEFT_RIGHT_SPI", "").strip().lower() in ("1", "true", "yes")
-# Optional: only show solid red/blue (no eye image)
-EYES_SOLID_COLORS = os.environ.get("EYES_SOLID_COLORS", "").strip().lower() in ("1", "true", "yes")
-# Optional: show gradient/rainbow instead of image (useful to test SPI without PIL/image file)
-EYES_GRADIENT = os.environ.get("EYES_GRADIENT", "").strip().lower() in ("1", "true", "yes")
-EYES_RAINBOW = os.environ.get("EYES_RAINBOW", "").strip().lower() in ("1", "true", "yes")
-# Animated eyes by default (PIL-rendered, no monitor). Set EYES_ANIMATED=0 for still image.
-EYES_ANIMATED = os.environ.get("EYES_ANIMATED", "1").strip().lower() not in ("0", "false", "no")
-# Optional: eye configuration — default, human (inverted + smaller iris), dragon (dragon-* + inverted), demon (dragon-* normal).
-# Eye type can be changed at runtime via set_eye_type(); get_eye_type() returns current value (env at startup).
-_eye_type_raw = os.environ.get("EYE_TYPE", "").strip().lower()
-_current_eye_type = None  # None = use env default; set via set_eye_type() for runtime changes
-
-def get_eye_type():
-    """Return current eye type (default, human, dragon, demon). Use set_eye_type() to change at runtime."""
-    if _current_eye_type is not None:
-        return _current_eye_type
-    if _eye_type_raw in ("human", "dragon", "demon"):
-        return _eye_type_raw
-    return "default"
-
-def set_eye_type(eye_type):
-    """Set eye type at runtime. Pass 'default', 'human', 'dragon', or 'demon'; or None to reset to env default."""
-    global _current_eye_type
-    if eye_type is None:
-        _current_eye_type = None
-        return
-    eye_type = str(eye_type).strip().lower()
-    if eye_type in ("human", "dragon", "demon"):
-        _current_eye_type = eye_type
-    else:
-        _current_eye_type = "default"
-
-EYE_TYPE_CYCLE = ("default", "human", "dragon", "demon")
-
-def _cycle_eye_type():
-    """Cycle to next eye type (default -> human -> dragon -> demon -> default). Returns new type."""
-    current = get_eye_type()
-    idx = EYE_TYPE_CYCLE.index(current) if current in EYE_TYPE_CYCLE else 0
-    next_type = EYE_TYPE_CYCLE[(idx + 1) % len(EYE_TYPE_CYCLE)]
-    set_eye_type(next_type)
-    return next_type
-
-# --- Display: gc9a01py via compat layer ---
 _vision_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _vision_dir)
+
+import config
+import assets
+import blit
+import render
+import test_patterns
+from display import init_displays
+
+# Re-export for callers that do "from vision.eyes import get_eye_type"
+get_eye_type = config.get_eye_type
+set_eye_type = config.set_eye_type
+
+# Display handles (set on init)
+left_eye, right_eye = None, None
 try:
-    from display import init_displays
-    left_eye, right_eye = init_displays(swap_left_right=SWAP_LEFT_RIGHT_SPI)
+    left_eye, right_eye = init_displays(swap_left_right=config.SWAP_LEFT_RIGHT_SPI)
 except Exception as e:
     print(f"⚠ Display init failed: {e}")
     import traceback
     traceback.print_exc()
-    left_eye, right_eye = None, None
 
-# --- UDP bridge ---
+# UDP bridge
 UDP_IP = "127.0.0.1"
 UDP_PORT = 5005
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -86,103 +39,7 @@ sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 sock.bind((UDP_IP, UDP_PORT))
 sock.setblocking(False)
 
-
-def _graphics_dir():
-    return os.path.join(_vision_dir, "graphics")
-
-
-def _eye_type_scales(eye_type):
-    """Return (invert_v, iris_scale, sclera_scale) for the given eye type. Single place for human/dragon/demon mapping rules."""
-    invert_v = eye_type in ("human", "dragon")
-    iris_scale = 0.8 if eye_type in ("human", "dragon") else 1.0
-    sclera_scale = 1.2 if eye_type in ("human", "demon") else 1.0
-    return (invert_v, iris_scale, sclera_scale)
-
-
-def _eye_type_pupil_radii(eye_type):
-    """Return (relaxed, focused, wide) pupil radius for the given eye type. default/dragon: resting 40, wide 60; human/demon: 22, 12, 40."""
-    if eye_type in ("default", "dragon"):
-        return (40, 12, 60)  # larger scale: resting 40, wide 60
-    return (22, 12, 40)  # human, demon
-
-
-_eye_image_pil = None
-_sclera_by_type = {}
-_iris_by_type = {}
-
-
-def load_eye_image():
-    """Load 240x240 image from vision/graphics/ (PIL). Fallback for static/non-animated mode."""
-    global _eye_image_pil
-    if _eye_image_pil is not None:
-        return _eye_image_pil
-    if not HAS_PIL:
-        return None
-    gdir = _graphics_dir()
-    for name in ("eye.png", "eye.jpg", "iris.png", "iris.jpg", "sclera.png", "dragon-iris.jpg"):
-        path = os.path.join(gdir, name)
-        if os.path.isfile(path):
-            try:
-                img = Image.open(path).convert("RGB")
-                resample = getattr(Image, "Resampling", Image).LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
-                img = img.resize((EYE_SIZE, EYE_SIZE), resample)
-                _eye_image_pil = img
-                return _eye_image_pil
-            except Exception as e:
-                print(f"⚠ Could not load {path}: {e}")
-    return None
-
-
-def load_sclera_image(eye_type=None):
-    """Load sclera texture (background / white of eye). eye_type: default/human (sclera.png), dragon/demon (dragon-sclera.png). Cached per type."""
-    global _sclera_by_type
-    if eye_type is None:
-        eye_type = get_eye_type()
-    if eye_type in _sclera_by_type:
-        return _sclera_by_type[eye_type]
-    if not HAS_PIL:
-        return None
-    gdir = _graphics_dir()
-    names = ("dragon-sclera.png",) if eye_type in ("dragon", "demon") else ("sclera.png",)
-    for name in names:
-        path = os.path.join(gdir, name)
-        if os.path.isfile(path):
-            try:
-                img = Image.open(path).convert("RGB")
-                resample = getattr(Image, "Resampling", Image).LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
-                img = img.resize((EYE_SIZE, EYE_SIZE), resample)
-                _sclera_by_type[eye_type] = img
-                return img
-            except Exception as e:
-                print(f"⚠ Could not load sclera {path}: {e}")
-    return None
-
-
-def load_iris_image(eye_type=None):
-    """Load iris texture (colored ring). eye_type: default/human (iris.png/jpg), dragon/demon (dragon-iris.jpg). Cached per type."""
-    global _iris_by_type
-    if eye_type is None:
-        eye_type = get_eye_type()
-    if eye_type in _iris_by_type:
-        return _iris_by_type[eye_type]
-    if not HAS_PIL:
-        return None
-    gdir = _graphics_dir()
-    names = ("dragon-iris.jpg",) if eye_type in ("dragon", "demon") else ("iris.png", "iris.jpg")
-    for name in names:
-        path = os.path.join(gdir, name)
-        if os.path.isfile(path):
-            try:
-                img = Image.open(path).convert("RGB")
-                resample = getattr(Image, "Resampling", Image).LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
-                img = img.resize((EYE_SIZE, EYE_SIZE), resample)
-                _iris_by_type[eye_type] = img
-                return img
-            except Exception as e:
-                print(f"⚠ Could not load iris {path}: {e}")
-    return None
-
-
+# --- Optional: /dev/fb1 fallback (legacy) ---
 FB1_PATH = "/dev/fb1"
 _fb1_warned = False
 
@@ -205,16 +62,16 @@ def _write_fb1(row_buf_or_full_buffer):
 
 def show_eye_image_fb1():
     """Draw eye image to /dev/fb1 (left eye when overlay is used). LE RGB565."""
-    img = load_eye_image()
+    img = assets.load_eye_image()
     if img is None:
         return
     try:
         import struct
         img = img.rotate(180)
         rows = []
-        for y in range(EYE_SIZE):
-            row_buf = bytearray(EYE_SIZE * 2)
-            for x in range(EYE_SIZE):
+        for y in range(config.EYE_SIZE):
+            row_buf = bytearray(config.EYE_SIZE * 2)
+            for x in range(config.EYE_SIZE):
                 r, g, b = img.getpixel((x, y))
                 c565 = (r & 0xF8) << 8 | (g & 0xFC) << 3 | (b >> 3)
                 row_buf[x * 2 : x * 2 + 2] = struct.pack("<H", c565)
@@ -226,406 +83,31 @@ def show_eye_image_fb1():
 def fill_fb1(color_565):
     """Fill /dev/fb1 with solid color (16-bit RGB565, little-endian)."""
     import struct
-    row = struct.pack("<H", color_565) * EYE_SIZE
-    _write_fb1([row] * EYE_SIZE)
+    row = struct.pack("<H", color_565) * config.EYE_SIZE
+    _write_fb1([row] * config.EYE_SIZE)
 
 
-def _rgb565_le(r, g, b):
-    """Pack R,G,B (0-255) to little-endian RGB565 (gradient/rainbow/fb1)."""
-    import struct
-    c565 = (r & 0xF8) << 8 | (g & 0xFC) << 3 | (b >> 3)
-    return struct.pack("<H", c565)
-
-
-def _rgb565_be(r, g, b):
-    """Pack R,G,B (0-255) to big-endian RGB565. Required for eye image on gc9a01py (iris displays correctly with >H)."""
-    import struct
-    c565 = (r & 0xF8) << 8 | (g & 0xFC) << 3 | (b >> 3)
-    return struct.pack(">H", c565)
-
-
-def show_gradient(display):
-    """Draw XY gradient (red/green sweep) to display. No image file; same blit path as show_eye_image."""
-    if display is None:
+def show_eye_image(display):
+    """Send PIL image to gc9a01py display. Big-endian RGB565 row-by-row."""
+    img = assets.load_eye_image()
+    if img is None or display is None:
         return
     try:
-        row_buf = bytearray(EYE_SIZE * 2)
-        for y in range(EYE_SIZE):
-            for x in range(EYE_SIZE):
-                r = x * 255 // (EYE_SIZE - 1) if EYE_SIZE > 1 else 0
-                g = y * 255 // (EYE_SIZE - 1) if EYE_SIZE > 1 else 0
-                b = 128
-                row_buf[x * 2 : x * 2 + 2] = _rgb565_le(r, g, b)
-            display.blit_buffer(row_buf, 0, y, EYE_SIZE, 1)
+        blit.blit_pil_to_display(display, img)
     except Exception as e:
-        print(f"⚠ Gradient error: {e}")
-
-
-def _hsv_to_rgb(h, s, v):
-    """H,S,V in [0,1] -> (r,g,b) 0-255."""
-    if s <= 0:
-        return (int(v * 255), int(v * 255), int(v * 255))
-    h = (h % 1.0) * 6
-    i = int(h)
-    f = h - i
-    p = v * (1 - s)
-    q = v * (1 - s * f)
-    t = v * (1 - s * (1 - f))
-    i %= 6
-    if i == 0:
-        r, g, b = v, t, p
-    elif i == 1:
-        r, g, b = q, v, p
-    elif i == 2:
-        r, g, b = p, v, t
-    elif i == 3:
-        r, g, b = p, q, v
-    elif i == 4:
-        r, g, b = t, p, v
-    else:
-        r, g, b = v, p, q
-    return (int(r * 255), int(g * 255), int(b * 255))
-
-
-def show_rainbow(display):
-    """Draw circular rainbow (hue by angle from center) to display. Same blit path as show_eye_image."""
-    if display is None:
-        return
-    try:
-        import math
-        cx = (EYE_SIZE - 1) / 2.0
-        cy = (EYE_SIZE - 1) / 2.0
-        row_buf = bytearray(EYE_SIZE * 2)
-        for y in range(EYE_SIZE):
-            for x in range(EYE_SIZE):
-                dx, dy = x - cx, y - cy
-                angle = math.atan2(dy, dx)
-                hue = (angle / (2 * math.pi) + 0.5) % 1.0
-                r, g, b = _hsv_to_rgb(hue, 1.0, 1.0)
-                row_buf[x * 2 : x * 2 + 2] = _rgb565_le(r, g, b)
-            display.blit_buffer(row_buf, 0, y, EYE_SIZE, 1)
-    except Exception as e:
-        print(f"⚠ Rainbow error: {e}")
-
-
-def _pil_to_rgb565_be_buffer(img):
-    """Convert 240x240 PIL RGB to bytearray big-endian RGB565 (row-major). Same as show_eye_image (>H) so iris displays correctly."""
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-    if img.size != (EYE_SIZE, EYE_SIZE):
-        img = img.resize((EYE_SIZE, EYE_SIZE), getattr(Image, "Resampling", Image).LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS)
-    img = img.rotate(180)
-    buf = bytearray(EYE_SIZE * EYE_SIZE * 2)
-    for y in range(EYE_SIZE):
-        for x in range(EYE_SIZE):
-            r, g, b = img.getpixel((x, y))
-            offset = (y * EYE_SIZE + x) * 2
-            buf[offset : offset + 2] = _rgb565_be(r, g, b)
-    return buf
-
-
-def _blit_buffer_row_by_row(display, buf):
-    """Blit RGB565 buffer to display row-by-row (same as show_eye_image / gradient path; avoids full-frame noise)."""
-    if display is None or buf is None:
-        return
-    for y in range(EYE_SIZE):
-        display.blit_buffer(buf[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2], 0, y, EYE_SIZE, 1)
-
-
-def _blit_buffer_full_frame_both(buf):
-    """Blit full 240x240 buffer to both displays in one call per display. Reduces visible scanline by updating the whole frame at once (vsync-like)."""
-    if buf is None or len(buf) < EYE_SIZE * EYE_SIZE * 2:
-        return
-    if left_eye is not None:
-        left_eye.blit_buffer(buf, 0, 0, EYE_SIZE, EYE_SIZE)
-    if right_eye is not None:
-        right_eye.blit_buffer(buf, 0, 0, EYE_SIZE, EYE_SIZE)
-
-
-def _blit_buffer_row_by_row_both(buf, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
-    """Blit same buffer row-by-row. partial_rows=(y0,y1)=only those rows (faster when only pupil/eyelid changes)."""
-    if buf is None:
-        return
-    y_lo, y_hi = (partial_rows if partial_rows else (0, EYE_SIZE - 1))
-    y_lo = max(0, min(EYE_SIZE - 1, y_lo))
-    y_hi = max(y_lo, min(EYE_SIZE - 1, y_hi))
-    if outside_in:
-        ys = []
-        for i in range(EYE_SIZE):
-            y = (EYE_SIZE - 1 - (i // 2)) if i % 2 == 0 else (i // 2)
-            ys.append(y)
-    elif inside_out:
-        center = EYE_SIZE // 2
-        ys = [center]
-        for offset in range(1, center + 1):
-            if center - offset >= 0:
-                ys.append(center - offset)
-            if center + offset < EYE_SIZE:
-                ys.append(center + offset)
-    elif reverse_rows:
-        ys = list(range(EYE_SIZE - 1, -1, -1))
-    else:
-        ys = list(range(EYE_SIZE))
-    if partial_rows is not None:
-        ys = [y for y in ys if y_lo <= y <= y_hi]
-    for y in ys:
-        row = buf[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2]
-        if left_eye is not None:
-            left_eye.blit_buffer(row, 0, y, EYE_SIZE, 1)
-        if right_eye is not None:
-            right_eye.blit_buffer(row, 0, y, EYE_SIZE, 1)
-
-
-def _blit_pil_to_display(display, img):
-    """Blit a 240x240 PIL RGB image to one display. Big-endian RGB565 row-by-row (same path as show_eye_image)."""
-    if display is None or img is None:
-        return
-    buf = _pil_to_rgb565_be_buffer(img)
-    _blit_buffer_row_by_row(display, buf)
-
-
-def _blit_pil_to_both(img, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
-    """Blit same PIL image to both displays. Full-frame top-down uses single blit per display (vsync-like, no scanline)."""
-    if img is None:
-        return
-    buf = _pil_to_rgb565_be_buffer(img)
-    if not reverse_rows and not outside_in and not inside_out and partial_rows is None:
-        _blit_buffer_full_frame_both(buf)
-    else:
-        _blit_buffer_row_by_row_both(buf, reverse_rows=reverse_rows, outside_in=outside_in, inside_out=inside_out, partial_rows=partial_rows)
-
-
-_eye_base_sclera_iris_by_type = {}
-
-
-def _sample_texture_spherical(tex, cx, cy, r_max, x, y, invert_v=False):
-    """
-    Sample texture with spherical mapping. v = r/r_max (0=center, 1=edge).
-    Default: bottom of texture = center, top = outer edge. invert_v=True (human): bottom = outer edge, top = center.
-    Returns (sx, sy) in texture coords or None if (x,y) outside circle.
-    """
-    import math
-    dx, dy = x - cx, y - cy
-    r = math.sqrt(dx * dx + dy * dy)
-    if r > r_max:
-        return None
-    angle = math.atan2(dy, dx)
-    u = (angle + math.pi) / (2.0 * math.pi)  # 0..1 around circle
-    v = r / r_max  # 0 at center, 1 at edge
-    w, h = tex.size
-    sx = int(u * (w - 1) + 0.5) % w
-    if invert_v:
-        sy = int(v * (h - 1) + 0.5)  # v=0 → top (0), v=1 → bottom (h-1): bottom of image = outside
-    else:
-        sy = int((1.0 - v) * (h - 1) + 0.5)  # v=0 → bottom (h-1), v=1 → top (0)
-    sy = max(0, min(h - 1, sy))
-    return (sx, sy)
-
-
-def build_eye_base_sclera_iris():
-    """
-    Build open-eye base: sclera (background) + iris (circular region), per eye.svg / PI_Eyes.
-    Uses EYE_TYPE: default (normal), human (inverted + smaller iris), dragon (dragon-* + inverted), demon (dragon-* normal). Cached per eye type.
-    """
-    global _eye_base_sclera_iris_by_type
-    eye_type = get_eye_type()
-    if eye_type in _eye_base_sclera_iris_by_type:
-        return _eye_base_sclera_iris_by_type[eye_type]
-    if not HAS_PIL:
-        return None
-    sclera = load_sclera_image(eye_type)
-    iris = load_iris_image(eye_type)
-    if sclera is None:
-        _eye_base_sclera_iris_by_type[eye_type] = load_iris_image(eye_type)  # fallback: iris only
-        return _eye_base_sclera_iris_by_type[eye_type]
-    invert_v, iris_scale, sclera_scale = _eye_type_scales(eye_type)
-    cx, cy = EYE_SIZE // 2, EYE_SIZE // 2
-    R_eye = int((EYE_SIZE // 2) * EYE_LAYER_VIEWPORT_SCALE * sclera_scale)
-    iris_r_scaled = int(IRIS_R * iris_scale * EYE_LAYER_VIEWPORT_SCALE)
-    base = Image.new("RGB", (EYE_SIZE, EYE_SIZE), (0, 0, 0))
-    sclera_pix = sclera.load()
-    base_pix = base.load()
-    for y in range(EYE_SIZE):
-        for x in range(EYE_SIZE):
-            pt = _sample_texture_spherical(sclera, cx, cy, R_eye, x, y, invert_v=invert_v)
-            if pt is not None:
-                base_pix[x, y] = sclera_pix[pt[0], pt[1]]
-    if iris is not None:
-        iris_pix = iris.load()
-        for y in range(EYE_SIZE):
-            for x in range(EYE_SIZE):
-                pt = _sample_texture_spherical(iris, cx, cy, iris_r_scaled, x, y, invert_v=invert_v)
-                if pt is not None:
-                    base_pix[x, y] = iris_pix[pt[0], pt[1]]
-    _eye_base_sclera_iris_by_type[eye_type] = base
-    return base
-
-
-def build_eye_base_sclera_iris_at_center(pole_x, pole_y, eye_type=None, size=None):
-    """
-    Build open-eye base with spherical mapping centered at (pole_x, pole_y).
-    pole_x, pole_y in EYE_SIZE space. size: output size (default EYE_SIZE); use smaller for Option C (then scale up).
-    """
-    if not HAS_PIL:
-        return None
-    if eye_type is None:
-        eye_type = get_eye_type()
-    if size is None:
-        size = EYE_SIZE
-    invert_v, iris_scale, sclera_scale = _eye_type_scales(eye_type)
-    sclera = load_sclera_image(eye_type)
-    iris = load_iris_image(eye_type)
-    if sclera is None:
-        return load_iris_image(eye_type)  # fallback: iris only, flat (no spherical at center)
-    scale = size / EYE_SIZE
-    pole_x_s = pole_x * scale
-    pole_y_s = pole_y * scale
-    R_eye = int((size // 2) * EYE_LAYER_VIEWPORT_SCALE * sclera_scale)
-    iris_r_scaled = int(IRIS_R * iris_scale * EYE_LAYER_VIEWPORT_SCALE * scale)
-    base = Image.new("RGB", (size, size), (0, 0, 0))
-    sclera_pix = sclera.load()
-    base_pix = base.load()
-    for y in range(size):
-        for x in range(size):
-            pt = _sample_texture_spherical(sclera, pole_x_s, pole_y_s, R_eye, x, y, invert_v=invert_v)
-            if pt is not None:
-                base_pix[x, y] = sclera_pix[pt[0], pt[1]]
-    if iris is not None:
-        iris_pix = iris.load()
-        for y in range(size):
-            for x in range(size):
-                pt = _sample_texture_spherical(iris, pole_x_s, pole_y_s, iris_r_scaled, x, y, invert_v=invert_v)
-                if pt is not None:
-                    base_pix[x, y] = iris_pix[pt[0], pt[1]]
-    return base
-
-
-# Option A: cache by quantized gaze (reuse base when gaze hasn't moved much); fixed step 0.1
-EYE_GAZE_CACHE_STEP = 0.1
-_gaze_cache = {}  # (eye_type, qx_idx, qy_idx) -> PIL image
-
-
-def _get_eye_base_cached(px, py):
-    """Return a copy of the eye base for quantized (px, py); build and cache on miss. Option A."""
-    global _gaze_cache
-    cx, cy = EYE_SIZE // 2, EYE_SIZE // 2
-    pupil_x = (px - cx) / 35.0
-    pupil_y = (py - cy) / 35.0
-    step = EYE_GAZE_CACHE_STEP
-    qx_idx = round(pupil_x / step)
-    qy_idx = round(pupil_y / step)
-    eye_type = get_eye_type()
-    key = (eye_type, qx_idx, qy_idx)
-    if key not in _gaze_cache:
-        qx = qx_idx * step
-        qy = qy_idx * step
-        qpx = int(cx + qx * 35)
-        qpy = int(cy + qy * 35)
-        _gaze_cache[key] = build_eye_base_sclera_iris_at_center(qpx, qpy, eye_type=eye_type, size=EYE_BUILD_SIZE)
-        if _gaze_cache[key] is None:
-            _gaze_cache[key] = Image.new("RGB", (EYE_BUILD_SIZE, EYE_BUILD_SIZE), (32, 32, 48))
-    base = _gaze_cache[key]
-    if base is None:
-        return None
-    return base.copy()
-
-
-# Option C: build at lower res then scale up (fewer pixels to sample)
-EYE_BUILD_SIZE = int(os.environ.get("EYE_BUILD_SIZE", "240"))  # 240 = full res; lower for faster builds
-
-
-_blink_overlay_240 = None
-
-
-def render_blink_overlay():
-    """Blink layer only: black + eyelid line. Cached. Blit this separately with outside_in/inside_out."""
-    global _blink_overlay_240
-    if _blink_overlay_240 is not None:
-        return _blink_overlay_240
-    if not HAS_PIL:
-        return None
-    from PIL import ImageDraw
-    overlay = Image.new("RGB", (EYE_SIZE, EYE_SIZE), (0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-    cy = EYE_SIZE // 2
-    line_y = cy
-    for dy in (-1, 0, 1):
-        draw.line([(0, line_y + dy), (EYE_SIZE, line_y + dy)], fill=(28, 28, 28), width=1)
-    _blink_overlay_240 = overlay
-    return _blink_overlay_240
-
-
-def render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, blink_state="open", pupil_radius=None):
-    """
-    Renders the EYE LAYER only (sclera + iris + pupil). Option A: gaze cache. Option C: build at EYE_BUILD_SIZE then scale up.
-    """
-    cx, cy = EYE_SIZE // 2, EYE_SIZE // 2
-    if pupil_radius is None:
-        pupil_radius = float(_eye_type_pupil_radii(get_eye_type())[0])
-    r = max(8.0, min(60.0, float(pupil_radius)))
-    px = int(cx + pupil_x * 35)
-    py = int(cy + pupil_y * 35)
-
-    # Option A: quantized gaze cache (reuse base when gaze step unchanged)
-    base = _get_eye_base_cached(px, py)
-    if base is None:
-        base = Image.new("RGB", (EYE_BUILD_SIZE, EYE_BUILD_SIZE), (32, 32, 48)) if cached_eye_base_240 is None else cached_eye_base_240.resize((EYE_BUILD_SIZE, EYE_BUILD_SIZE), getattr(Image, "Resampling", Image).LANCZOS)
-    scale_build = EYE_BUILD_SIZE / EYE_SIZE
-    px_b, py_b = px * scale_build, py * scale_build
-    r_b = r * scale_build
-    base_pix = base.load()
-    eye_type = get_eye_type()
-    x0 = max(0, int(px_b - r_b - 1))
-    y0 = max(0, int(py_b - r_b - 1))
-    x1 = min(EYE_BUILD_SIZE, int(px_b + r_b + 2))
-    y1 = min(EYE_BUILD_SIZE, int(py_b + r_b + 2))
-    if eye_type == "dragon":
-        half_w = max(2.0, r_b * 0.35)
-        half_h = r_b
-        for y in range(y0, y1):
-            for x in range(x0, x1):
-                if (abs(x - px_b) / half_w) + (abs(y - py_b) / half_h) <= 1.0:
-                    base_pix[x, y] = (0, 0, 0)
-    else:
-        r_sq = r_b * r_b
-        for y in range(y0, y1):
-            for x in range(x0, x1):
-                if (x - px_b) * (x - px_b) + (y - py_b) * (y - py_b) <= r_sq:
-                    base_pix[x, y] = (0, 0, 0)
-    if EYE_BUILD_SIZE != EYE_SIZE:
-        resample = getattr(Image, "Resampling", Image).LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
-        base = base.resize((EYE_SIZE, EYE_SIZE), resample)
-    return base
+        print(f"⚠ Show image error: {e}")
 
 
 def show_constructed_eye():
-    """Show the static constructed eyeball (sclera + iris + pupil at center) on both displays. No animation."""
-    frame = render_animated_frame(build_eye_base_sclera_iris(), 0.0, 0.0, "open")
+    """Show the static constructed eyeball (sclera + iris + pupil at center) on both displays."""
+    frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
     if frame is not None:
-        _blit_pil_to_both(frame, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+        blit.blit_pil_to_both(left_eye, right_eye, frame, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
     else:
-        # Fallback: single image if no sclera/iris
         show_eye_image(left_eye)
         if right_eye is not None:
             time.sleep(0.02)
             show_eye_image(right_eye)
-
-
-def show_eye_image(display):
-    """Send PIL image to gc9a01py display. Big-endian RGB565 row-by-row (PACK_FMT >H — known-good for iris on this hardware)."""
-    img = load_eye_image()
-    if img is None or display is None:
-        return
-    try:
-        img = img.rotate(180)
-        row_buf = bytearray(EYE_SIZE * 2)
-        for y in range(EYE_SIZE):
-            for x in range(EYE_SIZE):
-                r, g, b = img.getpixel((x, y))
-                row_buf[x * 2 : x * 2 + 2] = _rgb565_be(r, g, b)
-            display.blit_buffer(row_buf, 0, y, EYE_SIZE, 1)
-    except Exception as e:
-        print(f"⚠ Show image error: {e}")
 
 
 def run_eyes():
@@ -634,22 +116,22 @@ def run_eyes():
         return
 
     print("👀 Furbacca Vision Online (gc9a01py).")
-    use_gradient = EYES_GRADIENT
-    use_rainbow = EYES_RAINBOW
-    use_animated = EYES_ANIMATED and HAS_PIL and build_eye_base_sclera_iris() is not None
-    use_image = not EYES_SOLID_COLORS and not use_gradient and not use_rainbow and not use_animated and (
-        build_eye_base_sclera_iris() is not None or load_eye_image() is not None
+    use_gradient = config.EYES_GRADIENT
+    use_rainbow = config.EYES_RAINBOW
+    use_animated = config.EYES_ANIMATED and assets.HAS_PIL and render.build_eye_base_sclera_iris() is not None
+    use_image = not config.EYES_SOLID_COLORS and not use_gradient and not use_rainbow and not use_animated and (
+        render.build_eye_base_sclera_iris() is not None or assets.load_eye_image() is not None
     )
 
     def _show_idle():
         if use_gradient:
-            show_gradient(left_eye)
+            test_patterns.show_gradient(left_eye)
             time.sleep(0.05)
-            show_gradient(right_eye)
+            test_patterns.show_gradient(right_eye)
         elif use_rainbow:
-            show_rainbow(left_eye)
+            test_patterns.show_rainbow(left_eye)
             time.sleep(0.05)
-            show_rainbow(right_eye)
+            test_patterns.show_rainbow(right_eye)
         elif use_image:
             show_constructed_eye()
         else:
@@ -660,17 +142,14 @@ def run_eyes():
 
     if use_animated:
         print("  Animated eyes (headless, no monitor). UDP: blink, look x/y.")
-        cached_eye_base_240 = build_eye_base_sclera_iris()
         import random
-        import math
-        # Ease curve 3*t^2 - 2*t^3 (smooth start/end, fast middle) ported from C; 256 entries 0..255
+        cached_eye_base_240 = render.build_eye_base_sclera_iris()
         EASE_TABLE = tuple(
             int(255.0 * (3.0 * (i / 255.0) ** 2 - 2.0 * (i / 255.0) ** 3))
             for i in range(256)
         )
         pupil_x, pupil_y = 0.0, 0.0
         target_x, target_y = 0.0, 0.0
-        # Autonomous saccade-and-hold (like C: move to random point with ease curve, then hold)
         eye_in_motion = False
         eye_old_x, eye_old_y = 0.0, 0.0
         eye_new_x, eye_new_y = 0.0, 0.0
@@ -680,10 +159,9 @@ def run_eyes():
         IDLE_LOOK_TIMEOUT = 0.2
         MOVE_DURATION_MIN, MOVE_DURATION_MAX = 0.072, 0.144
         HOLD_DURATION_MAX = 3.0
-        # Blink: open 2–5 s, then closed (one duration), then open. Draw: closing = outside-in, opening = inside-out.
-        blit_open_bottom_to_top = False  # first open frame after blink: refresh inside-out
-        next_auto_blink = time.monotonic() + random.uniform(2.0, 5.0)  # open 2–5 s between blinks
-        ANIM_FPS = int(os.environ.get("ANIM_FPS", "60"))  # Option D: target fps; lower for more time per frame on slow hardware
+        blit_open_bottom_to_top = False
+        next_auto_blink = time.monotonic() + random.uniform(2.0, 5.0)
+        ANIM_FPS = int(os.environ.get("ANIM_FPS", "60"))
         frame_dt = 1.0 / ANIM_FPS
         PUPIL_EASE = 0.48
         BLINK_DEBOUNCE_S = 0.2
@@ -691,25 +169,22 @@ def run_eyes():
         last_blink_end = 0.0
         last_cycle_eye_type_at = 0.0
         last_look_time = 0.0
-        # Pupil size: per-eye-type (default: relaxed 40; human/dragon/demon: relaxed 22). Focused 12, wide 40. Eased transitions.
-        relaxed, focused, wide = _eye_type_pupil_radii(get_eye_type())
+        relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
         focus_until = 0.0
         wide_until = 0.0
         next_wide_at = 0.0
         FOCUS_HOLD_S = 0.35
-        PUPIL_TRANSITION_S = 0.5   # longer so dilation feels gradual, not a snap
+        PUPIL_TRANSITION_S = 0.5
         pupil_radius_current = float(relaxed)
         pupil_radius_target = relaxed
         radius_transition_start = 0.0
         radius_transition_from = float(relaxed)
         radius_transition_to = float(relaxed)
-        # Time-based blink: close then open (no hold when closed).
-        blink_phase = None  # None | "closing"
+        blink_phase = None
         blink_start_time = 0.0
-        closing_duration_s = 0.05   # ~50 ms closing
-        CLOSING_S_MIN, CLOSING_S_MAX = 0.04, 0.07   # 40–70 ms
-        do_cycle_on_next_open = False  # belly: blink first, then cycle when eyes open
-        # UDP-triggered animations: (duration_s, target_x, target_y) per segment; eased curve within each segment
+        closing_duration_s = 0.05
+        CLOSING_S_MIN, CLOSING_S_MAX = 0.04, 0.07
+        do_cycle_on_next_open = False
         animation_segments = []
         animation_start_time = 0.0
         animation_index = 0
@@ -720,7 +195,7 @@ def run_eyes():
             nonlocal animation_segments, animation_start_time, animation_index
             nonlocal segment_start_x, segment_start_y, segment_end_x, segment_end_y
             if name == "nervous_look":
-                n = random.randint(2, 3)  # 2 or 3 times left-right
+                n = random.randint(2, 3)
                 animation_segments = [(0.28, -5, 0.0), (0.28, 5, 0.0)] * n
                 animation_start_time = time.monotonic()
                 animation_index = 0
@@ -738,7 +213,6 @@ def run_eyes():
 
         while True:
             now = time.monotonic()
-            # UDP: drain all pending packets so head-trigger blink is not missed
             while True:
                 try:
                     data, _ = sock.recvfrom(1024)
@@ -772,27 +246,23 @@ def run_eyes():
                 except json.JSONDecodeError:
                     pass
 
-            # Auto blink: next time = 3 * last blink duration + 0–4 s (ported from C)
             if blink_phase is None and now >= next_auto_blink:
                 do_blink()
                 next_auto_blink = now + random.uniform(2.0, 5.0)
 
-            # Advance blink phase: closing (40–70 ms) -> open (no closed hold)
             if blink_phase == "closing":
                 if (now - blink_start_time) >= closing_duration_s:
                     blink_phase = None
                     blit_open_bottom_to_top = True
                     if do_cycle_on_next_open:
                         do_cycle_on_next_open = False
-                        next_type = _cycle_eye_type()
-                        print(f"👁 Eye type: {next_type}")
+                        config.cycle_eye_type()
+                        print(f"👁 Eye type: {config.get_eye_type()}")
                     total_blink_s = now - blink_start_time
                     next_auto_blink = now + (total_blink_s * 3.0) + random.uniform(0.0, 4.0)
 
-            # Map phase to visual state for render
             blink_state = "open" if blink_phase is None else "closed"
 
-            # Animation: eased transition along curve within each segment (smooth start/end, no snapping)
             if animation_segments:
                 seg = animation_segments[animation_index]
                 elapsed = now - animation_start_time
@@ -813,15 +283,12 @@ def run_eyes():
                         segment_start_x, segment_start_y = pupil_x, pupil_y
                         next_seg = animation_segments[animation_index]
                         segment_end_x, segment_end_y = next_seg[1], next_seg[2]
-            # Pupil motion: UDP look drives target; when idle use saccade-and-hold with ease curve
             elif (now - last_look_time) <= IDLE_LOOK_TIMEOUT:
-                # Recent UDP look: ease toward target
                 pupil_x += (target_x - pupil_x) * PUPIL_EASE
                 pupil_y += (target_y - pupil_y) * PUPIL_EASE
                 pupil_x = max(-1.0, min(1.0, pupil_x))
                 pupil_y = max(-1.0, min(1.0, pupil_y))
             else:
-                # Idle: saccade-and-hold with 3*t^2 - 2*t^3 ease (smooth start/end, fast middle)
                 if eye_in_motion:
                     elapsed = now - eye_move_start
                     if elapsed >= eye_move_duration:
@@ -840,7 +307,6 @@ def run_eyes():
                     pupil_x = eye_old_x
                     pupil_y = eye_old_y
                     if now >= eye_hold_until:
-                        # Pick new random point in unit circle (like C)
                         while True:
                             dx = random.uniform(-1.0, 1.0)
                             dy = random.uniform(-1.0, 1.0)
@@ -854,8 +320,7 @@ def run_eyes():
                 pupil_x = max(-1.0, min(1.0, pupil_x))
                 pupil_y = max(-1.0, min(1.0, pupil_y))
 
-            # Pupil size: target = focused / wide / relaxed per current eye type. Eased transition.
-            relaxed, focused, wide = _eye_type_pupil_radii(get_eye_type())
+            relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
             if now < focus_until:
                 pupil_radius_target = focused
             elif now < wide_until:
@@ -881,22 +346,20 @@ def run_eyes():
                 pupil_radius_current = radius_transition_from + (radius_transition_to - radius_transition_from) * e
             pupil_radius = pupil_radius_current
 
-            # Eye layer: open eye (sclera + iris + pupil). Always full-frame blit (no inside_out/outside_in — that's only for blink overlay).
-            eye_frame = render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, "open", pupil_radius=pupil_radius)
+            eye_frame = render.render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, "open", pupil_radius=pupil_radius)
             if blit_open_bottom_to_top:
-                _blit_pil_to_both(eye_frame, reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
+                blit.blit_pil_to_both(left_eye, right_eye, eye_frame, reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
                 blit_open_bottom_to_top = False
             elif blink_state == "closed":
-                # Composite eye + overlay in memory, then one blit (outside_in) so no flicker from two blits with different row orders.
-                overlay = render_blink_overlay()
+                overlay = render.render_blink_overlay()
                 if overlay is not None:
                     composite = eye_frame.copy()
                     composite.paste(overlay, (0, 0))
-                    _blit_pil_to_both(composite, reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
+                    blit.blit_pil_to_both(left_eye, right_eye, composite, reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
                 else:
-                    _blit_pil_to_both(eye_frame, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+                    blit.blit_pil_to_both(left_eye, right_eye, eye_frame, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
             else:
-                _blit_pil_to_both(eye_frame, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+                blit.blit_pil_to_both(left_eye, right_eye, eye_frame, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
             time.sleep(max(0.0, frame_dt - (time.monotonic() - now)))
         return
 
@@ -910,7 +373,7 @@ def run_eyes():
         print("  Showing eye image on both displays...")
         _show_idle()
     else:
-        if EYES_SOLID_COLORS:
+        if config.EYES_SOLID_COLORS:
             print("  Solid colors only (EYES_SOLID_COLORS=1).")
         if left_eye:
             left_eye.fill(0xF800)
@@ -918,18 +381,17 @@ def run_eyes():
         if right_eye:
             right_eye.fill(0x001F)
 
-    # Static blink: close then open (no hold when closed). Belly: blink first, then cycle when eyes open.
-    _static_eye_frame = render_animated_frame(build_eye_base_sclera_iris(), 0.0, 0.0, "open")
+    # Static blink loop
+    _static_eye_frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
     BLINK_DEBOUNCE_S = 0.2
     CYCLE_EYE_TYPE_DEBOUNCE_S = 0.4
     last_blink_end = 0.0
     last_cycle_eye_type_at = 0.0
     cycle_on_next_open = False
-    blink_phase = None  # None | "closing" | "opening"
+    blink_phase = None
 
     while True:
         now = time.monotonic()
-        # Drain UDP so we see the head trigger immediately (no missed packets)
         while True:
             try:
                 data, _ = sock.recvfrom(1024)
@@ -951,19 +413,19 @@ def run_eyes():
 
         if blink_phase == "closing":
             if _static_eye_frame is not None:
-                _blit_pil_to_both(_static_eye_frame, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
-            overlay = render_blink_overlay()
+                blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+            overlay = render.render_blink_overlay()
             if overlay is not None:
-                _blit_pil_to_both(overlay, reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
+                blit.blit_pil_to_both(left_eye, right_eye, overlay, reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
             blink_phase = "opening"
         elif blink_phase == "opening":
             if cycle_on_next_open:
                 cycle_on_next_open = False
-                next_type = _cycle_eye_type()
-                _static_eye_frame = render_animated_frame(build_eye_base_sclera_iris(), 0.0, 0.0, "open")
-                print(f"👁 Eye type: {next_type}")
+                config.cycle_eye_type()
+                _static_eye_frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
+                print(f"👁 Eye type: {config.get_eye_type()}")
             if _static_eye_frame is not None:
-                _blit_pil_to_both(_static_eye_frame, reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
+                blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame, reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
             blink_phase = None
 
         time.sleep(0.02)
