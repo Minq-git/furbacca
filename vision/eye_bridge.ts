@@ -16,4 +16,14 @@ export class EyeBridge {
   public playAnimation(name: string) {
     this.sendCommand('animation', { name });
   }
+
+  /** Set eye shape at runtime (e.g. 'round', 'sharp', 'bean', 'oval', 'pill'). */
+  public setEyeShape(shape: string) {
+    this.sendCommand('set_eye_shape', { shape });
+  }
+
+  /** Cycle to the next eye shape. */
+  public cycleEyeShape() {
+    this.sendCommand('cycle_eye_shape');
+  }
 }

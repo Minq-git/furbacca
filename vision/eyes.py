@@ -99,18 +99,25 @@ def show_eye_image(display):
         print(f"⚠ Show image error: {e}")
 
 
-def _apply_eye_shape(frame):
-    """Apply eye shape mask on top of frame (layer above sclera/iris/pupil). Outside shape = black."""
+def _apply_eye_shape_left(frame):
+    """Apply eye shape mask for left display (layer above sclera/iris/pupil). Outside shape = black."""
     if frame is None:
         return frame
-    return shapes.apply_shape_mask(frame, config.get_eye_shape())
+    return shapes.apply_shape_mask(frame, config.get_eye_shape(), mirror=False)
+
+
+def _apply_eye_shape_right(frame):
+    """Apply eye shape mask for right display (mirrored so shapes match left/right eyes)."""
+    if frame is None:
+        return frame
+    return shapes.apply_shape_mask(frame, config.get_eye_shape(), mirror=True)
 
 
 def show_constructed_eye():
     """Show the static constructed eyeball (sclera + iris + pupil at center) on both displays."""
     frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
     if frame is not None:
-        blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape(frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+        blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(frame), _apply_eye_shape_right(frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
     else:
         show_eye_image(left_eye)
         if right_eye is not None:
@@ -249,6 +256,13 @@ def run_eyes():
                             last_cycle_eye_type_at = now
                             do_cycle_on_next_open = True
                             do_blink()
+                    elif action == "set_eye_shape":
+                        shape = (msg.get("shape") or msg.get("eye_shape") or "round").strip().lower()
+                        config.set_eye_shape(shape)
+                        print(f"👁 Eye shape: {config.get_eye_shape()}")
+                    elif action == "cycle_eye_shape":
+                        new_shape = config.cycle_eye_shape()
+                        print(f"👁 Eye shape: {new_shape}")
                     elif action == "animation":
                         anim_name = (msg.get("name") or msg.get("animation") or "").strip().lower()
                         if anim_name:
@@ -369,18 +383,18 @@ def run_eyes():
 
             eye_frame = render.render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, "open", pupil_radius=pupil_radius)
             if blit_open_bottom_to_top:
-                blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape(eye_frame), reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
+                blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
                 blit_open_bottom_to_top = False
             elif blink_state == "closed":
                 overlay = render.render_blink_overlay()
                 if overlay is not None:
                     composite = eye_frame.copy()
                     composite.paste(overlay, (0, 0))
-                    blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape(composite), reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
+                    blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(composite), _apply_eye_shape_right(composite), reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
                 else:
-                    blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape(eye_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+                    blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
             else:
-                blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape(eye_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+                blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
             time.sleep(max(0.0, frame_dt - (time.monotonic() - now)))
         return
 
@@ -415,7 +429,9 @@ def run_eyes():
             right_eye.fill(0x001F)
 
     # Static blink loop (image or solid-color mode)
-    _static_eye_frame = _apply_eye_shape(render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open"))
+    _static_frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
+    _static_eye_frame_left = _apply_eye_shape_left(_static_frame)
+    _static_eye_frame_right = _apply_eye_shape_right(_static_frame)
     BLINK_DEBOUNCE_S = 0.2
     CYCLE_EYE_TYPE_DEBOUNCE_S = 0.4
     last_blink_end = 0.0
@@ -439,26 +455,45 @@ def run_eyes():
                     cycle_on_next_open = True
                     blink_phase = "closing"
                     last_blink_end = now
+                elif action == "set_eye_shape":
+                    shape = (msg.get("shape") or msg.get("eye_shape") or "round").strip().lower()
+                    config.set_eye_shape(shape)
+                    _static_frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
+                    _static_eye_frame_left = _apply_eye_shape_left(_static_frame)
+                    _static_eye_frame_right = _apply_eye_shape_right(_static_frame)
+                    if _static_eye_frame_left is not None:
+                        blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame_left, _static_eye_frame_right, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+                    print(f"👁 Eye shape: {config.get_eye_shape()}")
+                elif action == "cycle_eye_shape":
+                    new_shape = config.cycle_eye_shape()
+                    _static_frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
+                    _static_eye_frame_left = _apply_eye_shape_left(_static_frame)
+                    _static_eye_frame_right = _apply_eye_shape_right(_static_frame)
+                    if _static_eye_frame_left is not None:
+                        blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame_left, _static_eye_frame_right, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+                    print(f"👁 Eye shape: {new_shape}")
             except BlockingIOError:
                 break
             except json.JSONDecodeError:
                 pass
 
         if blink_phase == "closing":
-            if _static_eye_frame is not None:
-                blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+            if _static_eye_frame_left is not None:
+                blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame_left, _static_eye_frame_right, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
             overlay = render.render_blink_overlay()
             if overlay is not None:
-                blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape(overlay), reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
+                blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(overlay), _apply_eye_shape_right(overlay), reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
             blink_phase = "opening"
         elif blink_phase == "opening":
             if cycle_on_next_open:
                 cycle_on_next_open = False
                 config.cycle_eye_type()
-                _static_eye_frame = _apply_eye_shape(render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open"))
+                _static_frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
+                _static_eye_frame_left = _apply_eye_shape_left(_static_frame)
+                _static_eye_frame_right = _apply_eye_shape_right(_static_frame)
                 print(f"👁 Eye type: {config.get_eye_type()}")
-            if _static_eye_frame is not None:
-                blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame, reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
+            if _static_eye_frame_left is not None:
+                blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame_left, _static_eye_frame_right, reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
             blink_phase = None
 
         time.sleep(0.02)

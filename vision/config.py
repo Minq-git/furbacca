@@ -25,10 +25,10 @@ EYE_TYPE_CYCLE = ("default", "human", "dragon", "demon")
 EYE_GAZE_CACHE_STEP = 0.1
 EYE_BUILD_SIZE = int(os.environ.get("EYE_BUILD_SIZE", "240"))  # 240 = full res; lower for faster builds
 
-# Eye shape mask (round, oval, almond) — layer above sclera/iris/pupil
+# Eye shape mask — layer above sclera/iris/pupil
 _eye_shape_raw = os.environ.get("EYE_SHAPE", "round").strip().lower()
 _current_eye_shape = None
-EYE_SHAPES = ("round", "oval", "almond")
+EYE_SHAPES = ("round", "sharp", "half_moon", "bean", "oval", "trapezoid", "tilted", "dome", "pill")
 
 
 def get_eye_type():
@@ -78,7 +78,7 @@ def eye_type_pupil_radii(eye_type):
 
 
 def get_eye_shape():
-    """Return current eye shape (round, oval, almond). Layer above eye content; outside shape is black."""
+    """Return current eye shape (round, sharp, half_moon, bean, oval, trapezoid, tilted, dome, pill). Layer above eye content; outside shape is black."""
     if _current_eye_shape is not None:
         return _current_eye_shape
     if _eye_shape_raw in EYE_SHAPES:
@@ -87,10 +87,19 @@ def get_eye_shape():
 
 
 def set_eye_shape(shape_name):
-    """Set eye shape at runtime. Pass 'round', 'oval', or 'almond'; or None to reset to env default."""
+    """Set eye shape at runtime. Pass 'round', 'oval', 'pill', etc.; or None to reset to env default."""
     global _current_eye_shape
     if shape_name is None:
         _current_eye_shape = None
         return
     shape_name = str(shape_name).strip().lower()
     _current_eye_shape = shape_name if shape_name in EYE_SHAPES else "round"
+
+
+def cycle_eye_shape():
+    """Cycle to next eye shape. Returns new shape."""
+    current = get_eye_shape()
+    idx = EYE_SHAPES.index(current) if current in EYE_SHAPES else 0
+    next_shape = EYE_SHAPES[(idx + 1) % len(EYE_SHAPES)]
+    set_eye_shape(next_shape)
+    return next_shape

@@ -56,10 +56,12 @@ def blit_buffer_full_frame_both(left_eye, right_eye, buf):
         right_eye.blit_buffer(buf, 0, 0, EYE_SIZE, EYE_SIZE)
 
 
-def blit_buffer_row_by_row_both(left_eye, right_eye, buf, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
-    """Blit same buffer row-by-row to both displays. partial_rows=(y0,y1)=only those rows."""
-    if buf is None:
+def blit_buffer_row_by_row_both(left_eye, right_eye, buf_left, buf_right=None, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
+    """Blit buffer(s) row-by-row. If buf_right is None, use buf_left for both. Otherwise left to left display, right to right (mirrored shapes)."""
+    if buf_left is None:
         return
+    if buf_right is None:
+        buf_right = buf_left
     y_lo, y_hi = (partial_rows if partial_rows else (0, EYE_SIZE - 1))
     y_lo = max(0, min(EYE_SIZE - 1, y_lo))
     y_hi = max(y_lo, min(EYE_SIZE - 1, y_hi))
@@ -83,11 +85,12 @@ def blit_buffer_row_by_row_both(left_eye, right_eye, buf, reverse_rows=False, ou
     if partial_rows is not None:
         ys = [y for y in ys if y_lo <= y <= y_hi]
     for y in ys:
-        row = buf[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2]
+        row_left = buf_left[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2]
+        row_right = buf_right[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2]
         if left_eye is not None:
-            left_eye.blit_buffer(row, 0, y, EYE_SIZE, 1)
+            left_eye.blit_buffer(row_left, 0, y, EYE_SIZE, 1)
         if right_eye is not None:
-            right_eye.blit_buffer(row, 0, y, EYE_SIZE, 1)
+            right_eye.blit_buffer(row_right, 0, y, EYE_SIZE, 1)
 
 
 def blit_pil_to_display(display, img):
@@ -99,14 +102,22 @@ def blit_pil_to_display(display, img):
         blit_buffer_row_by_row(display, buf)
 
 
-def blit_pil_to_both(left_eye, right_eye, img, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
-    """Blit same PIL image to both displays. Full-frame top-down uses single blit per display."""
-    if img is None:
+def blit_pil_to_both(left_eye, right_eye, left_img, right_img=None, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
+    """Blit PIL image(s) to both displays. If right_img is None, use left_img for both (no mirror). Otherwise left to left display, right to right (for mirrored shapes)."""
+    if left_img is None:
         return
-    buf = pil_to_rgb565_buffer(img)
-    if buf is None:
+    if right_img is None:
+        right_img = left_img
+    buf_left = pil_to_rgb565_buffer(left_img)
+    buf_right = pil_to_rgb565_buffer(right_img)
+    if buf_left is None:
         return
+    if buf_right is None:
+        buf_right = buf_left
     if not reverse_rows and not outside_in and not inside_out and partial_rows is None:
-        blit_buffer_full_frame_both(left_eye, right_eye, buf)
+        if left_eye is not None:
+            left_eye.blit_buffer(buf_left, 0, 0, EYE_SIZE, EYE_SIZE)
+        if right_eye is not None:
+            right_eye.blit_buffer(buf_right, 0, 0, EYE_SIZE, EYE_SIZE)
     else:
-        blit_buffer_row_by_row_both(left_eye, right_eye, buf, reverse_rows=reverse_rows, outside_in=outside_in, inside_out=inside_out, partial_rows=partial_rows)
+        blit_buffer_row_by_row_both(left_eye, right_eye, buf_left, buf_right, reverse_rows=reverse_rows, outside_in=outside_in, inside_out=inside_out, partial_rows=partial_rows)
