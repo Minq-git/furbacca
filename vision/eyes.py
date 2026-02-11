@@ -90,10 +90,10 @@ def _eye_type_scales(eye_type):
 
 
 def _eye_type_pupil_radii(eye_type):
-    """Return (relaxed, focused, wide) pupil radius for the given eye type. default: resting 40, wide 60; human/dragon/demon: 22, 12, 40."""
-    if eye_type == "default":
-        return (40, 12, 60)  # larger resting (40), wide up to 60 for default
-    return (22, 12, 40)  # human, dragon, demon
+    """Return (relaxed, focused, wide) pupil radius for the given eye type. default/dragon: resting 40, wide 60; human/demon: 22, 12, 40."""
+    if eye_type in ("default", "dragon"):
+        return (40, 12, 60)  # larger scale: resting 40, wide 60
+    return (22, 12, 40)  # human, demon
 
 
 _eye_image_pil = None
@@ -522,17 +522,27 @@ def render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, blink_state="op
     base = build_eye_base_sclera_iris_at_center(px, py)
     if base is None:
         base = Image.new("RGB", (EYE_SIZE, EYE_SIZE), (32, 32, 48)) if cached_eye_base_240 is None else cached_eye_base_240.copy()
-    # Draw pupil with float radius (distance check) so dilation animates smoothly without integer stepping
+    # Draw pupil: circle for most eye types; vertical slit diamond for dragon (snake-like)
     base_pix = base.load()
-    r_sq = r * r
+    eye_type = get_eye_type()
     x0 = max(0, int(px - r - 1))
     y0 = max(0, int(py - r - 1))
     x1 = min(EYE_SIZE, int(px + r + 2))
     y1 = min(EYE_SIZE, int(py + r + 2))
-    for y in range(y0, y1):
-        for x in range(x0, x1):
-            if (x - px) * (x - px) + (y - py) * (y - py) <= r_sq:
-                base_pix[x, y] = (0, 0, 0)
+    if eye_type == "dragon":
+        # Snake diamond: tall and narrow (|x-px|/a + |y-py|/b <= 1 with a < b)
+        half_w = max(2.0, r * 0.35)
+        half_h = r
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                if (abs(x - px) / half_w) + (abs(y - py) / half_h) <= 1.0:
+                    base_pix[x, y] = (0, 0, 0)
+    else:
+        r_sq = r * r
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                if (x - px) * (x - px) + (y - py) * (y - py) <= r_sq:
+                    base_pix[x, y] = (0, 0, 0)
     return base
 
 
