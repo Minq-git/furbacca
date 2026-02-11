@@ -17,6 +17,7 @@ import blit
 import render
 import shapes
 import test_patterns
+import animations
 from display import init_displays
 
 # Re-export for callers that do "from vision.eyes import get_eye_type"
@@ -213,14 +214,13 @@ def run_eyes():
         def _start_animation(name):
             nonlocal animation_segments, animation_start_time, animation_index
             nonlocal segment_start_x, segment_start_y, segment_end_x, segment_end_y
-            if name == "nervous_look":
-                n = random.randint(2, 3)
-                animation_segments = [(0.28, -5, 0.0), (0.28, 5, 0.0)] * n
+            animation_segments = animations.get_animation(name)
+            if animation_segments:
                 animation_start_time = time.monotonic()
                 animation_index = 0
                 segment_start_x, segment_start_y = pupil_x, pupil_y
                 segment_end_x, segment_end_y = animation_segments[0][1], animation_segments[0][2]
-                print("🎬 Animation: nervous_look")
+                print(f"🎬 Animation: {name}")
             else:
                 animation_segments = []
 
@@ -318,50 +318,63 @@ def run_eyes():
                         segment_start_x, segment_start_y = pupil_x, pupil_y
                         next_seg = animation_segments[animation_index]
                         segment_end_x, segment_end_y = next_seg[1], next_seg[2]
-            elif (now - last_look_time) <= IDLE_LOOK_TIMEOUT:
-                pupil_x += (target_x - pupil_x) * PUPIL_EASE
-                pupil_y += (target_y - pupil_y) * PUPIL_EASE
-                pupil_x = max(-1.0, min(1.0, pupil_x))
-                pupil_y = max(-1.0, min(1.0, pupil_y))
-            else:
-                if eye_in_motion:
-                    elapsed = now - eye_move_start
-                    if elapsed >= eye_move_duration:
-                        eye_in_motion = False
-                        pupil_x = eye_old_x = eye_new_x
-                        pupil_y = eye_old_y = eye_new_y
-                        eye_hold_until = now + random.uniform(0.0, HOLD_DURATION_MAX)
-                        focus_until = now + FOCUS_HOLD_S
-                    else:
-                        t = elapsed / eye_move_duration
-                        idx = min(255, int(t * 255))
-                        e = EASE_TABLE[idx] / 255.0
-                        pupil_x = eye_old_x + (eye_new_x - eye_old_x) * e
-                        pupil_y = eye_old_y + (eye_new_y - eye_old_y) * e
-                else:
-                    pupil_x = eye_old_x
-                    pupil_y = eye_old_y
-                    if now >= eye_hold_until:
-                        while True:
-                            dx = random.uniform(-1.0, 1.0)
-                            dy = random.uniform(-1.0, 1.0)
-                            if dx * dx + dy * dy <= 1.0:
-                                break
-                        eye_old_x, eye_old_y = pupil_x, pupil_y
-                        eye_new_x, eye_new_y = dx * 0.85, dy * 0.85
-                        eye_move_start = now
-                        eye_move_duration = random.uniform(MOVE_DURATION_MIN, MOVE_DURATION_MAX)
-                        eye_in_motion = True
-                pupil_x = max(-1.0, min(1.0, pupil_x))
-                pupil_y = max(-1.0, min(1.0, pupil_y))
 
+            # Pupil radius: animation segment can override (wide/focused/relaxed)
             relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
-            if now < focus_until:
+            if animation_segments and animation_index < len(animation_segments):
+                seg = animation_segments[animation_index]
+                if len(seg) >= 4 and seg[3] is not None:
+                    mode = seg[3]
+                    if mode == "wide":
+                        pupil_radius_target = wide
+                    elif mode == "focused":
+                        pupil_radius_target = focused
+                    else:
+                        pupil_radius_target = relaxed
+            elif now < focus_until:
                 pupil_radius_target = focused
             elif now < wide_until:
                 pupil_radius_target = wide
             else:
                 pupil_radius_target = relaxed
+            if not animation_segments:
+                if (now - last_look_time) <= IDLE_LOOK_TIMEOUT:
+                    pupil_x += (target_x - pupil_x) * PUPIL_EASE
+                    pupil_y += (target_y - pupil_y) * PUPIL_EASE
+                    pupil_x = max(-1.0, min(1.0, pupil_x))
+                    pupil_y = max(-1.0, min(1.0, pupil_y))
+                else:
+                    if eye_in_motion:
+                        elapsed = now - eye_move_start
+                        if elapsed >= eye_move_duration:
+                            eye_in_motion = False
+                            pupil_x = eye_old_x = eye_new_x
+                            pupil_y = eye_old_y = eye_new_y
+                            eye_hold_until = now + random.uniform(0.0, HOLD_DURATION_MAX)
+                            focus_until = now + FOCUS_HOLD_S
+                        else:
+                            t = elapsed / eye_move_duration
+                            idx = min(255, int(t * 255))
+                            e = EASE_TABLE[idx] / 255.0
+                            pupil_x = eye_old_x + (eye_new_x - eye_old_x) * e
+                            pupil_y = eye_old_y + (eye_new_y - eye_old_y) * e
+                    else:
+                        pupil_x = eye_old_x
+                        pupil_y = eye_old_y
+                        if now >= eye_hold_until:
+                            while True:
+                                dx = random.uniform(-1.0, 1.0)
+                                dy = random.uniform(-1.0, 1.0)
+                                if dx * dx + dy * dy <= 1.0:
+                                    break
+                            eye_old_x, eye_old_y = pupil_x, pupil_y
+                            eye_new_x, eye_new_y = dx * 0.85, dy * 0.85
+                            eye_move_start = now
+                            eye_move_duration = random.uniform(MOVE_DURATION_MIN, MOVE_DURATION_MAX)
+                            eye_in_motion = True
+                    pupil_x = max(-1.0, min(1.0, pupil_x))
+                    pupil_y = max(-1.0, min(1.0, pupil_y))
+
             if next_wide_at == 0.0:
                 next_wide_at = now + random.uniform(25.0, 45.0)
             if now >= next_wide_at and pupil_radius_target == relaxed:
