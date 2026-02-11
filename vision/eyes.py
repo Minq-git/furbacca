@@ -17,7 +17,7 @@ except ImportError:
 EYE_SIZE = 240
 # Iris circle radius in pixels (from eye.svg: iris path radius 17.7 in 68px viewBox, eye radius 34 → 120*17.7/34 ≈ 62)
 IRIS_R = int((EYE_SIZE // 2) * 17.7 / 34)
-# Eye layer drawn 10% larger than viewport so when the eye moves we don't see black edges around the sclera
+# Eye layer drawn 25% larger than viewport so when the eye moves we don't see black edges around the sclera
 EYE_LAYER_VIEWPORT_SCALE = 1.25
 left_eye = None
 right_eye = None
@@ -92,7 +92,7 @@ def load_eye_image():
 
 
 def load_sclera_image(eye_type=None):
-    """Load sclera texture (background / white of eye). eye_type: default, human (same assets), dragon (dragon-sclera). Cached per type."""
+    """Load sclera texture (background / white of eye). eye_type: default/human (sclera.png), dragon/demon (dragon-sclera.png). Cached per type."""
     global _sclera_by_type
     if eye_type is None:
         eye_type = get_eye_type()
@@ -117,7 +117,7 @@ def load_sclera_image(eye_type=None):
 
 
 def load_iris_image(eye_type=None):
-    """Load iris texture (colored ring). eye_type: default, human (same assets), dragon (dragon-iris). Cached per type."""
+    """Load iris texture (colored ring). eye_type: default/human (iris.png/jpg), dragon/demon (dragon-iris.jpg). Cached per type."""
     global _iris_by_type
     if eye_type is None:
         eye_type = get_eye_type()
@@ -431,7 +431,7 @@ def build_eye_base_sclera_iris_at_center(pole_x, pole_y):
     eye_type = get_eye_type()
     invert_v = eye_type in ("human", "dragon")
     iris_scale = 0.8 if eye_type in ("human", "dragon") else 1.0
-    sclera_scale = 1.2 if eye_type in ("human", "demon") else 1.0
+    sclera_scale = 1.2 if eye_type == "human" else 1.0
     sclera = load_sclera_image(eye_type)
     iris = load_iris_image(eye_type)
     if sclera is None:
@@ -532,7 +532,6 @@ def show_eye_image(display):
         for y in range(EYE_SIZE):
             for x in range(EYE_SIZE):
                 r, g, b = img.getpixel((x, y))
-                c565 = (r & 0xF8) << 8 | (g & 0xFC) << 3 | (b >> 3)
                 row_buf[x * 2 : x * 2 + 2] = _rgb565_be(r, g, b)
             display.blit_buffer(row_buf, 0, y, EYE_SIZE, 1)
     except Exception as e:
@@ -689,7 +688,7 @@ def run_eyes():
                     else:
                         t = elapsed / eye_move_duration
                         idx = min(255, int(t * 255))
-                        e = (EASE_TABLE[idx] + 1) / 256.0
+                        e = EASE_TABLE[idx] / 255.0
                         pupil_x = eye_old_x + (eye_new_x - eye_old_x) * e
                         pupil_y = eye_old_y + (eye_new_y - eye_old_y) * e
                 else:
@@ -772,9 +771,6 @@ def run_eyes():
         time.sleep(0.02)
         if right_eye:
             right_eye.fill(0x001F)
-
-    def restore_idle():
-        _show_idle()
 
     # Static blink: close then open (no hold when closed). Cache eye frame once so blink is instant.
     _static_eye_frame = render_animated_frame(build_eye_base_sclera_iris(), 0.0, 0.0, "open")
