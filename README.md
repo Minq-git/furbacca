@@ -31,6 +31,7 @@ Or manually: `python3 -m venv env`, `source env/bin/activate`, `pip install spid
 - `EYES_RAINBOW=1` — show circular rainbow (pinwheel) on both displays (test pattern).
 - **Animated eyes are the default.** Set `EYES_ANIMATED=0` for still image (iris + pupil at center, blink on UDP). Animated: iris + moving pupil + blink; UDP `blink`, `look` (x/y), `animation` (e.g. `name: 'nervous_look'`), `cycle_eye_type`.
 - `EYE_TYPE` — eye texture/mapping: **default** (current), `human` (inverted + smaller iris), `dragon` (dragon assets + inverted), `demon` (dragon assets, normal mapping).
+- `EYE_SHAPE` — eye outline mask (layer above sclera/iris/pupil): **round** (circle), `oval` (flatter ellipse), `almond` (narrower ellipse). Outside shape = black.
 - `SPI_BAUDRATE` — default **60 MHz** (set lower, e.g. 20000000, if you see tearing or blackout); override if needed.
 - `ANIM_FPS` — target fps for animated eyes (default **60**). Lower (e.g. 15, 30) for more time per frame on slow hardware.
 - `EYE_BUILD_SIZE` — build eye layer at this size then scale to 240 (default **240** = full res). Lower for faster builds.
@@ -57,6 +58,10 @@ EYE_TYPE=demon python vision/eyes.py
 
 # Human-style mapping (texture bottom = outside of eyeball)
 EYE_TYPE=human python vision/eyes.py
+
+# Eye shapes: oval or almond (default round)
+EYE_SHAPE=oval python vision/eyes.py
+EYE_SHAPE=almond python vision/eyes.py
 ```
 
 **Optional — eye image on both eyes:**  
