@@ -6,7 +6,7 @@ An AI-powered, Matter-enabled animatronic build based on the 2012 Hasbro Furby, 
 ## 🛠 Project Architecture
 - **Nervous System:** Node.js (TypeScript) handling sensors (GPIO) and high-level logic.
 - **Vision System:** Python (env) handling dual GC9A01 circular LCDs via SPI.
-- **Bridge:** UDP Loopback (Port 5005) for inter-process communication.
+- **Bridge:** UDP Loopback (Port 5005) for inter-process communication. If the nervous system runs on a different host than the eyes (e.g. dev machine vs Pi), set `VISION_HOST` to the Pi’s hostname (e.g. `furbacca.local`) so blink/cycle_eye_type reach the eyes.
 
 ---
 

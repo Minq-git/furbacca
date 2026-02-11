@@ -3,7 +3,7 @@ import * as dgram from 'dgram';
 export class EyeBridge {
   private client = dgram.createSocket('udp4');
   private PORT = 5005;
-  private HOST = '127.0.0.1'; // Internal loopback address
+  private HOST = process.env.VISION_HOST ?? '127.0.0.1'; // Use VISION_HOST when eyes run on another machine (e.g. Pi)
 
   public sendCommand(action: string, params: object = {}) {
     const message = Buffer.from(JSON.stringify({ action, ...params }));

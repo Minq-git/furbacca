@@ -56,6 +56,16 @@ def set_eye_type(eye_type):
     else:
         _current_eye_type = "default"
 
+EYE_TYPE_CYCLE = ("default", "human", "dragon", "demon")
+
+def _cycle_eye_type():
+    """Cycle to next eye type (default -> human -> dragon -> demon -> default). Returns new type."""
+    current = get_eye_type()
+    idx = EYE_TYPE_CYCLE.index(current) if current in EYE_TYPE_CYCLE else 0
+    next_type = EYE_TYPE_CYCLE[(idx + 1) % len(EYE_TYPE_CYCLE)]
+    set_eye_type(next_type)
+    return next_type
+
 # --- Display: gc9a01py via compat layer ---
 _vision_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _vision_dir)
@@ -635,7 +645,9 @@ def run_eyes():
         frame_dt = 1.0 / ANIM_FPS
         PUPIL_EASE = 0.48
         BLINK_DEBOUNCE_S = 0.2
+        CYCLE_EYE_TYPE_DEBOUNCE_S = 0.4
         last_blink_end = 0.0
+        last_cycle_eye_type_at = 0.0
         last_look_time = 0.0
         # Pupil size: per-eye-type (default: relaxed 40; human/dragon/demon: relaxed 22). Focused 12, wide 40. Eased transitions.
         relaxed, focused, wide = _eye_type_pupil_radii(get_eye_type())
@@ -654,6 +666,7 @@ def run_eyes():
         blink_start_time = 0.0
         closing_duration_s = 0.05   # ~50 ms closing
         CLOSING_S_MIN, CLOSING_S_MAX = 0.04, 0.07   # 40–70 ms
+        do_cycle_on_next_open = False  # belly: blink first, then cycle when eyes open
 
         def do_blink():
             nonlocal blink_phase, blink_start_time, closing_duration_s
@@ -683,6 +696,11 @@ def run_eyes():
                             target_y = max(-1.0, min(1.0, float(ty)))
                         last_look_time = now
                         focus_until = now + FOCUS_HOLD_S
+                    elif action == "cycle_eye_type":
+                        if now - last_cycle_eye_type_at >= CYCLE_EYE_TYPE_DEBOUNCE_S:
+                            last_cycle_eye_type_at = now
+                            do_cycle_on_next_open = True
+                            do_blink()
                 except BlockingIOError:
                     break
                 except json.JSONDecodeError:
@@ -698,6 +716,10 @@ def run_eyes():
                 if (now - blink_start_time) >= closing_duration_s:
                     blink_phase = None
                     blit_open_bottom_to_top = True
+                    if do_cycle_on_next_open:
+                        do_cycle_on_next_open = False
+                        next_type = _cycle_eye_type()
+                        print(f"👁 Eye type: {next_type}")
                     total_blink_s = now - blink_start_time
                     next_auto_blink = now + (total_blink_s * 3.0) + random.uniform(0.0, 4.0)
 
@@ -809,10 +831,13 @@ def run_eyes():
         if right_eye:
             right_eye.fill(0x001F)
 
-    # Static blink: close then open (no hold when closed). Cache eye frame once so blink is instant.
+    # Static blink: close then open (no hold when closed). Belly: blink first, then cycle when eyes open.
     _static_eye_frame = render_animated_frame(build_eye_base_sclera_iris(), 0.0, 0.0, "open")
     BLINK_DEBOUNCE_S = 0.2
+    CYCLE_EYE_TYPE_DEBOUNCE_S = 0.4
     last_blink_end = 0.0
+    last_cycle_eye_type_at = 0.0
+    cycle_on_next_open = False
     blink_phase = None  # None | "closing" | "opening"
 
     while True:
@@ -827,6 +852,11 @@ def run_eyes():
                     blink_phase = "closing"
                     last_blink_end = now
                     print("🐾 Logic: Blinked both eyes.")
+                elif action == "cycle_eye_type" and (now - last_cycle_eye_type_at) >= CYCLE_EYE_TYPE_DEBOUNCE_S:
+                    last_cycle_eye_type_at = now
+                    cycle_on_next_open = True
+                    blink_phase = "closing"
+                    last_blink_end = now
             except BlockingIOError:
                 break
             except json.JSONDecodeError:
@@ -840,6 +870,11 @@ def run_eyes():
                 _blit_pil_to_both(overlay, reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
             blink_phase = "opening"
         elif blink_phase == "opening":
+            if cycle_on_next_open:
+                cycle_on_next_open = False
+                next_type = _cycle_eye_type()
+                _static_eye_frame = render_animated_frame(build_eye_base_sclera_iris(), 0.0, 0.0, "open")
+                print(f"👁 Eye type: {next_type}")
             if _static_eye_frame is not None:
                 _blit_pil_to_both(_static_eye_frame, reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
             blink_phase = None

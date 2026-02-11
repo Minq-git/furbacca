@@ -15,6 +15,8 @@ setInterval(() => {
       if (sensor === 'head') {
         eyes.sendCommand('blink');
         eyes.sendCommand('look', { x: 120, y: 40 });
+      } else if (sensor === 'belly') {
+        eyes.sendCommand('cycle_eye_type');
       }
     }
   });
