@@ -13,7 +13,7 @@ An AI-powered, Matter-enabled animatronic build based on the 2012 Hasbro Furby, 
 ## 🚀 Getting Started
 
 ### 1. The Vision System (Python)
-Eyes are driven by **vision/eyes.py** (UDP listener on port 5005) using [russhughes/gc9a01py](https://github.com/russhughes/gc9a01py) via a thin CPython compat layer (**vision/machine_compat**). Pinout: **vision/config.h** (GC9A01 240×240, DC=25, RST=27, CS_L=8, CS_R=7). SPI setup: **vision/BOOT_CONFIG.md**. **Pixel format:** eye/iris image uses **big-endian** RGB565 (`>H`) for correct colours; gradient/rainbow use little-endian (`<H`). See **instruction.md** for details.
+Eyes are driven by **vision/eyes.py** (UDP listener on port 5005) using [russhughes/gc9a01py](https://github.com/russhughes/gc9a01py) via a thin CPython compat layer (**vision/machine_compat**). Pinout: **vision/config.h** (GC9A01 240×240, DC=25, RST=27, CS_L=8, CS_R=7). SPI and boot config: **instruction.md** (§3.1). **Pixel format:** eye/iris image uses **big-endian** RGB565 (`>H`) for correct colours; gradient/rainbow use little-endian (`<H`). See **instruction.md** for details.
 
 **Setup (manual or one-shot):**
 ```bash
@@ -29,9 +29,11 @@ Or manually: `python3 -m venv env`, `source env/bin/activate`, `pip install spid
 - `EYES_SOLID_COLORS=1` — show only red/blue (no eye image).  
 - `EYES_GRADIENT=1` — show XY gradient on both displays (test pattern, no image file).  
 - `EYES_RAINBOW=1` — show circular rainbow (pinwheel) on both displays (test pattern).
-- **Animated eyes are the default.** Set `EYES_ANIMATED=0` for still image (iris + pupil at center, blink on UDP). Animated: iris + moving pupil + blink; UDP `blink` and `look` with `x`/`y` (-1..1).
+- **Animated eyes are the default.** Set `EYES_ANIMATED=0` for still image (iris + pupil at center, blink on UDP). Animated: iris + moving pupil + blink; UDP `blink`, `look` (x/y), `animation` (e.g. `name: 'nervous_look'`), `cycle_eye_type`.
 - `EYE_TYPE` — eye texture/mapping: **default** (current), `human` (inverted + smaller iris), `dragon` (dragon assets + inverted), `demon` (dragon assets, normal mapping).
-- `SPI_BAUDRATE` — default **20 MHz** (higher can cause screen tearing); override if needed.
+- `SPI_BAUDRATE` — default **60 MHz** (set lower, e.g. 20000000, if you see tearing or blackout); override if needed.
+- `ANIM_FPS` — target fps for animated eyes (default **60**). Lower (e.g. 15, 30) for more time per frame on slow hardware.
+- `EYE_BUILD_SIZE` — build eye layer at this size then scale to 240 (default **240** = full res). Lower for faster builds.
 
 **Display test modes (for later testing):**
 ```bash
@@ -71,7 +73,7 @@ bash scripts/setup-pi-eyes.sh
 pip install pi3d adafruit-blinka svg.path Pillow
 cd vision/pi_eyes && python eyes.py
 ```
-To drive Furbacca’s GC9A01 displays with Pi_Eyes you’d need a custom fbx2; see **vision/PI_EYES_FURBACCA.md**.
+To drive Furbacca’s GC9A01 displays with Pi_Eyes you’d need a custom fbx2; see **instruction.md** (§4).
 
 **Run:**
 ```bash
@@ -123,4 +125,4 @@ sudo npm start
 
 - **Permission Denied:** Run `sudo chown -R $USER:$USER .` to fix file ownership.
 - **Module Not Found:** Ensure `source env/bin/activate` is run before starting the Python script.
-- **Eyes / SPI:** Ensure SPI is enabled (`dtparam=spi=on` in `/boot/firmware/config.txt` or raspi-config). See **vision/BOOT_CONFIG.md** for GC9A01 pinout and fbtft notes.
+- **Eyes / SPI:** Ensure SPI is enabled (`dtparam=spi=on` in `/boot/firmware/config.txt` or raspi-config). See **instruction.md** (§3.1) for GC9A01 pinout and fbtft notes.

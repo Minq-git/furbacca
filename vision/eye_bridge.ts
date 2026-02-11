@@ -7,9 +7,13 @@ export class EyeBridge {
 
   public sendCommand(action: string, params: object = {}) {
     const message = Buffer.from(JSON.stringify({ action, ...params }));
-    
     this.client.send(message, this.PORT, this.HOST, (err) => {
       if (err) console.error("Eye Bridge Error:", err.message);
     });
+  }
+
+  /** Play a named animation (e.g. 'nervous_look': eyes look left then right 2–3 times). */
+  public playAnimation(name: string) {
+    this.sendCommand('animation', { name });
   }
 }

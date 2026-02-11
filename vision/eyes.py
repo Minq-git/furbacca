@@ -461,37 +461,77 @@ def build_eye_base_sclera_iris():
     return base
 
 
-def build_eye_base_sclera_iris_at_center(pole_x, pole_y):
+def build_eye_base_sclera_iris_at_center(pole_x, pole_y, eye_type=None, size=None):
     """
     Build open-eye base with spherical mapping centered at (pole_x, pole_y).
-    Sclera and iris follow the pupil (eyeball follows gaze). Uses EYE_TYPE (default/human/dragon/demon). Returns 240x240 RGB or None.
+    pole_x, pole_y in EYE_SIZE space. size: output size (default EYE_SIZE); use smaller for Option C (then scale up).
     """
     if not HAS_PIL:
         return None
-    eye_type = get_eye_type()
+    if eye_type is None:
+        eye_type = get_eye_type()
+    if size is None:
+        size = EYE_SIZE
     invert_v, iris_scale, sclera_scale = _eye_type_scales(eye_type)
     sclera = load_sclera_image(eye_type)
     iris = load_iris_image(eye_type)
     if sclera is None:
         return load_iris_image(eye_type)  # fallback: iris only, flat (no spherical at center)
-    R_eye = int((EYE_SIZE // 2) * EYE_LAYER_VIEWPORT_SCALE * sclera_scale)
-    iris_r_scaled = int(IRIS_R * iris_scale * EYE_LAYER_VIEWPORT_SCALE)
-    base = Image.new("RGB", (EYE_SIZE, EYE_SIZE), (0, 0, 0))
+    scale = size / EYE_SIZE
+    pole_x_s = pole_x * scale
+    pole_y_s = pole_y * scale
+    R_eye = int((size // 2) * EYE_LAYER_VIEWPORT_SCALE * sclera_scale)
+    iris_r_scaled = int(IRIS_R * iris_scale * EYE_LAYER_VIEWPORT_SCALE * scale)
+    base = Image.new("RGB", (size, size), (0, 0, 0))
     sclera_pix = sclera.load()
     base_pix = base.load()
-    for y in range(EYE_SIZE):
-        for x in range(EYE_SIZE):
-            pt = _sample_texture_spherical(sclera, pole_x, pole_y, R_eye, x, y, invert_v=invert_v)
+    for y in range(size):
+        for x in range(size):
+            pt = _sample_texture_spherical(sclera, pole_x_s, pole_y_s, R_eye, x, y, invert_v=invert_v)
             if pt is not None:
                 base_pix[x, y] = sclera_pix[pt[0], pt[1]]
     if iris is not None:
         iris_pix = iris.load()
-        for y in range(EYE_SIZE):
-            for x in range(EYE_SIZE):
-                pt = _sample_texture_spherical(iris, pole_x, pole_y, iris_r_scaled, x, y, invert_v=invert_v)
+        for y in range(size):
+            for x in range(size):
+                pt = _sample_texture_spherical(iris, pole_x_s, pole_y_s, iris_r_scaled, x, y, invert_v=invert_v)
                 if pt is not None:
                     base_pix[x, y] = iris_pix[pt[0], pt[1]]
     return base
+
+
+# Option A: cache by quantized gaze (reuse base when gaze hasn't moved much); fixed step 0.1
+EYE_GAZE_CACHE_STEP = 0.1
+_gaze_cache = {}  # (eye_type, qx_idx, qy_idx) -> PIL image
+
+
+def _get_eye_base_cached(px, py):
+    """Return a copy of the eye base for quantized (px, py); build and cache on miss. Option A."""
+    global _gaze_cache
+    cx, cy = EYE_SIZE // 2, EYE_SIZE // 2
+    pupil_x = (px - cx) / 35.0
+    pupil_y = (py - cy) / 35.0
+    step = EYE_GAZE_CACHE_STEP
+    qx_idx = round(pupil_x / step)
+    qy_idx = round(pupil_y / step)
+    eye_type = get_eye_type()
+    key = (eye_type, qx_idx, qy_idx)
+    if key not in _gaze_cache:
+        qx = qx_idx * step
+        qy = qy_idx * step
+        qpx = int(cx + qx * 35)
+        qpy = int(cy + qy * 35)
+        _gaze_cache[key] = build_eye_base_sclera_iris_at_center(qpx, qpy, eye_type=eye_type, size=EYE_BUILD_SIZE)
+        if _gaze_cache[key] is None:
+            _gaze_cache[key] = Image.new("RGB", (EYE_BUILD_SIZE, EYE_BUILD_SIZE), (32, 32, 48))
+    base = _gaze_cache[key]
+    if base is None:
+        return None
+    return base.copy()
+
+
+# Option C: build at lower res then scale up (fewer pixels to sample)
+EYE_BUILD_SIZE = int(os.environ.get("EYE_BUILD_SIZE", "240"))  # 240 = full res; lower for faster builds
 
 
 _blink_overlay_240 = None
@@ -517,42 +557,44 @@ def render_blink_overlay():
 
 def render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, blink_state="open", pupil_radius=None):
     """
-    Renders the EYE LAYER only (sclera + iris + pupil). Always the open eye.
-    Blink is drawn on a separate layer (render_blink_overlay) and blit with outside_in/inside_out.
-    pupil_radius: optional float; if None uses current eye type's relaxed radius. Uses float radius for smooth dilation (no integer snap).
+    Renders the EYE LAYER only (sclera + iris + pupil). Option A: gaze cache. Option C: build at EYE_BUILD_SIZE then scale up.
     """
     cx, cy = EYE_SIZE // 2, EYE_SIZE // 2
     if pupil_radius is None:
         pupil_radius = float(_eye_type_pupil_radii(get_eye_type())[0])
-    r = max(8.0, min(60.0, float(pupil_radius)))  # default wide can go to 60
+    r = max(8.0, min(60.0, float(pupil_radius)))
     px = int(cx + pupil_x * 35)
     py = int(cy + pupil_y * 35)
 
-    # Always render open eye (eye layer is always top-down; blink is separate overlay)
-    base = build_eye_base_sclera_iris_at_center(px, py)
+    # Option A: quantized gaze cache (reuse base when gaze step unchanged)
+    base = _get_eye_base_cached(px, py)
     if base is None:
-        base = Image.new("RGB", (EYE_SIZE, EYE_SIZE), (32, 32, 48)) if cached_eye_base_240 is None else cached_eye_base_240.copy()
-    # Draw pupil: circle for most eye types; vertical slit diamond for dragon (snake-like)
+        base = Image.new("RGB", (EYE_BUILD_SIZE, EYE_BUILD_SIZE), (32, 32, 48)) if cached_eye_base_240 is None else cached_eye_base_240.resize((EYE_BUILD_SIZE, EYE_BUILD_SIZE), getattr(Image, "Resampling", Image).LANCZOS)
+    scale_build = EYE_BUILD_SIZE / EYE_SIZE
+    px_b, py_b = px * scale_build, py * scale_build
+    r_b = r * scale_build
     base_pix = base.load()
     eye_type = get_eye_type()
-    x0 = max(0, int(px - r - 1))
-    y0 = max(0, int(py - r - 1))
-    x1 = min(EYE_SIZE, int(px + r + 2))
-    y1 = min(EYE_SIZE, int(py + r + 2))
+    x0 = max(0, int(px_b - r_b - 1))
+    y0 = max(0, int(py_b - r_b - 1))
+    x1 = min(EYE_BUILD_SIZE, int(px_b + r_b + 2))
+    y1 = min(EYE_BUILD_SIZE, int(py_b + r_b + 2))
     if eye_type == "dragon":
-        # Snake diamond: tall and narrow (|x-px|/a + |y-py|/b <= 1 with a < b)
-        half_w = max(2.0, r * 0.35)
-        half_h = r
+        half_w = max(2.0, r_b * 0.35)
+        half_h = r_b
         for y in range(y0, y1):
             for x in range(x0, x1):
-                if (abs(x - px) / half_w) + (abs(y - py) / half_h) <= 1.0:
+                if (abs(x - px_b) / half_w) + (abs(y - py_b) / half_h) <= 1.0:
                     base_pix[x, y] = (0, 0, 0)
     else:
-        r_sq = r * r
+        r_sq = r_b * r_b
         for y in range(y0, y1):
             for x in range(x0, x1):
-                if (x - px) * (x - px) + (y - py) * (y - py) <= r_sq:
+                if (x - px_b) * (x - px_b) + (y - py_b) * (y - py_b) <= r_sq:
                     base_pix[x, y] = (0, 0, 0)
+    if EYE_BUILD_SIZE != EYE_SIZE:
+        resample = getattr(Image, "Resampling", Image).LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+        base = base.resize((EYE_SIZE, EYE_SIZE), resample)
     return base
 
 
@@ -641,7 +683,7 @@ def run_eyes():
         # Blink: open 2–5 s, then closed (one duration), then open. Draw: closing = outside-in, opening = inside-out.
         blit_open_bottom_to_top = False  # first open frame after blink: refresh inside-out
         next_auto_blink = time.monotonic() + random.uniform(2.0, 5.0)  # open 2–5 s between blinks
-        ANIM_FPS = 60
+        ANIM_FPS = int(os.environ.get("ANIM_FPS", "60"))  # Option D: target fps; lower for more time per frame on slow hardware
         frame_dt = 1.0 / ANIM_FPS
         PUPIL_EASE = 0.48
         BLINK_DEBOUNCE_S = 0.2
@@ -667,6 +709,26 @@ def run_eyes():
         closing_duration_s = 0.05   # ~50 ms closing
         CLOSING_S_MIN, CLOSING_S_MAX = 0.04, 0.07   # 40–70 ms
         do_cycle_on_next_open = False  # belly: blink first, then cycle when eyes open
+        # UDP-triggered animations: (duration_s, target_x, target_y) per segment; eased curve within each segment
+        animation_segments = []
+        animation_start_time = 0.0
+        animation_index = 0
+        segment_start_x, segment_start_y = 0.0, 0.0
+        segment_end_x, segment_end_y = 0.0, 0.0
+
+        def _start_animation(name):
+            nonlocal animation_segments, animation_start_time, animation_index
+            nonlocal segment_start_x, segment_start_y, segment_end_x, segment_end_y
+            if name == "nervous_look":
+                n = random.randint(2, 3)  # 2 or 3 times left-right
+                animation_segments = [(0.28, -5, 0.0), (0.28, 5, 0.0)] * n
+                animation_start_time = time.monotonic()
+                animation_index = 0
+                segment_start_x, segment_start_y = pupil_x, pupil_y
+                segment_end_x, segment_end_y = animation_segments[0][1], animation_segments[0][2]
+                print("🎬 Animation: nervous_look")
+            else:
+                animation_segments = []
 
         def do_blink():
             nonlocal blink_phase, blink_start_time, closing_duration_s
@@ -701,6 +763,10 @@ def run_eyes():
                             last_cycle_eye_type_at = now
                             do_cycle_on_next_open = True
                             do_blink()
+                    elif action == "animation":
+                        anim_name = (msg.get("name") or msg.get("animation") or "").strip().lower()
+                        if anim_name:
+                            _start_animation(anim_name)
                 except BlockingIOError:
                     break
                 except json.JSONDecodeError:
@@ -726,9 +792,30 @@ def run_eyes():
             # Map phase to visual state for render
             blink_state = "open" if blink_phase is None else "closed"
 
-            # Pupil motion: UDP look drives target; when idle use saccade-and-hold with ease curve (ported from C)
-            if (now - last_look_time) <= IDLE_LOOK_TIMEOUT:
-                # Recent UDP look: ease toward target (same as before)
+            # Animation: eased transition along curve within each segment (smooth start/end, no snapping)
+            if animation_segments:
+                seg = animation_segments[animation_index]
+                elapsed = now - animation_start_time
+                progress = min(1.0, elapsed / seg[0])
+                idx = min(255, int(progress * 255))
+                e = EASE_TABLE[idx] / 255.0
+                pupil_x = segment_start_x + (segment_end_x - segment_start_x) * e
+                pupil_y = segment_start_y + (segment_end_y - segment_start_y) * e
+                pupil_x = max(-1.0, min(1.0, pupil_x))
+                pupil_y = max(-1.0, min(1.0, pupil_y))
+                if elapsed >= seg[0]:
+                    animation_index += 1
+                    animation_start_time = now
+                    if animation_index >= len(animation_segments):
+                        animation_segments = []
+                        animation_index = 0
+                    else:
+                        segment_start_x, segment_start_y = pupil_x, pupil_y
+                        next_seg = animation_segments[animation_index]
+                        segment_end_x, segment_end_y = next_seg[1], next_seg[2]
+            # Pupil motion: UDP look drives target; when idle use saccade-and-hold with ease curve
+            elif (now - last_look_time) <= IDLE_LOOK_TIMEOUT:
+                # Recent UDP look: ease toward target
                 pupil_x += (target_x - pupil_x) * PUPIL_EASE
                 pupil_y += (target_y - pupil_y) * PUPIL_EASE
                 pupil_x = max(-1.0, min(1.0, pupil_x))

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Clone Adafruit Pi_Eyes and install Python deps so you can run their animated eyes.
 # Pi_Eyes renders to the framebuffer (HDMI or fb0); to show on Furbacca's GC9A01
-# displays you need a custom fbx2 (see vision/PI_EYES_FURBACCA.md).
+# displays you need a custom fbx2 (see instruction.md §4).
 # Run from repo root.
 
 set -e
@@ -45,4 +45,4 @@ echo "Run Pi_Eyes (renders to default display / framebuffer):"
 echo "  cd vision/pi_eyes && python eyes.py"
 echo ""
 echo "To show animated eyes on Furbacca's GC9A01 displays you need a custom fbx2;"
-echo "see vision/PI_EYES_FURBACCA.md. Our vision/eyes.py shows a static image on both eyes."
+echo "see instruction.md §4. Our vision/eyes.py shows animated eyes on both displays."

@@ -19,6 +19,7 @@ class SPI:
     """Thin wrapper so gc9a01py sees .write(buf). Uses spidev on Raspberry Pi."""
 
     def __init__(self, bus, device, baudrate=10_000_000):
+        """baudrate default 10 MHz; display.py passes SPI_BAUDRATE (env, default 60 MHz)."""
         if spidev is None:
             raise RuntimeError("spidev required; install with: pip install spidev (or apt install python3-spidev)")
         self._spi = spidev.SpiDev()
