@@ -270,6 +270,15 @@ def run_eyes():
                         do_cycle_on_next_open = False
                         config.cycle_eye_type()
                         print(f"👁 Eye type: {config.get_eye_type()}")
+                        # Reset pupil to new type's relaxed size immediately (no focus/wide delay)
+                        relaxed, _focused, _wide = config.eye_type_pupil_radii(config.get_eye_type())
+                        focus_until = 0.0
+                        wide_until = 0.0
+                        pupil_radius_current = float(relaxed)
+                        pupil_radius_target = relaxed
+                        radius_transition_from = float(relaxed)
+                        radius_transition_to = relaxed
+                        radius_transition_start = now
                     total_blink_s = now - blink_start_time
                     next_auto_blink = now + (total_blink_s * 3.0) + random.uniform(0.0, 4.0)
 
