@@ -29,23 +29,23 @@ Or manually: `python3 -m venv env`, `source env/bin/activate`, `pip install spid
 - `EYES_SOLID_COLORS=1` — show only red/blue (no eye image).  
 - `EYES_GRADIENT=1` — show XY gradient on both displays (test pattern, no image file).  
 - `EYES_RAINBOW=1` — show circular rainbow (pinwheel) on both displays (test pattern).
-- `EYES_ANIMATED=1` — **headless animated eyes** (no monitor): iris + moving pupil + blink, driven by PIL; UDP `blink` and `look` with `x`/`y` (-1..1) for pupil target. For smart toys.
+- **Animated eyes are the default.** Set `EYES_ANIMATED=0` for still image (iris + pupil at center, blink on UDP). Animated: iris + moving pupil + blink; UDP `blink` and `look` with `x`/`y` (-1..1).
 - `EYE_TYPE` — eye texture/mapping: **default** (current), `human` (inverted + smaller iris), `dragon` (dragon assets + inverted), `demon` (dragon assets, normal mapping).
 - `SPI_BAUDRATE` — default **20 MHz** (higher can cause screen tearing); override if needed.
 
 **Display test modes (for later testing):**
 ```bash
-# Default: eye image (e.g. vision/graphics/iris.jpg) on both displays
+# Default: animated eyes (iris + pupil + blink; UDP look x/y)
 python vision/eyes.py
+
+# Still image (iris + pupil at center, blink on UDP)
+EYES_ANIMATED=0 python vision/eyes.py
 
 # XY gradient (red/green sweep)
 EYES_GRADIENT=1 python vision/eyes.py
 
 # Rainbow pinwheel (radial hue by angle)
 EYES_RAINBOW=1 python vision/eyes.py
-
-# Animated eyes (headless: iris + pupil + blink; UDP look x/y)
-EYES_ANIMATED=1 python vision/eyes.py
 
 # Dragon eyes (dragon assets + inverted mapping, smaller iris)
 EYE_TYPE=dragon python vision/eyes.py
@@ -54,7 +54,7 @@ EYE_TYPE=dragon python vision/eyes.py
 EYE_TYPE=demon python vision/eyes.py
 
 # Human-style mapping (texture bottom = outside of eyeball)
-EYE_TYPE=human EYES_ANIMATED=1 python vision/eyes.py
+EYE_TYPE=human python vision/eyes.py
 ```
 
 **Optional — Pi_Eyes-style image on both eyes:**  

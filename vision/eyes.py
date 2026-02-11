@@ -29,15 +29,32 @@ EYES_SOLID_COLORS = os.environ.get("EYES_SOLID_COLORS", "").strip().lower() in (
 # Optional: show gradient/rainbow instead of image (useful to test SPI without PIL/image file)
 EYES_GRADIENT = os.environ.get("EYES_GRADIENT", "").strip().lower() in ("1", "true", "yes")
 EYES_RAINBOW = os.environ.get("EYES_RAINBOW", "").strip().lower() in ("1", "true", "yes")
-# Optional: headless animated eyes (PIL-rendered, no monitor) — iris + pupil + blink
-EYES_ANIMATED = os.environ.get("EYES_ANIMATED", "").strip().lower() in ("1", "true", "yes")
-# Optional: eye configuration — default, human (inverted + smaller iris), dragon (dragon-* + inverted), demon (dragon-* normal)
+# Animated eyes by default (PIL-rendered, no monitor). Set EYES_ANIMATED=0 for still image.
+EYES_ANIMATED = os.environ.get("EYES_ANIMATED", "1").strip().lower() not in ("0", "false", "no")
+# Optional: eye configuration — default, human (inverted + smaller iris), dragon (dragon-* + inverted), demon (dragon-* normal).
+# Eye type can be changed at runtime via set_eye_type(); get_eye_type() returns current value (env at startup).
 _eye_type_raw = os.environ.get("EYE_TYPE", "").strip().lower()
+_current_eye_type = None  # None = use env default; set via set_eye_type() for runtime changes
+
 def get_eye_type():
+    """Return current eye type (default, human, dragon, demon). Use set_eye_type() to change at runtime."""
+    if _current_eye_type is not None:
+        return _current_eye_type
     if _eye_type_raw in ("human", "dragon", "demon"):
         return _eye_type_raw
     return "default"
-EYE_TYPE = get_eye_type()
+
+def set_eye_type(eye_type):
+    """Set eye type at runtime. Pass 'default', 'human', 'dragon', or 'demon'; or None to reset to env default."""
+    global _current_eye_type
+    if eye_type is None:
+        _current_eye_type = None
+        return
+    eye_type = str(eye_type).strip().lower()
+    if eye_type in ("human", "dragon", "demon"):
+        _current_eye_type = eye_type
+    else:
+        _current_eye_type = "default"
 
 # --- Display: gc9a01py via compat layer ---
 _vision_dir = os.path.dirname(os.path.abspath(__file__))
@@ -62,6 +79,14 @@ sock.setblocking(False)
 
 def _graphics_dir():
     return os.path.join(_vision_dir, "graphics")
+
+
+def _eye_type_scales(eye_type):
+    """Return (invert_v, iris_scale, sclera_scale) for the given eye type. Single place for human/dragon/demon mapping rules."""
+    invert_v = eye_type in ("human", "dragon")
+    iris_scale = 0.8 if eye_type in ("human", "dragon") else 1.0
+    sclera_scale = 1.2 if eye_type in ("human", "demon") else 1.0
+    return (invert_v, iris_scale, sclera_scale)
 
 
 _eye_image_pil = None
@@ -396,9 +421,7 @@ def build_eye_base_sclera_iris():
     if sclera is None:
         _eye_base_sclera_iris_by_type[eye_type] = load_iris_image(eye_type)  # fallback: iris only
         return _eye_base_sclera_iris_by_type[eye_type]
-    invert_v = eye_type in ("human", "dragon")
-    iris_scale = 0.8 if eye_type in ("human", "dragon") else 1.0
-    sclera_scale = 1.2 if eye_type == "human" else 1.0
+    invert_v, iris_scale, sclera_scale = _eye_type_scales(eye_type)
     cx, cy = EYE_SIZE // 2, EYE_SIZE // 2
     R_eye = int((EYE_SIZE // 2) * EYE_LAYER_VIEWPORT_SCALE * sclera_scale)
     iris_r_scaled = int(IRIS_R * iris_scale * EYE_LAYER_VIEWPORT_SCALE)
@@ -429,9 +452,7 @@ def build_eye_base_sclera_iris_at_center(pole_x, pole_y):
     if not HAS_PIL:
         return None
     eye_type = get_eye_type()
-    invert_v = eye_type in ("human", "dragon")
-    iris_scale = 0.8 if eye_type in ("human", "dragon") else 1.0
-    sclera_scale = 1.2 if eye_type == "human" else 1.0
+    invert_v, iris_scale, sclera_scale = _eye_type_scales(eye_type)
     sclera = load_sclera_image(eye_type)
     iris = load_iris_image(eye_type)
     if sclera is None:
