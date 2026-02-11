@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fetch Adafruit Pi_Eyes graphics into vision/graphics/ for image-based eyes.
+# Fetch eye assets (iris, sclera, eye.svg, etc.) from Adafruit Pi_Eyes into vision/graphics/.
 # Run from repo root. Does not overwrite existing files.
 
 set -e
@@ -9,13 +9,13 @@ GRAPHICS_DIR="${REPO_DIR}/vision/graphics"
 GITHUB_URL="https://github.com/adafruit/Pi_Eyes/archive/refs/heads/master.zip"
 ZIP_NAME="Pi_Eyes-master.zip"
 
-echo "Furbacca: Fetching Pi_Eyes graphics into ${GRAPHICS_DIR}"
+echo "Furbacca: Fetching eye graphics into ${GRAPHICS_DIR}"
 
 mkdir -p "$GRAPHICS_DIR"
 cd "$REPO_DIR"
 
 if [[ ! -f "$ZIP_NAME" ]]; then
-  echo "Downloading Pi_Eyes..."
+  echo "Downloading Pi_Eyes (graphics only)..."
   curl -sL -o "$ZIP_NAME" "$GITHUB_URL"
 fi
 
@@ -29,4 +29,4 @@ rm -rf "$TMPDIR" "$ZIP_NAME"
 echo "Done. Contents of vision/graphics:"
 ls -la "$GRAPHICS_DIR"
 echo ""
-echo "Run vision/eyes.py; it will use iris.jpg (or eye.png if present) on both displays."
+echo "vision/eyes.py will use iris.jpg (or eye.png if present) on both displays."

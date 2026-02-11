@@ -22,7 +22,7 @@ cd ~/furbacca
 bash scripts/setup-fresh.sh
 source env/bin/activate
 ```
-Or manually: `python3 -m venv env`, `source env/bin/activate`, `pip install spidev RPi.GPIO pillow`, `bash scripts/fetch-gc9a01py.sh`, `bash scripts/fetch-pi-eyes-graphics.sh`.
+Or manually: `python3 -m venv env`, `source env/bin/activate`, `pip install spidev RPi.GPIO Pillow`, `bash scripts/fetch-gc9a01py.sh`, `bash scripts/fetch-eye-graphics.sh`.
 
 **Optional env:**  
 - `SWAP_LEFT_RIGHT_SPI=1` — swap which physical display is "left" vs "right".  
@@ -59,21 +59,8 @@ EYE_TYPE=demon python vision/eyes.py
 EYE_TYPE=human python vision/eyes.py
 ```
 
-**Optional — Pi_Eyes-style image on both eyes:**  
-Copy Adafruit Pi_Eyes graphics so eyes show an image instead of the red/blue test:
-```bash
-./scripts/fetch-pi-eyes-graphics.sh
-```
-Then run eyes as usual; **vision/eyes.py** will use **vision/graphics/iris.jpg** (or **eye.png** if present) on both displays. See **vision/graphics/README.md**.
-
-**Optional — Pi_Eyes (animated eyes on HDMI/fb):**  
-[Adafruit Pi_Eyes](https://github.com/adafruit/Pi_Eyes) renders animated eyes with pi3d. To try it (renders to default display, not the GC9A01s):
-```bash
-bash scripts/setup-pi-eyes.sh
-pip install pi3d adafruit-blinka svg.path Pillow
-cd vision/pi_eyes && python eyes.py
-```
-To drive Furbacca’s GC9A01 displays with Pi_Eyes you’d need a custom fbx2; see **instruction.md** (§4).
+**Optional — eye image on both eyes:**  
+Setup-fresh already fetches eye assets (iris.jpg, sclera.png, etc.) into **vision/graphics**. To fetch or refresh them: `./scripts/fetch-eye-graphics.sh`. **vision/eyes.py** uses **vision/graphics/iris.jpg** (or eye.png) on both displays. See **vision/graphics/README.md** if present.
 
 **Run:**
 ```bash
