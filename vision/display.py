@@ -1,6 +1,6 @@
 """
 Initialize dual GC9A01 displays using russhughes/gc9a01py and machine_compat (CPython on Raspberry Pi).
-Pinout from vision/config.h: DC=25, RST=27, CS_L=8 (spidev0.0), CS_R=7 (spidev0.1), BL=18.
+Pinout: DC=25, RST=27, CS_L=8 (spidev0.0), CS_R=7 (spidev0.1), BL=18. See instruction.md §3.1.
 """
 import sys
 import time

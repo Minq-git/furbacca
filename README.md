@@ -13,7 +13,7 @@ An AI-powered, Matter-enabled animatronic build based on the 2012 Hasbro Furby, 
 ## 🚀 Getting Started
 
 ### 1. The Vision System (Python)
-Eyes are driven by **vision/eyes.py** (UDP listener on port 5005) using [russhughes/gc9a01py](https://github.com/russhughes/gc9a01py) via a thin CPython compat layer (**vision/machine_compat**). Pinout: **vision/config.h** (GC9A01 240×240, DC=25, RST=27, CS_L=8, CS_R=7). SPI and boot config: **instruction.md** (§3.1). **Pixel format:** eye/iris image uses **big-endian** RGB565 (`>H`) for correct colours; gradient/rainbow use little-endian (`<H`). See **instruction.md** for details.
+Eyes are driven by **vision/eyes.py** (UDP listener on port 5005) using [russhughes/gc9a01py](https://github.com/russhughes/gc9a01py) via a thin CPython compat layer (**vision/machine_compat**). Pinout: **instruction.md** §3.1 (GC9A01 240×240, DC=25, RST=27, CS_L=8, CS_R=7). SPI and boot config: **instruction.md** (§3.1). **Pixel format:** eye/iris image uses **big-endian** RGB565 (`>H`) for correct colours; gradient/rainbow use little-endian (`<H`). See **instruction.md** for details.
 
 **Setup (manual or one-shot):**
 ```bash
