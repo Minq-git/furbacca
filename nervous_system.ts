@@ -14,7 +14,9 @@ setInterval(() => {
       // Route the signal to the eyes
       if (sensor === 'head') {
         eyes.sendCommand('blink');
-        eyes.sendCommand('look', { x: 120, y: 40 });
+        eyes.playAnimation('nervous_look'); // smooth look left/right 2–3× to test frame rate
+      } else if (sensor === 'belly') {
+        eyes.sendCommand('cycle_eye_type');
       }
     }
   });
