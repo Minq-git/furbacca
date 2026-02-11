@@ -89,6 +89,13 @@ def _eye_type_scales(eye_type):
     return (invert_v, iris_scale, sclera_scale)
 
 
+def _eye_type_pupil_radii(eye_type):
+    """Return (relaxed, focused, wide) pupil radius for the given eye type. default: resting 40, wide 60; human/dragon/demon: 22, 12, 40."""
+    if eye_type == "default":
+        return (40, 12, 60)  # larger resting (40), wide up to 60 for default
+    return (22, 12, 40)  # human, dragon, demon
+
+
 _eye_image_pil = None
 _sclera_by_type = {}
 _iris_by_type = {}
@@ -502,12 +509,12 @@ def render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, blink_state="op
     """
     Renders the EYE LAYER only (sclera + iris + pupil). Always the open eye.
     Blink is drawn on a separate layer (render_blink_overlay) and blit with outside_in/inside_out.
-    pupil_radius: optional float; if None uses 22. Uses float radius for smooth dilation (no integer snap).
+    pupil_radius: optional float; if None uses current eye type's relaxed radius. Uses float radius for smooth dilation (no integer snap).
     """
     cx, cy = EYE_SIZE // 2, EYE_SIZE // 2
     if pupil_radius is None:
-        pupil_radius = 22.0
-    r = max(8.0, min(40.0, float(pupil_radius)))
+        pupil_radius = float(_eye_type_pupil_radii(get_eye_type())[0])
+    r = max(8.0, min(60.0, float(pupil_radius)))  # default wide can go to 60
     px = int(cx + pupil_x * 35)
     py = int(cy + pupil_y * 35)
 
@@ -620,20 +627,18 @@ def run_eyes():
         BLINK_DEBOUNCE_S = 0.2
         last_blink_end = 0.0
         last_look_time = 0.0
-        # Pupil size: relaxed 22, focused 12, wide 40 (dark room). Smooth eased transitions (same curve as blink/saccade).
-        PUPIL_RADIUS_RELAXED = 22
-        PUPIL_RADIUS_FOCUSED = 12
-        PUPIL_RADIUS_WIDE = 40
+        # Pupil size: per-eye-type (default: relaxed 40; human/dragon/demon: relaxed 22). Focused 12, wide 40. Eased transitions.
+        relaxed, focused, wide = _eye_type_pupil_radii(get_eye_type())
         focus_until = 0.0
         wide_until = 0.0
         next_wide_at = 0.0
         FOCUS_HOLD_S = 0.35
         PUPIL_TRANSITION_S = 0.5   # longer so dilation feels gradual, not a snap
-        pupil_radius_current = float(PUPIL_RADIUS_RELAXED)
-        pupil_radius_target = PUPIL_RADIUS_RELAXED
+        pupil_radius_current = float(relaxed)
+        pupil_radius_target = relaxed
         radius_transition_start = 0.0
-        radius_transition_from = float(PUPIL_RADIUS_RELAXED)
-        radius_transition_to = float(PUPIL_RADIUS_RELAXED)
+        radius_transition_from = float(relaxed)
+        radius_transition_to = float(relaxed)
         # Time-based blink: close then open (no hold when closed).
         blink_phase = None  # None | "closing"
         blink_start_time = 0.0
@@ -730,16 +735,17 @@ def run_eyes():
                 pupil_x = max(-1.0, min(1.0, pupil_x))
                 pupil_y = max(-1.0, min(1.0, pupil_y))
 
-            # Pupil size: target = focused (12) when looking at something, wide (40) in "dark" moment, else relaxed (22). Eased transition.
+            # Pupil size: target = focused / wide / relaxed per current eye type. Eased transition.
+            relaxed, focused, wide = _eye_type_pupil_radii(get_eye_type())
             if now < focus_until:
-                pupil_radius_target = PUPIL_RADIUS_FOCUSED
+                pupil_radius_target = focused
             elif now < wide_until:
-                pupil_radius_target = PUPIL_RADIUS_WIDE
+                pupil_radius_target = wide
             else:
-                pupil_radius_target = PUPIL_RADIUS_RELAXED
+                pupil_radius_target = relaxed
             if next_wide_at == 0.0:
                 next_wide_at = now + random.uniform(25.0, 45.0)
-            if now >= next_wide_at and pupil_radius_target == PUPIL_RADIUS_RELAXED:
+            if now >= next_wide_at and pupil_radius_target == relaxed:
                 wide_until = now + random.uniform(1.0, 2.0)
                 next_wide_at = now + random.uniform(25.0, 45.0)
             if pupil_radius_target != radius_transition_to:
