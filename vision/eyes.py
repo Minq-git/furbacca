@@ -118,7 +118,11 @@ def run_eyes():
     print("👀 Furbacca Vision Online (gc9a01py).")
     use_gradient = config.EYES_GRADIENT
     use_rainbow = config.EYES_RAINBOW
-    use_animated = config.EYES_ANIMATED and assets.HAS_PIL and render.build_eye_base_sclera_iris() is not None
+    # Gradient/rainbow take precedence over animated; otherwise EYES_RAINBOW=1 would still show animated eyes
+    use_animated = (
+        config.EYES_ANIMATED and not use_gradient and not use_rainbow
+        and assets.HAS_PIL and render.build_eye_base_sclera_iris() is not None
+    )
     use_image = not config.EYES_SOLID_COLORS and not use_gradient and not use_rainbow and not use_animated and (
         render.build_eye_base_sclera_iris() is not None or assets.load_eye_image() is not None
     )
@@ -366,9 +370,21 @@ def run_eyes():
     if use_gradient:
         print("  Showing XY gradient on both displays (EYES_GRADIENT=1).")
         _show_idle()
+        while True:
+            try:
+                sock.recvfrom(1024)
+            except BlockingIOError:
+                pass
+            time.sleep(0.02)
     elif use_rainbow:
         print("  Showing rainbow on both displays (EYES_RAINBOW=1).")
         _show_idle()
+        while True:
+            try:
+                sock.recvfrom(1024)
+            except BlockingIOError:
+                pass
+            time.sleep(0.02)
     elif use_image:
         print("  Showing eye image on both displays...")
         _show_idle()
@@ -381,7 +397,7 @@ def run_eyes():
         if right_eye:
             right_eye.fill(0x001F)
 
-    # Static blink loop
+    # Static blink loop (image or solid-color mode)
     _static_eye_frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
     BLINK_DEBOUNCE_S = 0.2
     CYCLE_EYE_TYPE_DEBOUNCE_S = 0.4

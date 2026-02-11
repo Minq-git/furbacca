@@ -1,5 +1,5 @@
 """
-RGB565 packing and blit to one or both GC9A01 displays. Big-endian for eye image (iris correct on hardware).
+RGB565 packing and blit to one or both GC9A01 displays. One byte order for all (big-endian).
 """
 import struct
 
@@ -13,20 +13,14 @@ import config
 EYE_SIZE = config.EYE_SIZE
 
 
-def rgb565_le(r, g, b):
-    """Pack R,G,B (0-255) to little-endian RGB565 (gradient/rainbow/fb1)."""
-    c565 = (r & 0xF8) << 8 | (g & 0xFC) << 3 | (b >> 3)
-    return struct.pack("<H", c565)
-
-
-def rgb565_be(r, g, b):
-    """Pack R,G,B (0-255) to big-endian RGB565. Required for eye image on gc9a01py (iris displays correctly with >H)."""
+def rgb565(r, g, b):
+    """Pack R,G,B (0-255) to RGB565 for GC9A01 (big-endian). Used for eye image, gradient, rainbow."""
     c565 = (r & 0xF8) << 8 | (g & 0xFC) << 3 | (b >> 3)
     return struct.pack(">H", c565)
 
 
-def pil_to_rgb565_be_buffer(img):
-    """Convert 240x240 PIL RGB to bytearray big-endian RGB565 (row-major). Same as show_eye_image (>H)."""
+def pil_to_rgb565_buffer(img):
+    """Convert 240x240 PIL RGB to bytearray RGB565 (row-major). Same pack as rgb565()."""
     if img is None or PILImage is None:
         return None
     if img.mode != "RGB":
@@ -40,7 +34,7 @@ def pil_to_rgb565_be_buffer(img):
         for x in range(EYE_SIZE):
             r, g, b = img.getpixel((x, y))
             offset = (y * EYE_SIZE + x) * 2
-            buf[offset : offset + 2] = rgb565_be(r, g, b)
+            buf[offset : offset + 2] = rgb565(r, g, b)
     return buf
 
 
@@ -97,10 +91,10 @@ def blit_buffer_row_by_row_both(left_eye, right_eye, buf, reverse_rows=False, ou
 
 
 def blit_pil_to_display(display, img):
-    """Blit a 240x240 PIL RGB image to one display. Big-endian RGB565 row-by-row."""
+    """Blit a 240x240 PIL RGB image to one display. RGB565 row-by-row (same as gradient/rainbow)."""
     if display is None or img is None:
         return
-    buf = pil_to_rgb565_be_buffer(img)
+    buf = pil_to_rgb565_buffer(img)
     if buf:
         blit_buffer_row_by_row(display, buf)
 
@@ -109,7 +103,7 @@ def blit_pil_to_both(left_eye, right_eye, img, reverse_rows=False, outside_in=Fa
     """Blit same PIL image to both displays. Full-frame top-down uses single blit per display."""
     if img is None:
         return
-    buf = pil_to_rgb565_be_buffer(img)
+    buf = pil_to_rgb565_buffer(img)
     if buf is None:
         return
     if not reverse_rows and not outside_in and not inside_out and partial_rows is None:

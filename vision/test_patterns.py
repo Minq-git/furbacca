@@ -46,7 +46,7 @@ def show_gradient(display):
                 r = x * 255 // (EYE_SIZE - 1) if EYE_SIZE > 1 else 0
                 g = y * 255 // (EYE_SIZE - 1) if EYE_SIZE > 1 else 0
                 b = 128
-                row_buf[x * 2 : x * 2 + 2] = blit.rgb565_le(r, g, b)
+                row_buf[x * 2 : x * 2 + 2] = blit.rgb565(r, g, b)
             display.blit_buffer(row_buf, 0, y, EYE_SIZE, 1)
     except Exception as e:
         print(f"⚠ Gradient error: {e}")
@@ -66,7 +66,7 @@ def show_rainbow(display):
                 angle = math.atan2(dy, dx)
                 hue = (angle / (2 * math.pi) + 0.5) % 1.0
                 r, g, b = _hsv_to_rgb(hue, 1.0, 1.0)
-                row_buf[x * 2 : x * 2 + 2] = blit.rgb565_le(r, g, b)
+                row_buf[x * 2 : x * 2 + 2] = blit.rgb565(r, g, b)
             display.blit_buffer(row_buf, 0, y, EYE_SIZE, 1)
     except Exception as e:
         print(f"⚠ Rainbow error: {e}")
