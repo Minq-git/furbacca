@@ -18,6 +18,7 @@ import render
 import shapes
 import test_patterns
 import animations
+import blink
 from display import init_displays
 
 # Re-export for callers that do "from vision.eyes import get_eye_type"
@@ -40,53 +41,6 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 sock.bind((UDP_BIND, UDP_PORT))
 sock.setblocking(False)
-
-# --- Optional: /dev/fb1 fallback (legacy) ---
-FB1_PATH = "/dev/fb1"
-_fb1_warned = False
-
-def _write_fb1(row_buf_or_full_buffer):
-    """Write buffer (row or full frame) to /dev/fb1. LE RGB565. Needs sudo for /dev/fb1."""
-    global _fb1_warned
-    try:
-        with open(FB1_PATH, "wb") as fb:
-            if isinstance(row_buf_or_full_buffer, (list, tuple)):
-                for row in row_buf_or_full_buffer:
-                    fb.write(row)
-            else:
-                fb.write(row_buf_or_full_buffer)
-    except PermissionError:
-        if not _fb1_warned:
-            print("⚠ Left eye (fb1): run with sudo for /dev/fb1 write access.")
-            _fb1_warned = True
-    except Exception as e:
-        print(f"⚠ fb1 write error: {e}")
-
-def show_eye_image_fb1():
-    """Draw eye image to /dev/fb1 (left eye when overlay is used). LE RGB565."""
-    img = assets.load_eye_image()
-    if img is None:
-        return
-    try:
-        import struct
-        img = img.rotate(180)
-        rows = []
-        for y in range(config.EYE_SIZE):
-            row_buf = bytearray(config.EYE_SIZE * 2)
-            for x in range(config.EYE_SIZE):
-                r, g, b = img.getpixel((x, y))
-                c565 = (r & 0xF8) << 8 | (g & 0xFC) << 3 | (b >> 3)
-                row_buf[x * 2 : x * 2 + 2] = struct.pack("<H", c565)
-            rows.append(row_buf)
-        _write_fb1(rows)
-    except Exception as e:
-        print(f"⚠ Show image fb1 error: {e}")
-
-def fill_fb1(color_565):
-    """Fill /dev/fb1 with solid color (16-bit RGB565, little-endian)."""
-    import struct
-    row = struct.pack("<H", color_565) * config.EYE_SIZE
-    _write_fb1([row] * config.EYE_SIZE)
 
 
 def show_eye_image(display):
@@ -180,13 +134,11 @@ def run_eyes():
         MOVE_DURATION_MIN, MOVE_DURATION_MAX = 0.072, 0.144
         HOLD_DURATION_MAX = 3.0
         blit_open_bottom_to_top = False
-        next_auto_blink = time.monotonic() + random.uniform(2.0, 5.0)
+        next_auto_blink = time.monotonic() + blink.next_auto_blink_delay()
         ANIM_FPS = int(os.environ.get("ANIM_FPS", "60"))
         frame_dt = 1.0 / ANIM_FPS
         PUPIL_EASE = 0.48
-        BLINK_DEBOUNCE_S = 0.2
         CYCLE_EYE_TYPE_DEBOUNCE_S = 0.4
-        last_blink_end = 0.0
         last_cycle_eye_type_at = 0.0
         last_look_time = 0.0
         relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
@@ -200,10 +152,7 @@ def run_eyes():
         radius_transition_start = 0.0
         radius_transition_from = float(relaxed)
         radius_transition_to = float(relaxed)
-        blink_phase = None
-        blink_start_time = 0.0
-        closing_duration_s = 0.05
-        CLOSING_S_MIN, CLOSING_S_MAX = 0.04, 0.07
+        animated_blink = blink.AnimatedBlink()
         do_cycle_on_next_open = False
         animation_segments = []
         animation_start_time = 0.0
@@ -224,12 +173,6 @@ def run_eyes():
             else:
                 animation_segments = []
 
-        def do_blink():
-            nonlocal blink_phase, blink_start_time, closing_duration_s
-            blink_phase = "closing"
-            blink_start_time = time.monotonic()
-            closing_duration_s = random.uniform(CLOSING_S_MIN, CLOSING_S_MAX)
-
         while True:
             now = time.monotonic()
             while True:
@@ -238,9 +181,8 @@ def run_eyes():
                     msg = json.loads(data.decode())
                     action = msg.get("action")
                     if action == "blink":
-                        if now - last_blink_end >= BLINK_DEBOUNCE_S:
-                            do_blink()
-                            last_blink_end = now
+                        if animated_blink.can_trigger(now):
+                            animated_blink.trigger(now)
                             print("🐾 Logic: Blinked both eyes.")
                     elif action == "look":
                         tx = msg.get("x")
@@ -255,7 +197,7 @@ def run_eyes():
                         if now - last_cycle_eye_type_at >= CYCLE_EYE_TYPE_DEBOUNCE_S:
                             last_cycle_eye_type_at = now
                             do_cycle_on_next_open = True
-                            do_blink()
+                            animated_blink.trigger(now)
                     elif action == "set_eye_type":
                         eye_type = (msg.get("type") or msg.get("eye_type") or "default").strip().lower()
                         config.set_eye_type(eye_type)
@@ -276,31 +218,29 @@ def run_eyes():
                 except json.JSONDecodeError:
                     pass
 
-            if blink_phase is None and now >= next_auto_blink:
-                do_blink()
-                next_auto_blink = now + random.uniform(2.0, 5.0)
+            if animated_blink.phase is None and now >= next_auto_blink:
+                animated_blink.trigger(now)
+                next_auto_blink = now + blink.next_auto_blink_delay()
 
-            if blink_phase == "closing":
-                if (now - blink_start_time) >= closing_duration_s:
-                    blink_phase = None
-                    blit_open_bottom_to_top = True
-                    if do_cycle_on_next_open:
-                        do_cycle_on_next_open = False
-                        config.cycle_eye_type()
-                        print(f"👁 Eye type: {config.get_eye_type()}")
-                        # Reset pupil to new type's relaxed size immediately (no focus/wide delay)
-                        relaxed, _focused, _wide = config.eye_type_pupil_radii(config.get_eye_type())
-                        focus_until = 0.0
-                        wide_until = 0.0
-                        pupil_radius_current = float(relaxed)
-                        pupil_radius_target = relaxed
-                        radius_transition_from = float(relaxed)
-                        radius_transition_to = relaxed
-                        radius_transition_start = now
-                    total_blink_s = now - blink_start_time
-                    next_auto_blink = now + (total_blink_s * 3.0) + random.uniform(0.0, 4.0)
+            just_opened, next_delay = animated_blink.advance(now)
+            if just_opened:
+                blit_open_bottom_to_top = True
+                if do_cycle_on_next_open:
+                    do_cycle_on_next_open = False
+                    config.cycle_eye_type()
+                    print(f"👁 Eye type: {config.get_eye_type()}")
+                    relaxed, _focused, _wide = config.eye_type_pupil_radii(config.get_eye_type())
+                    focus_until = 0.0
+                    wide_until = 0.0
+                    pupil_radius_current = float(relaxed)
+                    pupil_radius_target = relaxed
+                    radius_transition_from = float(relaxed)
+                    radius_transition_to = relaxed
+                    radius_transition_start = now
+                if next_delay is not None:
+                    next_auto_blink = now + next_delay
 
-            blink_state = "open" if blink_phase is None else "closed"
+            blink_state = "closed" if animated_blink.is_closed else "open"
 
             if animation_segments:
                 seg = animation_segments[animation_index]
@@ -462,12 +402,10 @@ def run_eyes():
     _static_frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
     _static_eye_frame_left = _apply_eye_shape_left(_static_frame)
     _static_eye_frame_right = _apply_eye_shape_right(_static_frame)
-    BLINK_DEBOUNCE_S = 0.2
     CYCLE_EYE_TYPE_DEBOUNCE_S = 0.4
-    last_blink_end = 0.0
     last_cycle_eye_type_at = 0.0
     cycle_on_next_open = False
-    blink_phase = None
+    static_blink = blink.StaticBlink()
 
     while True:
         now = time.monotonic()
@@ -476,15 +414,13 @@ def run_eyes():
                 data, _ = sock.recvfrom(1024)
                 msg = json.loads(data.decode())
                 action = msg.get("action")
-                if action == "blink" and (now - last_blink_end) >= BLINK_DEBOUNCE_S:
-                    blink_phase = "closing"
-                    last_blink_end = now
+                if action == "blink" and static_blink.can_trigger(now):
+                    static_blink.trigger(now)
                     print("🐾 Logic: Blinked both eyes.")
                 elif action == "cycle_eye_type" and (now - last_cycle_eye_type_at) >= CYCLE_EYE_TYPE_DEBOUNCE_S:
                     last_cycle_eye_type_at = now
                     cycle_on_next_open = True
-                    blink_phase = "closing"
-                    last_blink_end = now
+                    static_blink.trigger(now)
                 elif action == "set_eye_type":
                     eye_type = (msg.get("type") or msg.get("eye_type") or "default").strip().lower()
                     config.set_eye_type(eye_type)
@@ -516,15 +452,15 @@ def run_eyes():
             except json.JSONDecodeError:
                 pass
 
-        if blink_phase == "closing":
+        if static_blink.is_closing:
             if _static_eye_frame_left is not None:
                 blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame_left, _static_eye_frame_right, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
             overlay_left = render.render_blink_overlay(mirror=False)
             overlay_right = render.render_blink_overlay(mirror=True)
             if overlay_left is not None and overlay_right is not None:
                 blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(overlay_left), _apply_eye_shape_right(overlay_right), reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
-            blink_phase = "opening"
-        elif blink_phase == "opening":
+            static_blink.advance()
+        elif static_blink.is_opening:
             if cycle_on_next_open:
                 cycle_on_next_open = False
                 config.cycle_eye_type()
@@ -534,7 +470,7 @@ def run_eyes():
                 print(f"👁 Eye type: {config.get_eye_type()}")
             if _static_eye_frame_left is not None:
                 blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame_left, _static_eye_frame_right, reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
-            blink_phase = None
+            static_blink.advance()
 
         time.sleep(0.02)
 

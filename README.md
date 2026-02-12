@@ -12,21 +12,22 @@ An AI-powered, Matter-enabled animatronic build based on the 2012 Hasbro Furby, 
 
 ## 🚀 Starting the services
 
-From the repo root on the Pi:
+From the repo root on the Pi you can start everything with one command:
 
-1. **Nervous system** (sensors, blink/eye-type triggers):
-   ```bash
-   npm start
-   ```
-   (Use `sudo npm start` if GPIO requires it.)
+**One command (eyes + nervous system in the same terminal):**
+```bash
+./scripts/wake-furbacca.sh
+```
+Or alias it and run from anywhere:
+```bash
+alias wake-furbacca='~/furbacca/scripts/wake-furbacca.sh'
+wake-furbacca
+```
+This starts the eyes in the background (UDP 5005, `UDP_BIND=0.0.0.0` for remote commands) and the nervous system in the foreground. Both log to the same terminal. Ctrl+C stops both and blanks the displays.
 
-2. **Eyes** (displays, UDP listener on 5005):
-   ```bash
-   wake-furbacca
-   ```
-   (`wake-furbacca` is your alias for starting the eye service, e.g. `./scripts/run-eyes.sh` with venv.)
-
-To accept eye commands from your Mac, start the eyes with `UDP_BIND=0.0.0.0 wake-furbacca`, then use `./scripts/eye-command.sh furbacca.local …` from the Mac.
+**Separate processes (two terminals):**
+- **Eyes only:** `./scripts/run-eyes.sh` (or an alias with `UDP_BIND=0.0.0.0` in front of the `python` call).
+- **Nervous system only:** `npm start` (use `sudo npm start` if GPIO needs it).
 
 ---
 
@@ -42,7 +43,7 @@ While the eyes are running, you can send UDP commands to port 5005.
 ./scripts/eye-command.sh blink
 ```
 
-**From your Mac** (eyes started with `UDP_BIND=0.0.0.0`):
+**From your Mac** (eyes started with `UDP_BIND=0.0.0.0`): pass the Pi host as the first argument. If you use an alias, include the host so commands reach the Pi (e.g. `alias fe='./scripts/eye-command.sh furbacca.local'`).
 ```bash
 ./scripts/eye-command.sh furbacca.local shape sharp
 ./scripts/eye-command.sh furbacca.local type human
