@@ -3,144 +3,120 @@ An AI-powered, Matter-enabled animatronic build based on the 2012 Hasbro Furby, 
 
 **Platform:** Raspberry Pi Zero 2 WH (with headers), Debian Trixie (Testing).
 
-## 🛠 Project Architecture
-- **Nervous System:** Node.js (TypeScript) handling sensors (GPIO) and high-level logic.
-- **Vision System:** Python (env) handling dual GC9A01 circular LCDs via SPI.
-- **Bridge:** UDP Loopback (Port 5005) for inter-process communication. If the nervous system runs on a different host than the eyes (e.g. dev machine vs Pi), set `VISION_HOST` to the Pi’s hostname (e.g. `furbacca.local`) so blink/cycle_eye_type reach the eyes.
-
-**Sending commands (SSH or from your Mac):**  
-You can change eye shape, blink, or cycle eye type while the eyes and nervous system are running by sending UDP JSON to port 5005.
-
-- **From SSH on the Pi** (eyes listen on 127.0.0.1 by default):
-  ```bash
-  ./scripts/eye-command.sh cycle_eye_shape
-  ./scripts/eye-command.sh set_eye_shape sharp
-  ./scripts/eye-command.sh blink
-  ```
-- **From your Mac to the Pi** (e.g. `furbacca.local`): start the eyes with `UDP_BIND=0.0.0.0` so they accept network packets, then from your Mac:
-  ```bash
-  UDP_BIND=0.0.0.0 python vision/eyes.py   # on the Pi
-  ./scripts/eye-command.sh furbacca.local cycle_eye_shape   # on your Mac
-  ./scripts/eye-command.sh furbacca.local set_eye_shape bean
-  ```
-  Shapes: `round`, `sharp`, `half_moon`, `bean`, `oval`, `trapezoid`, `tilted`, `dome`, `pill`.
-
-  **If remote commands aren't received:** On the Pi, allow UDP 5005 (e.g. `sudo ufw allow 5005/udp` then `sudo ufw reload`, or temporarily disable firewall to test). Check the eyes are bound to all interfaces: on the Pi run `ss -ulnp | grep 5005` — you should see `0.0.0.0:5005` when started with `UDP_BIND=0.0.0.0`.
+## 🛠 Architecture
+- **Nervous System:** Node.js (TypeScript), sensors (GPIO), high-level logic.
+- **Vision System:** Python (venv), dual GC9A01 circular LCDs via SPI.
+- **Bridge:** UDP port 5005. Set `VISION_HOST` (e.g. `furbacca.local`) if the nervous system runs on a different host than the eyes.
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Starting the services
 
-### 1. The Vision System (Python)
-Eyes are driven by **vision/eyes.py** (UDP listener on port 5005) using [russhughes/gc9a01py](https://github.com/russhughes/gc9a01py) via a thin CPython compat layer (**vision/machine_compat**). Pinout: **instruction.md** §3.1 (GC9A01 240×240, DC=25, RST=27, CS_L=8, CS_R=7). SPI and boot config: **instruction.md** (§3.1). **Pixel format:** eye image, gradient, and rainbow all use the same RGB565 pack (vision/blit.py). See **instruction.md** for details.
+From the repo root on the Pi:
 
-**Setup (manual or one-shot):**
+1. **Nervous system** (sensors, blink/eye-type triggers):
+   ```bash
+   npm start
+   ```
+   (Use `sudo npm start` if GPIO requires it.)
+
+2. **Eyes** (displays, UDP listener on 5005):
+   ```bash
+   wake-furbacca
+   ```
+   (`wake-furbacca` is your alias for starting the eye service, e.g. `./scripts/run-eyes.sh` with venv.)
+
+To accept eye commands from your Mac, start the eyes with `UDP_BIND=0.0.0.0 wake-furbacca`, then use `./scripts/eye-command.sh furbacca.local …` from the Mac.
+
+---
+
+## 📡 Sending eye commands (SSH or from your Mac)
+
+While the eyes are running, you can send UDP commands to port 5005.
+
+**On the Pi (SSH):**
+```bash
+./scripts/eye-command.sh cycle_eye_shape
+./scripts/eye-command.sh shape sharp
+./scripts/eye-command.sh type dragon
+./scripts/eye-command.sh blink
+```
+
+**From your Mac** (eyes started with `UDP_BIND=0.0.0.0`):
+```bash
+./scripts/eye-command.sh furbacca.local shape sharp
+./scripts/eye-command.sh furbacca.local type human
+```
+Shapes: `round`, `sharp`, `half_moon`, `bean`, `oval`, `trapezoid`, `tilted`, `dome`, `pill`.  
+Types: `default`, `human`, `dragon`, `demon`.
+
+**If remote commands aren’t received:** On the Pi, allow UDP 5005 (e.g. `sudo ufw allow 5005/udp` and `sudo ufw reload`). Check with `ss -ulnp | grep 5005` that the eyes are bound to `0.0.0.0:5005`.
+
+---
+
+## 🔧 Setup
+
+### Vision (Python / eyes)
+Eyes: **vision/eyes.py** (UDP 5005), [gc9a01py](https://github.com/russhughes/gc9a01py). Pinout and SPI: **instruction.md** §3.1.
+
 ```bash
 cd ~/furbacca
-# One-shot: venv + pip + gc9a01py + Pi_Eyes graphics
 bash scripts/setup-fresh.sh
 source env/bin/activate
 ```
-Or manually: `python3 -m venv env`, `source env/bin/activate`, `pip install spidev RPi.GPIO Pillow`, `bash scripts/fetch-gc9a01py.sh`, `bash scripts/fetch-eye-graphics.sh`.
+Or: `python3 -m venv env`, `source env/bin/activate`, `pip install spidev RPi.GPIO Pillow`, `bash scripts/fetch-gc9a01py.sh`, `bash scripts/fetch-eye-graphics.sh`.
 
 **Optional env:**  
-- `SWAP_LEFT_RIGHT_SPI=1` — swap which physical display is "left" vs "right".  
-- `EYES_SOLID_COLORS=1` — show only red/blue (no eye image).  
-- `EYES_GRADIENT=1` — show XY gradient on both displays (test pattern, no image file).  
-- `EYES_RAINBOW=1` — show circular rainbow (pinwheel) on both displays (test pattern).
-- **Animated eyes are the default.** Set `EYES_ANIMATED=0` for still image (iris + pupil at center, blink on UDP). Animated: iris + moving pupil + blink; UDP `blink`, `look` (x/y), `animation` (e.g. `name: 'nervous_look'`), `cycle_eye_type`.
-- `EYE_TYPE` — eye texture/mapping: **default** (current), `human` (inverted + smaller iris), `dragon` (dragon assets + inverted), `demon` (dragon assets, normal mapping).
-- `EYE_SHAPE` — eye outline mask (layer above sclera/iris/pupil): **round**, `sharp` (cat-like), `half_moon`, `bean`, `oval`, `trapezoid`, `tilted`, `dome`, `pill`. Outside shape = black.
-- `SPI_BAUDRATE` — default **60 MHz** (set lower, e.g. 20000000, if you see tearing or blackout); override if needed.
-- `ANIM_FPS` — target fps for animated eyes (default **60**). Lower (e.g. 15, 30) for more time per frame on slow hardware.
-- `EYE_BUILD_SIZE` — build eye layer at this size then scale to 240 (default **240** = full res). Lower for faster builds.
-- `UDP_BIND` — bind address for UDP port 5005 (default **127.0.0.1**). Set to **0.0.0.0** to accept commands from the network (e.g. from your Mac to `furbacca.local`).
+- `SWAP_LEFT_RIGHT_SPI=1` — swap left/right displays.  
+- `EYES_SOLID_COLORS=1`, `EYES_GRADIENT=1`, `EYES_RAINBOW=1` — test patterns.  
+- `EYES_ANIMATED=0` — still image (default: animated).  
+- `EYE_TYPE` — **default**, `human`, `dragon`, `demon`.  
+- `EYE_SHAPE` — **round**, `sharp`, `half_moon`, `bean`, `oval`, `trapezoid`, `tilted`, `dome`, `pill`.  
+- `SPI_BAUDRATE`, `ANIM_FPS`, `EYE_BUILD_SIZE` — tune if needed.  
+- `UDP_BIND=0.0.0.0` — accept eye commands from the network.
 
-**Display test modes (for later testing):**
+**Test modes** (run with `source env/bin/activate`):
 ```bash
-# Default: animated eyes (iris + pupil + blink; UDP look x/y)
 python vision/eyes.py
-
-# Still image (iris + pupil at center, blink on UDP)
 EYES_ANIMATED=0 python vision/eyes.py
-
-# XY gradient (red/green sweep)
 EYES_GRADIENT=1 python vision/eyes.py
-
-# Rainbow pinwheel (radial hue by angle)
-EYES_RAINBOW=1 python vision/eyes.py
-
-# Dragon eyes (dragon assets + inverted mapping, smaller iris)
 EYE_TYPE=dragon python vision/eyes.py
-
-# Demon eyes (dragon assets, normal mapping)
-EYE_TYPE=demon python vision/eyes.py
-
-# Human-style mapping (texture bottom = outside of eyeball)
-EYE_TYPE=human python vision/eyes.py
-
-# Eye shapes: sharp, half_moon, bean, oval, trapezoid, tilted, dome, pill (default round)
-EYE_SHAPE=oval python vision/eyes.py
 EYE_SHAPE=sharp python vision/eyes.py
-EYE_SHAPE=half_moon python vision/eyes.py
-EYE_SHAPE=bean python vision/eyes.py
-EYE_SHAPE=trapezoid python vision/eyes.py
-EYE_SHAPE=tilted python vision/eyes.py
-EYE_SHAPE=dome python vision/eyes.py
-EYE_SHAPE=pill python vision/eyes.py
 ```
+Eye assets: **vision/graphics**. Refresh with `./scripts/fetch-eye-graphics.sh`.
 
-**Optional — eye image on both eyes:**  
-Setup-fresh already fetches eye assets (iris.jpg, sclera.png, etc.) into **vision/graphics**. To fetch or refresh them: `./scripts/fetch-eye-graphics.sh`. **vision/eyes.py** uses **vision/graphics/iris.jpg** (or eye.png) on both displays. See **vision/graphics/README.md** if present.
-
-**Run:**
-```bash
-# Using the custom alias
-wake-furbacca
-```
-
-### 2. The Nervous System (Node.js)
-Handles touch sensors (P17/P22) and coordinates behaviors.
-
-**Setup:**
+### Nervous system (Node.js)
 ```bash
 npm install
 npm run build
 ```
-
-**Run:**
-```bash
-# Requires sudo for GPIO access
-sudo npm start
-```
+Run with `npm start` (or `sudo npm start` for GPIO). See **Starting the services** above.
 
 ---
 
-## 🔌 Hardware Mappings (BCM / Physical)
+## 🔌 Hardware (BCM / physical)
 
-| Component      | GPIO | Physical Pin | Notes           |
-|----------------|------|--------------|-----------------|
-| Touch (Head)   | 17   | 11           | TTP223 Sensor   |
-| Touch (Belly)  | 22   | 15           | TTP223 Sensor   |
-| SPI SCLK       | 11   | 23           | Shared (Eyes)   |
-| SPI MOSI       | 10   | 19           | Shared (Eyes)   |
-| Eye DC         | 25   | 22           | Data/Command (GC9A01) |
-| Eye RST        | 27   | 13           | Reset (GC9A01)  |
-| Eye CS (L)     | 8    | 24           | Left Eye Select |
-| Eye CS (R)     | 7    | 26           | Right Eye Select |
+| Component      | GPIO | Physical | Notes           |
+|----------------|------|----------|-----------------|
+| Touch (Head)   | 17   | 11       | TTP223          |
+| Touch (Belly)  | 22   | 15       | TTP223          |
+| SPI SCLK       | 11   | 23       | Eyes            |
+| SPI MOSI       | 10   | 19       | Eyes            |
+| Eye DC         | 25   | 22       | GC9A01          |
+| Eye RST        | 27   | 13       | GC9A01          |
+| Eye CS (L)     | 8    | 24       | Left            |
+| Eye CS (R)     | 7    | 26       | Right           |
 
 ---
 
-## 🤖 Commands & Automation
-
-- **`wake-furbacca`:** Alias to start the eye listener.
-- **`sudo systemctl status furbacca-eyes`:** Check background eye service.
-- **`push-furbacca`:** (Mac command) Syncs code from MacBook to Pi.
+## 🤖 Commands & automation
+- **`wake-furbacca`** — start the eye service (alias for run-eyes).
+- **`sudo systemctl status furbacca-eyes`** — if eyes run as a service.
+- **`push-furbacca`** — (Mac) sync code to the Pi.
 
 ---
 
 ## 📝 Troubleshooting
-
-- **Permission Denied:** Run `sudo chown -R $USER:$USER .` to fix file ownership.
-- **Module Not Found:** Ensure `source env/bin/activate` is run before starting the Python script.
-- **Eyes / SPI:** Ensure SPI is enabled (`dtparam=spi=on` in `/boot/firmware/config.txt` or raspi-config). See **instruction.md** (§3.1) for GC9A01 pinout and fbtft notes.
+- **Permission denied:** `sudo chown -R $USER:$USER .`
+- **Module not found:** Run `source env/bin/activate` before Python/eyes.
+- **Eyes / SPI:** Enable SPI (`dtparam=spi=on`), see **instruction.md** §3.1.
