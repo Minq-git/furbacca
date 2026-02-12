@@ -8,6 +8,25 @@ An AI-powered, Matter-enabled animatronic build based on the 2012 Hasbro Furby, 
 - **Vision System:** Python (env) handling dual GC9A01 circular LCDs via SPI.
 - **Bridge:** UDP Loopback (Port 5005) for inter-process communication. If the nervous system runs on a different host than the eyes (e.g. dev machine vs Pi), set `VISION_HOST` to the Pi’s hostname (e.g. `furbacca.local`) so blink/cycle_eye_type reach the eyes.
 
+**Sending commands (SSH or from your Mac):**  
+You can change eye shape, blink, or cycle eye type while the eyes and nervous system are running by sending UDP JSON to port 5005.
+
+- **From SSH on the Pi** (eyes listen on 127.0.0.1 by default):
+  ```bash
+  ./scripts/eye-command.sh cycle_eye_shape
+  ./scripts/eye-command.sh set_eye_shape sharp
+  ./scripts/eye-command.sh blink
+  ```
+- **From your Mac to the Pi** (e.g. `furbacca.local`): start the eyes with `UDP_BIND=0.0.0.0` so they accept network packets, then from your Mac:
+  ```bash
+  UDP_BIND=0.0.0.0 python vision/eyes.py   # on the Pi
+  ./scripts/eye-command.sh furbacca.local cycle_eye_shape   # on your Mac
+  ./scripts/eye-command.sh furbacca.local set_eye_shape bean
+  ```
+  Shapes: `round`, `sharp`, `half_moon`, `bean`, `oval`, `trapezoid`, `tilted`, `dome`, `pill`.
+
+  **If remote commands aren't received:** On the Pi, allow UDP 5005 (e.g. `sudo ufw allow 5005/udp` then `sudo ufw reload`, or temporarily disable firewall to test). Check the eyes are bound to all interfaces: on the Pi run `ss -ulnp | grep 5005` — you should see `0.0.0.0:5005` when started with `UDP_BIND=0.0.0.0`.
+
 ---
 
 ## 🚀 Getting Started
@@ -35,6 +54,7 @@ Or manually: `python3 -m venv env`, `source env/bin/activate`, `pip install spid
 - `SPI_BAUDRATE` — default **60 MHz** (set lower, e.g. 20000000, if you see tearing or blackout); override if needed.
 - `ANIM_FPS` — target fps for animated eyes (default **60**). Lower (e.g. 15, 30) for more time per frame on slow hardware.
 - `EYE_BUILD_SIZE` — build eye layer at this size then scale to 240 (default **240** = full res). Lower for faster builds.
+- `UDP_BIND` — bind address for UDP port 5005 (default **127.0.0.1**). Set to **0.0.0.0** to accept commands from the network (e.g. from your Mac to `furbacca.local`).
 
 **Display test modes (for later testing):**
 ```bash

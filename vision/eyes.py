@@ -33,12 +33,12 @@ except Exception as e:
     import traceback
     traceback.print_exc()
 
-# UDP bridge
-UDP_IP = "127.0.0.1"
+# UDP bridge (bind 0.0.0.0 to accept commands from network, e.g. Mac → furbacca.local:5005)
+UDP_BIND = os.environ.get("UDP_BIND", "127.0.0.1").strip() or "127.0.0.1"
 UDP_PORT = 5005
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-sock.bind((UDP_IP, UDP_PORT))
+sock.bind((UDP_BIND, UDP_PORT))
 sock.setblocking(False)
 
 # --- Optional: /dev/fb1 fallback (legacy) ---
@@ -256,6 +256,10 @@ def run_eyes():
                             last_cycle_eye_type_at = now
                             do_cycle_on_next_open = True
                             do_blink()
+                    elif action == "set_eye_type":
+                        eye_type = (msg.get("type") or msg.get("eye_type") or "default").strip().lower()
+                        config.set_eye_type(eye_type)
+                        print(f"👁 Eye type: {config.get_eye_type()}")
                     elif action == "set_eye_shape":
                         shape = (msg.get("shape") or msg.get("eye_shape") or "round").strip().lower()
                         config.set_eye_shape(shape)
@@ -409,11 +413,14 @@ def run_eyes():
                 blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
                 blit_open_bottom_to_top = False
             elif blink_state == "closed":
-                overlay = render.render_blink_overlay()
-                if overlay is not None:
-                    composite = eye_frame.copy()
-                    composite.paste(overlay, (0, 0))
-                    blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(composite), _apply_eye_shape_right(composite), reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
+                overlay_left = render.render_blink_overlay(mirror=False)
+                overlay_right = render.render_blink_overlay(mirror=True)
+                if overlay_left is not None and overlay_right is not None:
+                    composite_left = eye_frame.copy()
+                    composite_left.paste(overlay_left, (0, 0))
+                    composite_right = eye_frame.copy()
+                    composite_right.paste(overlay_right, (0, 0))
+                    blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(composite_left), _apply_eye_shape_right(composite_right), reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
                 else:
                     blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
             else:
@@ -478,6 +485,15 @@ def run_eyes():
                     cycle_on_next_open = True
                     blink_phase = "closing"
                     last_blink_end = now
+                elif action == "set_eye_type":
+                    eye_type = (msg.get("type") or msg.get("eye_type") or "default").strip().lower()
+                    config.set_eye_type(eye_type)
+                    _static_frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
+                    _static_eye_frame_left = _apply_eye_shape_left(_static_frame)
+                    _static_eye_frame_right = _apply_eye_shape_right(_static_frame)
+                    if _static_eye_frame_left is not None:
+                        blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame_left, _static_eye_frame_right, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+                    print(f"👁 Eye type: {config.get_eye_type()}")
                 elif action == "set_eye_shape":
                     shape = (msg.get("shape") or msg.get("eye_shape") or "round").strip().lower()
                     config.set_eye_shape(shape)
@@ -503,9 +519,10 @@ def run_eyes():
         if blink_phase == "closing":
             if _static_eye_frame_left is not None:
                 blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame_left, _static_eye_frame_right, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
-            overlay = render.render_blink_overlay()
-            if overlay is not None:
-                blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(overlay), _apply_eye_shape_right(overlay), reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
+            overlay_left = render.render_blink_overlay(mirror=False)
+            overlay_right = render.render_blink_overlay(mirror=True)
+            if overlay_left is not None and overlay_right is not None:
+                blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(overlay_left), _apply_eye_shape_right(overlay_right), reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
             blink_phase = "opening"
         elif blink_phase == "opening":
             if cycle_on_next_open:

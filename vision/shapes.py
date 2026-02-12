@@ -107,6 +107,42 @@ def _bean_points(size):
     return pts
 
 
+def get_blink_line(shape_name, size=None):
+    """
+    Return ((x0, y0), (x1, y1)) for the closed-eye blink line so it follows the shape.
+    For angular shapes (e.g. sharp) the line connects the corners; for round shapes it's horizontal.
+    """
+    if size is None:
+        size = config.EYE_SIZE
+    shape_name = (shape_name or "round").strip().lower()
+    if shape_name not in config.EYE_SHAPES:
+        shape_name = "round"
+    cy = size // 2
+    # Horizontal through center for round-like shapes
+    if shape_name in ("round", "oval", "pill", "half_moon", "bean", "dome"):
+        return ((0, cy), (size, cy))
+    if shape_name == "sharp":
+        # Line through inner (left) and outer (right) corners to match cat-eye angle
+        x0 = int(size * 0.10)
+        y0 = int(size * 0.75)
+        x1 = int(size * 0.95)
+        y1 = int(size * 0.35)
+        return ((x0, y0), (x1, y1))
+    if shape_name == "tilted":
+        # Oval rotated -18°: blink line opposite to sharp (down left→right)
+        tan18 = math.tan(math.radians(18))
+        offset = int((size / 2) * tan18)
+        return ((0, cy - offset), (size, cy + offset))
+    if shape_name == "trapezoid":
+        # Bottom edge of trapezoid (wider top, narrower bottom)
+        x0 = int(size * 0.12)
+        x1 = int(size * 0.88)
+        y = int(size * 0.82)
+        return ((x0, y), (x1, y))
+    # default
+    return ((0, cy), (size, cy))
+
+
 def get_shape_mask(shape_name, size=None):
     """
     Return a PIL Image (mode "L"): 255 inside the eye shape, 0 outside.

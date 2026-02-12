@@ -12,10 +12,11 @@ except ImportError:
 
 import config
 import assets
+import shapes
 
 _eye_base_sclera_iris_by_type = {}
 _gaze_cache = {}  # (eye_type, qx_idx, qy_idx) -> PIL image
-_blink_overlay_240 = None
+_blink_overlay_cache = {}  # shape_name -> PIL image (blink line follows eye shape)
 
 
 def _sample_texture_spherical(tex, cx, cy, r_max, x, y, invert_v=False):
@@ -143,22 +144,24 @@ def _get_eye_base_cached(px, py):
     return base.copy()
 
 
-def render_blink_overlay():
-    """Blink layer only: black + eyelid line. Cached."""
-    global _blink_overlay_240
-    if _blink_overlay_240 is not None:
-        return _blink_overlay_240
+def render_blink_overlay(shape_name=None, mirror=False):
+    """Blink layer only: black + eyelid line. Line follows eye shape (e.g. angular for sharp). mirror=True for right eye. Cached per (shape, mirror)."""
     if not HAS_PIL:
         return None
     from PIL import ImageDraw
-    overlay = Image.new("RGB", (config.EYE_SIZE, config.EYE_SIZE), (0, 0, 0))
+    shape_name = (shape_name or config.get_eye_shape() or "round").strip().lower()
+    size = config.EYE_SIZE
+    key = (shape_name, mirror)
+    if key in _blink_overlay_cache:
+        return _blink_overlay_cache[key]
+    overlay = Image.new("RGB", (size, size), (0, 0, 0))
     draw = ImageDraw.Draw(overlay)
-    cy = config.EYE_SIZE // 2
-    line_y = cy
-    for dy in (-1, 0, 1):
-        draw.line([(0, line_y + dy), (config.EYE_SIZE, line_y + dy)], fill=(28, 28, 28), width=1)
-    _blink_overlay_240 = overlay
-    return _blink_overlay_240
+    (x0, y0), (x1, y1) = shapes.get_blink_line(shape_name, size)
+    draw.line([(x0, y0), (x1, y1)], fill=(28, 28, 28), width=3)
+    if mirror:
+        overlay = overlay.transpose(Image.FLIP_LEFT_RIGHT)
+    _blink_overlay_cache[key] = overlay
+    return overlay
 
 
 def render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, blink_state="open", pupil_radius=None):
