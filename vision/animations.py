@@ -20,18 +20,17 @@ def get_animation(name, **kwargs):
 
 def _nervous_look(n_repeats=None):
     """
-    Look left/right with wide pupils, then re-centre into focus for a moment, then relaxed.
+    Look left/right with focused pupils, then re-centre and go wide, then relaxed.
     n_repeats: number of left-right cycles (default random 2–3).
     """
     if n_repeats is None:
         n_repeats = random.randint(2, 3)
     n_repeats = max(1, min(5, int(n_repeats)))
-    # Wide pupils while looking left and right
+    # Focused pupils while looking left and right
     segments = []
     for _ in range(n_repeats):
-        segments.append((0.28, -1.0, 0.0, "wide"))   # look left
-        segments.append((0.28, 1.0, 0.0, "wide"))   # look right
-    # Re-centre with focused pupils, then relax
-    segments.append((0.2, 0.0, 0.0, "focused"))     # move to centre, focused
-    segments.append((0.07, 0.0, 0.0, "relaxed"))    # hold centre, back to normal
+        segments.append((0.28, -1.0, 0.0, "focused"))   # look left
+        segments.append((0.28, 1.0, 0.0, "focused"))     # look right
+    # Re-centre, then relax
+    segments.append((0.9, 0.0, 0.0, "relaxed"))        # move to centre, back to normal
     return segments

@@ -331,6 +331,10 @@ def run_eyes():
                         pupil_radius_target = focused
                     else:
                         pupil_radius_target = relaxed
+                    # Apply immediately so animation pupil size is visible (no transition delay)
+                    pupil_radius_current = float(pupil_radius_target)
+                    radius_transition_from = pupil_radius_target
+                    radius_transition_to = pupil_radius_target
             elif now < focus_until:
                 pupil_radius_target = focused
             elif now < wide_until:
@@ -384,11 +388,17 @@ def run_eyes():
                 radius_transition_from = pupil_radius_current
                 radius_transition_to = pupil_radius_target
                 radius_transition_start = now
+            # Use short transition when animation segment sets pupil mode so focused/relaxed are visible
+            transition_s = PUPIL_TRANSITION_S
+            if animation_segments and animation_index < len(animation_segments):
+                seg = animation_segments[animation_index]
+                if len(seg) >= 4 and seg[3] is not None:
+                    transition_s = 0.06
             elapsed = now - radius_transition_start
-            if elapsed >= PUPIL_TRANSITION_S or radius_transition_from == radius_transition_to:
+            if elapsed >= transition_s or radius_transition_from == radius_transition_to:
                 pupil_radius_current = float(radius_transition_to)
             else:
-                progress = elapsed / PUPIL_TRANSITION_S
+                progress = elapsed / transition_s
                 idx = min(255, int(progress * 255))
                 e = EASE_TABLE[idx] / 255.0
                 pupil_radius_current = radius_transition_from + (radius_transition_to - radius_transition_from) * e
