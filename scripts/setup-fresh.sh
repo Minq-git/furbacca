@@ -27,11 +27,11 @@ pip install --quiet spidev RPi.GPIO Pillow
 
 # 3. Fetch gc9a01py driver (required for vision/py/eyes.py)
 echo "Fetching gc9a01py driver..."
-bash scripts/fetch-gc9a01py.sh
+bash scripts/setup/fetch-gc9a01py.sh
 
 # 4. Fetch eye graphics (iris.jpg, eye.svg, sclera.png, etc. into vision/py/graphics)
 echo "Fetching eye graphics..."
-bash scripts/fetch-eye-graphics.sh
+bash scripts/setup/fetch-eye-graphics.sh
 
 echo ""
 echo "=== Setup complete ==="

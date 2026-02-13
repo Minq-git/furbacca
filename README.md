@@ -63,7 +63,7 @@ cd ~/furbacca
 bash scripts/setup-fresh.sh
 source env/bin/activate
 ```
-Or: `python3 -m venv env`, `source env/bin/activate`, `pip install spidev RPi.GPIO Pillow`, `bash scripts/fetch-gc9a01py.sh`, `bash scripts/fetch-eye-graphics.sh`.
+Or: `python3 -m venv env`, `source env/bin/activate`, `pip install spidev RPi.GPIO Pillow`, `bash scripts/setup/fetch-gc9a01py.sh`, `bash scripts/setup/fetch-eye-graphics.sh`.
 
 **Optional env:**  
 - `SWAP_LEFT_RIGHT_SPI=1` — swap left/right displays.  
@@ -82,7 +82,7 @@ EYES_GRADIENT=1 python vision/py/eyes.py
 EYE_TYPE=dragon python vision/py/eyes.py
 EYE_SHAPE=sharp python vision/py/eyes.py
 ```
-Eye assets: **vision/py/graphics**. Refresh with `./scripts/fetch-eye-graphics.sh`.
+Eye assets: **vision/py/graphics**. Refresh with `./scripts/setup/fetch-eye-graphics.sh`.
 
 ### Nervous system (Node.js)
 ```bash
@@ -111,7 +111,7 @@ Run with `npm start` (or `sudo npm start` for GPIO). See **Starting the services
 ## 🤖 Commands & automation
 - **`wake-furbacca`** — start all services (eyes + nervous system). Use this.
 - **`sudo systemctl status furbacca-eyes`** — if you run eyes as a service (see below).
-- **`push-furbacca`** — (Mac) rsync project to the Pi. Use **`--delete`** so the Pi loses old paths (e.g. `vision/eyes.py` after refactor) and matches your Mac layout. Exclude Pi-only dirs so rsync doesn't delete them: `vision/py/gc9a01py` (fetched on the Pi by `fetch-gc9a01py.sh`; not on the Mac), and optionally `vision/waveshare-lcd-code`, `vision/gc9a01py` (old leftovers). Add to `~/.zshrc`:
+- **`push-furbacca`** — (Mac) rsync project to the Pi. Use **`--delete`** so the Pi loses old paths (e.g. `vision/eyes.py` after refactor) and matches your Mac layout. Exclude Pi-only dirs so rsync doesn't delete them: `vision/py/gc9a01py` (fetched on the Pi by `scripts/setup/fetch-gc9a01py.sh`; not on the Mac), and optionally `vision/waveshare-lcd-code`, `vision/gc9a01py` (old leftovers). Add to `~/.zshrc`:
   ```bash
   alias push-furbacca='rsync -avz --delete --exclude node_modules --exclude .git --exclude env --exclude dist --exclude vision/py/gc9a01py --exclude vision/waveshare-lcd-code --exclude vision/gc9a01py /Users/brent/Documents/Code/Furbacca/ minqz@furbacca.local:~/furbacca/'
   ```
@@ -126,7 +126,7 @@ Edit `User`, `WorkingDirectory`, and `ExecStart` paths to match your Pi user and
 
 ## 📝 Troubleshooting
 - **Permission denied:** `sudo chown -R $USER:$USER .`
-- **push-furbacca: cannot delete non-empty directory: vision/py/gc9a01py** — That dir is created on the Pi by `fetch-gc9a01py.sh` and isn't on the Mac, so `--delete` tries to remove it. Add `--exclude vision/py/gc9a01py` to your alias so rsync leaves it on the Pi.
+- **push-furbacca: cannot delete non-empty directory: vision/py/gc9a01py** — That dir is created on the Pi by `scripts/setup/fetch-gc9a01py.sh` and isn't on the Mac, so `--delete` tries to remove it. Add `--exclude vision/py/gc9a01py` to your alias so rsync leaves it on the Pi.
 - **push-furbacca: Permission denied (13) when deleting** — Some files on the Pi may be owned by root or another user. Use `--exclude` for those Pi-only dirs, or on the Pi run once: `sudo chown -R minqz:minqz ~/furbacca`, then run `push-furbacca` again.
 - **Module not found:** Run `source env/bin/activate` before Python/eyes.
 - **Eyes / SPI:** Enable SPI (`dtparam=spi=on`), see **instruction.md** §3.1.

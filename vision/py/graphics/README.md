@@ -19,7 +19,7 @@ If no image is found, eyes fall back to the red/blue test pattern.
 Setup-fresh already runs this. To fetch or refresh assets (from Adafruit Pi_Eyes graphics):
 
 ```bash
-./scripts/fetch-eye-graphics.sh
+./scripts/setup/fetch-eye-graphics.sh
 ```
 
 Then run **vision/py/eyes.py** as usual.

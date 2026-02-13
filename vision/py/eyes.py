@@ -83,7 +83,7 @@ def show_constructed_eye():
 
 def run_eyes():
     if left_eye is None and right_eye is None:
-        print("❌ No displays initialized. Run scripts/fetch-gc9a01py.sh and ensure vision/py/machine_compat and vision/py/gc9a01py are present.")
+        print("❌ No displays initialized. Run scripts/setup/fetch-gc9a01py.sh and ensure vision/py/machine_compat and vision/py/gc9a01py are present.")
         return
 
     print("👀 Furbacca Vision Online (gc9a01py).")

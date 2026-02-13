@@ -5,7 +5,7 @@
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 GRAPHICS_DIR="${REPO_DIR}/vision/py/graphics"
 GITHUB_URL="https://github.com/adafruit/Pi_Eyes/archive/refs/heads/master.zip"
 ZIP_NAME="Pi_Eyes-master.zip"
