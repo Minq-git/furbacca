@@ -47,7 +47,7 @@ def _blit_worker():
             if r_handle and r_buf:
                 r_handle.blit_buffer(r_buf, 0, 0, EYE_SIZE, EYE_SIZE)
         except Exception as e:
-            print(f"SPI Worker Error: {e}")
+            print(f"SPI Worker Error (check wiring/display): {e}")
         finally:
             _blit_queue.task_done()
 

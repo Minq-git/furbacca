@@ -6,6 +6,7 @@ import json
 import os
 import socket
 import sys
+import threading
 import time
 import random
 
@@ -68,11 +69,12 @@ def run_eyes():
         return
 
     print("👀 Furbacca Vision Online (Optimized).")
-    # --- PRE-LOAD ASSETS ---
-    # This happens before the animation engine starts
-    render.preload_all_types()
-    
+    # Pre-load current eye type only so first frame is fast; other types load in background
     check_base = render.build_eye_base_sclera_iris()
+    def _preload_background():
+        render.preload_all_types()
+    _preload_thread = threading.Thread(target=_preload_background, daemon=True)
+    _preload_thread.start()
 
     use_animated = (
         config.EYES_ANIMATED and not config.EYES_GRADIENT and not config.EYES_RAINBOW
@@ -105,6 +107,10 @@ def run_eyes():
         next_auto_blink = time.monotonic() + blink.next_auto_blink_delay()
         last_look_time = 0.0
         relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
+        # One synchronous frame so both displays get a stable image before async (reduces right-eye crash at startup)
+        first_frame = render.render_animated_frame(cached_eye_base_240, 0.0, 0.0, "open", pupil_radius=relaxed)
+        if first_frame is not None:
+            blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(first_frame), _apply_eye_shape_right(first_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
         focus_until = 0.0
         wide_until = 0.0
         next_wide_at = 0.0

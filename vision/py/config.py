@@ -47,8 +47,24 @@ SEGMENT_INDEX_NONE = -1
 # Eye shape mask — layer above sclera/iris/pupil
 _eye_shape_raw = os.environ.get("EYE_SHAPE", "round").strip().lower()
 _current_eye_shape = None
-EYE_SHAPES = ("round", "sharp", "half_moon", "bean", "oval", "trapezoid", "tilted", "dome", "pill")
-
+EYE_SHAPES = (
+    "round", 
+    "sharp", 
+    "half_moon", 
+    "bean", 
+    "concerned",
+    "oval", 
+    "tilted", 
+    "dome", 
+    "pill", 
+    "heart", 
+    "anime", 
+    "glare", 
+    "gemini", 
+    "sus", 
+    "stern", 
+    "kawaii"
+)
 
 def get_eye_type():
     """Return current eye type (default, human, dragon, demon). Use set_eye_type() to change at runtime."""
@@ -97,7 +113,7 @@ def eye_type_pupil_radii(eye_type):
 
 
 def get_eye_shape():
-    """Return current eye shape (round, sharp, half_moon, bean, oval, trapezoid, tilted, dome, pill). Layer above eye content; outside shape is black."""
+    """Return current eye shape (round, sharp, half_moon, bean, oval, tilted, dome, pill). Layer above eye content; outside shape is black."""
     if _current_eye_shape is not None:
         return _current_eye_shape
     if _eye_shape_raw in EYE_SHAPES:

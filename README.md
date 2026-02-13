@@ -46,7 +46,7 @@ While the eyes are running, you can send UDP commands to port 5005.
 ./scripts/eye-command.sh furbacca.local shape sharp
 ./scripts/eye-command.sh furbacca.local type human
 ```
-Shapes: `round`, `sharp`, `half_moon`, `bean`, `oval`, `trapezoid`, `tilted`, `dome`, `pill`.  
+Shapes: `round`, `sharp`, `half_moon`, `bean`, `oval`, `tilted`, `dome`, `pill`, `anime`, `concerned`, `glare`, `gemini`, `heart`, `kawaii`, `stern`, `sus`.  
 Types: `default`, `human`, `dragon`, `demon`.
 
 **If remote commands aren’t received:** On the Pi, allow UDP 5005 (e.g. `sudo ufw allow 5005/udp` and `sudo ufw reload`). Check with `ss -ulnp | grep 5005` that the eyes are bound to `0.0.0.0:5005`.
@@ -70,7 +70,7 @@ Or: `python3 -m venv env`, `source env/bin/activate`, `pip install spidev RPi.GP
 - `EYES_SOLID_COLORS=1`, `EYES_GRADIENT=1`, `EYES_RAINBOW=1` — test patterns.  
 - `EYES_ANIMATED=0` — still image (default: animated).  
 - `EYE_TYPE` — **default**, `human`, `dragon`, `demon`.  
-- `EYE_SHAPE` — **round**, `sharp`, `half_moon`, `bean`, `oval`, `trapezoid`, `tilted`, `dome`, `pill`.  
+- `EYE_SHAPE` — **round**, `sharp`, `half_moon`, `bean`, `oval`, `tilted`, `dome`, `pill`, `anime`, `concerned`, `glare`, `gemini`, `heart`, `kawaii`, `stern`, `sus`.  
 - `ANIM_FPS` — target FPS (default **30**; use 15 for toy style or 60 if Pi keeps up).  
 - `EYES_NUMPY_SWAP_RB=1` — if NumPy gives a blue tint and the channel check shows BGR, set this. If the check shows RGB but you still get a blue tint, use `EYES_USE_NUMPY_BLIT=0` to force the fallback (correct colors, slower FPS).  
 - `SPI_BAUDRATE`, `EYE_BUILD_SIZE` — tune if needed.  
