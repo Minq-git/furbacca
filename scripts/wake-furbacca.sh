@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Start eyes (background) and nervous system (foreground) in one terminal.
-# Ctrl+C or exit stops both; eyes are blanked on exit.
-# Run from repo root, or the script will cd there.
+# Start eyes (vision/py/eyes.py) + nervous system. One terminal; Ctrl+C stops both.
+# Run from repo root, or the script will cd there. Sync from Mac (push-furbacca) if you see "vision/eyes.py: No such file".
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,7 +10,7 @@ cd "$REPO_DIR"
 
 # Refactor check: eyes live in vision/py/ (pull latest if missing)
 if [[ ! -f vision/py/eyes.py ]]; then
-  echo "❌ vision/py/eyes.py not found. Pull the latest refactor: git pull"
+  echo "❌ vision/py/eyes.py not found. Sync from your Mac: push-furbacca"
   exit 1
 fi
 
