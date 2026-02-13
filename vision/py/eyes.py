@@ -82,19 +82,37 @@ def run_eyes():
     )
 
     if use_animated:
+        # --- Tunable constants (timing & motion) ---
         ANIM_FPS = int(os.environ.get("ANIM_FPS", "60"))
-        print(f"  Animated eyes @ {ANIM_FPS} FPS. UDP enabled.")
-        
-        cached_eye_base_240 = render.build_eye_base_sclera_iris()
         frame_dt = 1.0 / ANIM_FPS
-        
-        # Original Easing Table
+        EASE_TABLE_SIZE = 256
+        EASE_INDEX_MAX = EASE_TABLE_SIZE - 1
+        IDLE_LOOK_TIMEOUT_S = 0.2
+        MOVE_DURATION_MIN_S = 0.072
+        MOVE_DURATION_MAX_S = 0.144
+        HOLD_DURATION_MAX_S = 3.0
+        PUPIL_EASE_FACTOR = 0.48
+        FOCUS_HOLD_S = 0.35
+        PUPIL_TRANSITION_S = 0.5
+        PUPIL_TRANSITION_ANIM_S = 0.06  # snappier during animations
+        SHIVER_DEBOUNCE_S = 0.28
+        LOOK_CLAMP_MIN = -1.0
+        LOOK_CLAMP_MAX = 1.0
+        IDLE_WANDER_MIN = -0.8
+        IDLE_WANDER_MAX = 0.8
+        UDP_RECV_SIZE = 1024
+        SEGMENT_INDEX_NONE = -1
+
+        print(f"👀 Animated eyes @ {ANIM_FPS} FPS. UDP enabled.")
+        cached_eye_base_240 = render.build_eye_base_sclera_iris()
+
+        # Smoothstep easing: 3t² - 2t³ over [0,1]
         EASE_TABLE = tuple(
-            int(255.0 * (3.0 * (i / 255.0) ** 2 - 2.0 * (i / 255.0) ** 3))
-            for i in range(256)
+            int(EASE_TABLE_SIZE * (3.0 * (i / EASE_INDEX_MAX) ** 2 - 2.0 * (i / EASE_INDEX_MAX) ** 3))
+            for i in range(EASE_TABLE_SIZE)
         )
-        
-        # --- Original State Machine ---
+
+        # --- State machine ---
         pupil_x, pupil_y = 0.0, 0.0
         target_x, target_y = 0.0, 0.0
         eye_in_motion = False
@@ -103,19 +121,13 @@ def run_eyes():
         eye_move_start = 0.0
         eye_move_duration = 0.0
         eye_hold_until = 0.0
-        IDLE_LOOK_TIMEOUT = 0.2
-        MOVE_DURATION_MIN, MOVE_DURATION_MAX = 0.072, 0.144
-        HOLD_DURATION_MAX = 3.0
         blit_open_bottom_to_top = False
         next_auto_blink = time.monotonic() + blink.next_auto_blink_delay()
-        PUPIL_EASE = 0.48
         last_look_time = 0.0
         relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
         focus_until = 0.0
         wide_until = 0.0
         next_wide_at = 0.0
-        FOCUS_HOLD_S = 0.35
-        PUPIL_TRANSITION_S = 0.5
         pupil_radius_current = float(relaxed)
         pupil_radius_target = relaxed
         radius_transition_start = 0.0
@@ -128,9 +140,8 @@ def run_eyes():
         animation_index = 0
         segment_start_x, segment_start_y = 0.0, 0.0
         segment_end_x, segment_end_y = 0.0, 0.0
-        last_blink_triggered_segment_index = -1  # so we only trigger once per segment
+        last_blink_triggered_segment_index = SEGMENT_INDEX_NONE
         last_impulse_at = 0.0
-        SHIVER_DEBOUNCE_S = 0.28
 
         def _start_animation(name):
             nonlocal animation_segments, animation_start_time, animation_index
@@ -143,11 +154,12 @@ def run_eyes():
             if not segments:
                 return
             animation_segments = segments
-            last_blink_triggered_segment_index = -1
+            last_blink_triggered_segment_index = SEGMENT_INDEX_NONE
             animation_start_time = time.monotonic()
             animation_index = 0
             segment_start_x, segment_start_y = pupil_x, pupil_y
-            segment_end_x, segment_end_y = animation_segments[0][1], animation_segments[0][2]
+            seg0 = animation_segments[0]
+            segment_end_x, segment_end_y = seg0.x, seg0.y
             print(f"🎬 Animation: {name}")
 
         while True:
@@ -156,7 +168,7 @@ def run_eyes():
             # --- UDP Command Logic (Original) ---
             while True:
                 try:
-                    data, _ = sock.recvfrom(1024)
+                    data, _ = sock.recvfrom(UDP_RECV_SIZE)
                     msg = json.loads(data.decode())
                     action = msg.get("action")
                     if action == "blink":
@@ -164,8 +176,8 @@ def run_eyes():
                             animated_blink.trigger(now)
                     elif action == "look":
                         tx, ty = msg.get("x"), msg.get("y")
-                        if tx is not None: target_x = max(-1.0, min(1.0, float(tx)))
-                        if ty is not None: target_y = max(-1.0, min(1.0, float(ty)))
+                        if tx is not None: target_x = max(LOOK_CLAMP_MIN, min(LOOK_CLAMP_MAX, float(tx)))
+                        if ty is not None: target_y = max(LOOK_CLAMP_MIN, min(LOOK_CLAMP_MAX, float(ty)))
                         last_look_time, focus_until = now, now + FOCUS_HOLD_S
                     elif action == "set_eye_shape":
                         shape = (msg.get("shape") or "round").strip().lower()
@@ -221,8 +233,8 @@ def run_eyes():
                 elapsed = now - animation_start_time
                 
                 progress = min(1.0, max(0.0, elapsed / seg.duration)) if seg.duration > 0 else 1.0
-                idx = min(255, int(progress * 255))
-                e = EASE_TABLE[idx] / 255.0
+                idx = min(EASE_INDEX_MAX, int(progress * EASE_INDEX_MAX))
+                e = EASE_TABLE[idx] / EASE_INDEX_MAX
 
                 pupil_x = segment_start_x + (seg.x - segment_start_x) * e
                 pupil_y = segment_start_y + (seg.y - segment_start_y) * e
@@ -232,7 +244,7 @@ def run_eyes():
                     animation_start_time = now
                     if animation_index >= len(animation_segments):
                         animation_segments = []
-                        last_blink_triggered_segment_index = -1
+                        last_blink_triggered_segment_index = SEGMENT_INDEX_NONE
                     else:
                         segment_start_x, segment_start_y = pupil_x, pupil_y
                         next_seg = animation_segments[animation_index]
@@ -242,23 +254,23 @@ def run_eyes():
             # --- Physics: Idle Looking & Pupil Radius ---
             relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
             if not animation_segments:
-                if (now - last_look_time) <= IDLE_LOOK_TIMEOUT:
-                    pupil_x += (target_x - pupil_x) * PUPIL_EASE
-                    pupil_y += (target_y - pupil_y) * PUPIL_EASE
+                if (now - last_look_time) <= IDLE_LOOK_TIMEOUT_S:
+                    pupil_x += (target_x - pupil_x) * PUPIL_EASE_FACTOR
+                    pupil_y += (target_y - pupil_y) * PUPIL_EASE_FACTOR
                 else:
                     if eye_in_motion:
                         elapsed = now - eye_move_start
                         t = min(1.0, elapsed / eye_move_duration) if eye_move_duration > 0 else 1.0
-                        e = EASE_TABLE[min(255, int(t * 255))] / 255.0
+                        e = EASE_TABLE[min(EASE_INDEX_MAX, int(t * EASE_INDEX_MAX))] / EASE_INDEX_MAX
                         pupil_x = eye_old_x + (eye_new_x - eye_old_x) * e
                         pupil_y = eye_old_y + (eye_new_y - eye_old_y) * e
                         if elapsed >= eye_move_duration:
                             eye_in_motion = False
-                            eye_hold_until = now + random.uniform(0.0, HOLD_DURATION_MAX)
+                            eye_hold_until = now + random.uniform(0.0, HOLD_DURATION_MAX_S)
                     elif now >= eye_hold_until:
                         eye_old_x, eye_old_y = pupil_x, pupil_y
-                        eye_new_x, eye_new_y = random.uniform(-0.8, 0.8), random.uniform(-0.8, 0.8)
-                        eye_move_start, eye_move_duration = now, random.uniform(MOVE_DURATION_MIN, MOVE_DURATION_MAX)
+                        eye_new_x, eye_new_y = random.uniform(IDLE_WANDER_MIN, IDLE_WANDER_MAX), random.uniform(IDLE_WANDER_MIN, IDLE_WANDER_MAX)
+                        eye_move_start, eye_move_duration = now, random.uniform(MOVE_DURATION_MIN_S, MOVE_DURATION_MAX_S)
                         eye_in_motion = True
 
             # --- Pupil Radius: Logic with Animation Overrides ---
@@ -292,7 +304,7 @@ def run_eyes():
                 radius_transition_start = now
             
             # Use faster transitions during animations
-            transition_s = 0.06 if animation_segments else PUPIL_TRANSITION_S
+            transition_s = PUPIL_TRANSITION_ANIM_S if animation_segments else PUPIL_TRANSITION_S
             
             elapsed_r = now - radius_transition_start
             if elapsed_r >= transition_s or radius_transition_from == radius_transition_to:
@@ -300,8 +312,8 @@ def run_eyes():
             else:
                 # Smoothly ease the radius change
                 progress = min(1.0, elapsed_r / transition_s)
-                idx = min(255, int(progress * 255))
-                e_r = EASE_TABLE[idx] / 255.0
+                idx = min(EASE_INDEX_MAX, int(progress * EASE_INDEX_MAX))
+                e_r = EASE_TABLE[idx] / EASE_INDEX_MAX
                 pupil_radius_current = radius_transition_from + (radius_transition_to - radius_transition_from) * e_r
 
             # --- Rendering & Async Blitting ---
