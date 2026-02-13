@@ -63,7 +63,7 @@ cd ~/furbacca
 bash scripts/setup-fresh.sh
 source env/bin/activate
 ```
-Or: `python3 -m venv env`, `source env/bin/activate`, `pip install spidev RPi.GPIO Pillow`, `bash scripts/setup/fetch-gc9a01py.sh`, `bash scripts/setup/fetch-eye-graphics.sh`.
+Or: `python3 -m venv env`, `source env/bin/activate`, `pip install spidev RPi.GPIO Pillow numpy`, `bash scripts/setup/fetch-gc9a01py.sh`, `bash scripts/setup/fetch-eye-graphics.sh`. NumPy gives smooth 15–30 FPS; if the display is tinted blue, set `EYES_NUMPY_SWAP_RB=1`.
 
 **Optional env:**  
 - `SWAP_LEFT_RIGHT_SPI=1` — swap left/right displays.  
@@ -71,7 +71,9 @@ Or: `python3 -m venv env`, `source env/bin/activate`, `pip install spidev RPi.GP
 - `EYES_ANIMATED=0` — still image (default: animated).  
 - `EYE_TYPE` — **default**, `human`, `dragon`, `demon`.  
 - `EYE_SHAPE` — **round**, `sharp`, `half_moon`, `bean`, `oval`, `trapezoid`, `tilted`, `dome`, `pill`.  
-- `SPI_BAUDRATE`, `ANIM_FPS`, `EYE_BUILD_SIZE` — tune if needed.  
+- `ANIM_FPS` — target FPS (default **30**; use 15 for toy style or 60 if Pi keeps up).  
+- `EYES_NUMPY_SWAP_RB=1` — if NumPy gives a blue tint and the channel check shows BGR, set this. If the check shows RGB but you still get a blue tint, use `EYES_USE_NUMPY_BLIT=0` to force the fallback (correct colors, slower FPS).  
+- `SPI_BAUDRATE`, `EYE_BUILD_SIZE` — tune if needed.  
 - `UDP_BIND=0.0.0.0` — accept eye commands from the network.
 
 **Test modes** (run with `source env/bin/activate`):

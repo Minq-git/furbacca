@@ -2,11 +2,12 @@
 # Send a single UDP command to the eyes (e.g. change shape, blink).
 # Use from another terminal while scripts/run-eyes.sh is running (eyes listen on UDP 5005).
 # Usage:
-#   ./scripts/eye-command.sh cycle_eye_shape
-#   ./scripts/eye-command.sh set_eye_shape sharp   # or: shape sharp
-#   ./scripts/eye-command.sh set_eye_type dragon    # or: type dragon
+#   ./scripts/eye-command.sh anim nervous_look
+#   ./scripts/eye-command.sh anim shiver
 #   ./scripts/eye-command.sh blink
-#   ./scripts/eye-command.sh furbacca.local shape bean   # from Mac to Pi
+#   ./scripts/eye-command.sh shape sharp
+#   ./scripts/eye-command.sh type dragon
+#   ./scripts/eye-command.sh furbacca.local anim shiver   # from Mac (fe anim shiver)
 set -e
 PORT="${EYE_UDP_PORT:-5005}"
 HOST="127.0.0.1"
@@ -39,19 +40,28 @@ case "$1" in
     shift
     CMD=$(printf '{"action":"set_eye_type","type":"%s"}' "$EYE_TYPE")
     ;;
-  nervous_look|animation)
-    CMD=$(printf '{"action":"animation","name":"%s"}' "${2:-nervous_look}")
+  anim)
+    ANIM_NAME="${2:-nervous_look}"
+    shift
+    CMD=$(printf '{"action":"animation","name":"%s"}' "$ANIM_NAME")
+    ;;
+  nervous_look)
+    CMD='{"action":"animation","name":"nervous_look"}'
+    ;;
+  shiver|impulse)
+    CMD='{"action":"animation","name":"shiver"}'
     ;;
   *)
     echo "Usage: $0 [host] <command> [arg]" >&2
     echo "  host    optional; e.g. furbacca.local (default 127.0.0.1)" >&2
-    echo "  command one of: cycle_eye_shape, set_eye_shape <shape>, shape <shape>, blink, cycle_eye_type, set_eye_type <type>, type <type>, nervous_look" >&2
+    echo "  command one of: cycle_eye_shape, shape <shape>, blink, cycle_eye_type, type <type>, anim <name>, nervous_look, shiver" >&2
+    echo "  anim    anim <name> — nervous_look, shiver (or use nervous_look / shiver directly)" >&2
     echo "  shapes  round, sharp, half_moon, bean, oval, trapezoid, tilted, dome, pill" >&2
     echo "  types   default, human, dragon, demon" >&2
     echo "Examples:" >&2
-    echo "  $0 cycle_eye_shape" >&2
-    echo "  $0 set_eye_shape sharp    # or: $0 shape sharp" >&2
-    echo "  $0 set_eye_type dragon     # or: $0 type dragon" >&2
+    echo "  $0 anim nervous_look" >&2
+    echo "  $0 anim shiver" >&2
+    echo "  $0 blink" >&2
     echo "  $0 furbacca.local shape bean" >&2
     exit 1
     ;;

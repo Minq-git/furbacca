@@ -23,7 +23,7 @@ echo "Installing pip packages..."
 # shellcheck source=/dev/null
 source env/bin/activate
 pip install --quiet --upgrade pip
-pip install --quiet spidev RPi.GPIO Pillow
+pip install --quiet spidev RPi.GPIO Pillow numpy
 
 # 3. Fetch gc9a01py driver (required for vision/py/eyes.py)
 echo "Fetching gc9a01py driver..."

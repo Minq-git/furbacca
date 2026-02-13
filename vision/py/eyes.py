@@ -116,9 +116,12 @@ def run_eyes():
                 right_eye.fill(0x001F)
 
     if use_animated:
+        ANIM_FPS = int(os.environ.get("ANIM_FPS", "30"))
         print("  Animated eyes (headless, no monitor). UDP: blink, look x/y.")
+        print(f"  Target {ANIM_FPS} FPS (set ANIM_FPS=15|30|60).")
         import random
         cached_eye_base_240 = render.build_eye_base_sclera_iris()
+        frame_dt = 1.0 / ANIM_FPS
         EASE_TABLE = tuple(
             int(255.0 * (3.0 * (i / 255.0) ** 2 - 2.0 * (i / 255.0) ** 3))
             for i in range(256)
@@ -136,8 +139,6 @@ def run_eyes():
         HOLD_DURATION_MAX = 3.0
         blit_open_bottom_to_top = False
         next_auto_blink = time.monotonic() + blink.next_auto_blink_delay()
-        ANIM_FPS = int(os.environ.get("ANIM_FPS", "60"))
-        frame_dt = 1.0 / ANIM_FPS
         PUPIL_EASE = 0.48
         CYCLE_EYE_TYPE_DEBOUNCE_S = 0.4
         last_cycle_eye_type_at = 0.0
