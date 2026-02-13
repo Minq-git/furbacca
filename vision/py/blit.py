@@ -34,19 +34,24 @@ def rgb565(r, g, b):
 
 
 def _pil_to_rgb565_numpy(img):
-    """Fast path: whole-image RGB565 via NumPy. 180° rotation only (GC9A01 hardware requirement).
-    Orientation only; pupil gaze is handled by the caller (left/right images with same pupil_x/y, mirrored shapes)."""
+    """Fast path: whole-image RGB565 via NumPy without redundant copies."""
+    # arr is a view of the PIL memory
     arr = np.array(img, dtype=np.uint8)
-    arr = np.flip(arr, axis=(0, 1)).copy()  # 180° rotation (view then copy for contiguous .tobytes())
+    # flip returns a view (no memory allocation)
+    flipped_view = np.flip(arr, axis=(0, 1))
+    # We promote to uint16 here. This is the first mandatory allocation 
+    # since we're changing the bit-depth from 8 to 16.
     if _NUMPY_SWAP_RB:
-        r = arr[:, :, 2].astype(np.uint16)
-        g = arr[:, :, 1].astype(np.uint16)
-        b = arr[:, :, 0].astype(np.uint16)
+        r = flipped_view[:, :, 2].astype(np.uint16)
+        g = flipped_view[:, :, 1].astype(np.uint16)
+        b = flipped_view[:, :, 0].astype(np.uint16)
     else:
-        r = arr[:, :, 0].astype(np.uint16)
-        g = arr[:, :, 1].astype(np.uint16)
-        b = arr[:, :, 2].astype(np.uint16)
+        r = flipped_view[:, :, 0].astype(np.uint16)
+        g = flipped_view[:, :, 1].astype(np.uint16)
+        b = flipped_view[:, :, 2].astype(np.uint16)
+    # Bitwise operations on the new uint16 arrays
     rgb565_u16 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+    # Convert to big-endian bytes for SPI
     return rgb565_u16.astype(">u2").tobytes()
 
 
