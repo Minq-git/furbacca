@@ -1,35 +1,123 @@
 /**
- * Touch sensors (TTP223B) via gpioget. SW-420 vibration on BCM 23.
+ * Touch sensors (TTP223B) and SW-420 vibration.
  * Head: BCM 17. Belly: BCM 22. Vibration DO: BCM 23 (Logic 0 = detected).
+ *
+ * Two modes:
+ * - Event-driven: startEventWatch() spawns gpiomon (libgpiod) for ~instant response.
+ * - Polling fallback: poll() with setInterval when gpiomon is not available.
  */
-import { execSync } from "child_process";
+import { execSync, spawn, ChildProcess } from "child_process";
 
 const VIBE_BCM = 23;
+
+const OFFSET_HEAD = 17;
+const OFFSET_BELLY = 22;
+const OFFSET_VIBE = 23;
+const EDGE_RISING = 1;
+const EDGE_FALLING = 2;
+
+export type TouchSensor = "head" | "belly" | "shiver";
+
+export type TouchCallback = (sensor: TouchSensor, active: boolean) => void;
 
 export class TouchSenses {
   private chipNum: number;
   private lastHead: number = 0;
   private lastBelly: number = 0;
   private lastVibe: number = 1;
+  private gpiomonProcess: ChildProcess | null = null;
 
   constructor(chip: number) {
     this.chipNum = chip;
   }
 
+  /** Check if gpiomon (libgpiod) is available for event-driven mode. */
+  static hasGpiomon(): boolean {
+    try {
+      execSync("which gpiomon", { encoding: "utf-8" });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Start event-driven watch using gpiomon. Calls callback immediately on GPIO edges.
+   * Returns a stop function. If gpiomon is not available, returns null (use poll() instead).
+   */
+  startEventWatch(callback: TouchCallback): (() => void) | null {
+    if (!TouchSenses.hasGpiomon()) {
+      return null;
+    }
+    const proc = spawn(
+      "gpiomon",
+      [
+        "-c", String(this.chipNum),
+        "-F", "%o %e\n",
+        "-e", "both",
+        String(OFFSET_HEAD),
+        String(OFFSET_BELLY),
+        String(OFFSET_VIBE),
+      ],
+      { stdio: ["ignore", "pipe", "pipe"] }
+    );
+    this.gpiomonProcess = proc;
+    let buffer = "";
+    proc.stdout?.on("data", (chunk: Buffer) => {
+      buffer += chunk.toString();
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 2) {
+          const offset = parseInt(parts[0], 10);
+          const edge = parseInt(parts[1], 10);
+          const sensor = this.offsetToSensor(offset);
+          if (sensor) {
+            const active = this.edgeToActive(sensor, edge);
+            callback(sensor, active);
+          }
+        }
+      }
+    });
+    proc.stderr?.on("data", (d) => process.stderr.write(d));
+    proc.on("error", () => { this.gpiomonProcess = null; });
+    proc.on("exit", () => { this.gpiomonProcess = null; });
+    return () => {
+      if (this.gpiomonProcess) {
+        this.gpiomonProcess.kill("SIGTERM");
+        this.gpiomonProcess = null;
+      }
+    };
+  }
+
+  private offsetToSensor(offset: number): TouchSensor | null {
+    if (offset === OFFSET_HEAD) return "head";
+    if (offset === OFFSET_BELLY) return "belly";
+    if (offset === OFFSET_VIBE) return "shiver";
+    return null;
+  }
+
+  /** Vibration sensor: Logic 0 = detected, so falling edge = active. Head/Belly: rising = touch. */
+  private edgeToActive(sensor: TouchSensor, edge: number): boolean {
+    if (sensor === "shiver") return edge === EDGE_FALLING;
+    return edge === EDGE_RISING;
+  }
+
   private readPins(): [number, number, number] {
     try {
-      // GPIO 17 (Head), 22 (Belly), 23 (Vibration SW-420 DO)
       const out = execSync(`gpioget -c ${this.chipNum} --numeric 17 22 23`, {
         encoding: "utf-8",
       });
       const parts = out.trim().split(/\s+/);
       return [parseInt(parts[0], 10), parseInt(parts[1], 10), parseInt(parts[2], 10)];
     } catch {
-      return [0, 0, 1]; // Default vibe to 1 (NC state)
+      return [0, 0, 1];
     }
   }
 
-  public poll(callback: (type: "head" | "belly" | "shiver", state: boolean) => void): void {
+  /** Polling mode: call each tick to detect changes. Use when gpiomon is not available. */
+  public poll(callback: TouchCallback): void {
     const [head, belly, vibe] = this.readPins();
     if (head !== this.lastHead) {
       this.lastHead = head;
@@ -41,9 +129,7 @@ export class TouchSenses {
     }
     if (vibe !== this.lastVibe) {
       this.lastVibe = vibe;
-      if (vibe === 0) {
-        callback("shiver", true);
-      }
+      if (vibe === 0) callback("shiver", true);
     }
   }
 }

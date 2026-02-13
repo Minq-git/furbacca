@@ -1,34 +1,68 @@
-import * as dgram from 'dgram';
+import * as dgram from "dgram";
+
+const PORT = 5005;
+
+/** Pre-allocated buffers for high-frequency commands to avoid JSON.stringify + Buffer alloc on every call (reduces GC on Pi). */
+const PAYLOAD_IMPULSE = Buffer.from(JSON.stringify({ action: "impulse" }));
+const PAYLOAD_BLINK = Buffer.from(JSON.stringify({ action: "blink" }));
+const PAYLOAD_CYCLE_EYE_TYPE = Buffer.from(JSON.stringify({ action: "cycle_eye_type" }));
+
+/** Cache for animation messages by name (replace flag varies). */
+const animationCache = new Map<string, Buffer>();
+
+function getAnimationPayload(name: string, replace: boolean): Buffer {
+  const key = `${name}:${replace}`;
+  let buf = animationCache.get(key);
+  if (!buf) {
+    buf = Buffer.from(JSON.stringify({ action: "animation", name, replace }));
+    animationCache.set(key, buf);
+  }
+  return buf;
+}
 
 export class EyeBridge {
-  private client = dgram.createSocket('udp4');
-  private PORT = 5005;
-  private HOST = process.env.VISION_HOST ?? '127.0.0.1'; // Use VISION_HOST when eyes run on another machine (e.g. Pi)
+  private client = dgram.createSocket("udp4");
+  private HOST = process.env.VISION_HOST ?? "127.0.0.1";
 
-  public sendCommand(action: string, params: object = {}) {
-    const message = Buffer.from(JSON.stringify({ action, ...params }));
-    this.client.send(message, this.PORT, this.HOST, (err) => {
+  /** Send a raw payload (uses pre-allocated buffer when possible). */
+  private send(payload: Buffer): void {
+    this.client.send(payload, PORT, this.HOST, (err) => {
       if (err) console.error("Eye Bridge Error:", err.message);
     });
   }
 
-  /** Play a named animation (e.g. 'nervous_look': eyes look left then right 2–3 times). */
-  public playAnimation(name: string) {
-    this.sendCommand('animation', { name });
+  /** Generic command; for high-frequency actions use the specific methods to benefit from cached buffers. */
+  public sendCommand(action: string, params: object = {}): void {
+    const payload = Buffer.from(JSON.stringify({ action, ...params }));
+    this.send(payload);
   }
 
-  /** Set eye shape at runtime (e.g. 'round', 'sharp', 'bean', 'oval', 'pill'). */
-  public setEyeShape(shape: string) {
-    this.sendCommand('set_eye_shape', { shape });
+  /** Play a named animation. Use replace: true to restart even if an animation is running (e.g. double head-tap). */
+  public playAnimation(name: string, options?: { replace?: boolean }): void {
+    const replace = options?.replace ?? false;
+    this.send(getAnimationPayload(name, replace));
   }
 
-  /** Cycle to the next eye shape. */
-  public cycleEyeShape() {
-    this.sendCommand('cycle_eye_shape');
+  public setEyeShape(shape: string): void {
+    this.sendCommand("set_eye_shape", { shape });
   }
 
-  /** Apply a short pupil jiggle (e.g. from SW-420 vibration / Matter.js impulse). */
-  public impulse() {
-    this.sendCommand('impulse');
+  public cycleEyeShape(): void {
+    this.sendCommand("cycle_eye_shape");
+  }
+
+  /** Impulse (shiver): uses pre-allocated buffer for rapid-fire. */
+  public impulse(): void {
+    this.send(PAYLOAD_IMPULSE);
+  }
+
+  /** Blink: uses pre-allocated buffer. */
+  public blink(): void {
+    this.send(PAYLOAD_BLINK);
+  }
+
+  /** Cycle eye type (belly): uses pre-allocated buffer. */
+  public cycleEyeType(): void {
+    this.send(PAYLOAD_CYCLE_EYE_TYPE);
   }
 }

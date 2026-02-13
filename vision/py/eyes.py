@@ -123,12 +123,12 @@ def run_eyes():
         last_blink_triggered_segment_index = config.SEGMENT_INDEX_NONE
         last_impulse_at = 0.0
 
-        def _start_animation(name):
+        def _start_animation(name, replace=False):
             nonlocal animation_segments, animation_start_time, animation_index
             nonlocal segment_start_x, segment_start_y, segment_end_x, segment_end_y
             nonlocal last_blink_triggered_segment_index
-            # Don't start a new animation while one is already running (prevents crash/weird state)
-            if animation_segments:
+            # If one is already running, only continue when replace=True (e.g. double head-tap restarts nervous_look)
+            if animation_segments and not replace:
                 return
             segments = animations.get_animation(name)
             if not segments:
@@ -177,7 +177,9 @@ def run_eyes():
                         print(f"👁 Eye type cycled to: {config.get_eye_type()}")
                     elif action == "animation":
                         anim_name = (msg.get("name") or "").strip().lower()
-                        if anim_name: _start_animation(anim_name)
+                        replace = msg.get("replace") is True
+                        if anim_name:
+                            _start_animation(anim_name, replace=replace)
                     elif action == "impulse":
                         if (now - last_impulse_at) >= config.SHIVER_DEBOUNCE_S:
                             last_impulse_at = now
