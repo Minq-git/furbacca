@@ -1,3 +1,5 @@
+.cursor
+.vscode
 node_modules
 dist
 instruction.md

@@ -41,6 +41,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 sock.bind((UDP_BIND, UDP_PORT))
 sock.setblocking(False)
+print(f"  UDP {UDP_BIND}:{UDP_PORT} (remote fe + local nervous system)")
 
 
 def show_eye_image(display):
@@ -82,7 +83,7 @@ def show_constructed_eye():
 
 def run_eyes():
     if left_eye is None and right_eye is None:
-        print("❌ No displays initialized. Run scripts/fetch-gc9a01py.sh and ensure vision/machine_compat and vision/gc9a01py are present.")
+        print("❌ No displays initialized. Run scripts/fetch-gc9a01py.sh and ensure vision/py/machine_compat and vision/py/gc9a01py are present.")
         return
 
     print("👀 Furbacca Vision Online (gc9a01py).")

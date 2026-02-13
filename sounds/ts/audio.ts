@@ -6,8 +6,8 @@
 import { spawn } from "child_process";
 import path from "path";
 
-// Use module directory so path works whether running via ts-node or node dist/...
-const SOUNDS_DIR = __dirname;
+// WAV files live in sounds/assets/; path works via ts-node or node dist/...
+const SOUNDS_DIR = path.join(__dirname, "..", "assets");
 
 /**
  * Play a WAV file immediately in the background. Returns without waiting for playback to finish.
