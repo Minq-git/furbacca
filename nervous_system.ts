@@ -115,7 +115,7 @@ let headActive = false;
 let bellyActive = false;
 
 function handleBellyTouch(): void {
-  console.log("🐾 Belly touch: Cycling species");
+  console.log("  🐾 Belly: cycling species");
   eyes.cycleEyeType();
   eyes.sendCommand("look", { x: 0, y: 0, pupil_mode: "wide" });
 }
@@ -126,13 +126,13 @@ function onTouch(sensor: "head" | "belly" | "shiver", active: boolean): void {
 
   if (!active) return;
   if (sensor === "head") {
-    console.log("🐾 Head touch");
+    console.log("  🐾 Head: touch");
     eyes.blink();
     eyes.playAnimation("nervous_look", { replace: true });
   } else if (sensor === "belly") {
     handleBellyTouch();
   } else if (sensor === "shiver") {
-    console.log(`🫨  SHIVER: BCM ${VIBE_BCM} detected vibration (Logic 0)`);
+    console.log(`  🫨  Shiver: BCM ${VIBE_BCM}`);
     eyes.impulse();
   }
 }

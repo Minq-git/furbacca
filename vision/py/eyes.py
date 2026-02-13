@@ -92,7 +92,7 @@ def run_eyes():
         frame_dt = 1.0 / config.ANIM_FPS
         EASE_INDEX_MAX = config.EASE_TABLE_SIZE - 1
 
-        print(f"Furbacca Vision Online: Animated @ {config.ANIM_FPS} FPS.")
+        print(f"ᯤ Furbacca Vision Online: Animated @ {config.ANIM_FPS} FPS.")
         cached_eye_base_240 = None  # First frame fills cache for current type
 
         # Smoothstep easing: 3t² - 2t³ over [0,1]
@@ -169,7 +169,7 @@ def run_eyes():
             segment_start_x, segment_start_y = pupil_x, pupil_y
             seg0 = animation_segments[0]
             segment_end_x, segment_end_y = seg0.x, seg0.y
-            print(f"🎬 Animation: {name}")
+            print(f"  🎬 Animation: {name}")
 
         while True:
             if _shutdown_requested:
@@ -207,13 +207,13 @@ def run_eyes():
                         cached_eye_base_240 = render.build_eye_base_sclera_iris()
                         relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
                         pupil_radius_current = float(relaxed)
-                        print(f"👁 Eye type updated to: {config.get_eye_type()}")
+                        print(f"  👁  Eye type: {config.get_eye_type()}")
                     elif action == "cycle_eye_type":
                         config.cycle_eye_type()
                         cached_eye_base_240 = render.build_eye_base_sclera_iris()
                         relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
                         pupil_radius_current = float(relaxed)
-                        print(f"👁 Eye type cycled to: {config.get_eye_type()}")
+                        print(f"  👁  Eye type: {config.get_eye_type()}")
                     elif action == "animation":
                         anim_name = (msg.get("name") or "").strip().lower()
                         replace = msg.get("replace") is True
