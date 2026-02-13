@@ -1,5 +1,8 @@
 .cursor
 .vscode
+.DS_Store
+
 node_modules
 dist
 instruction.md
+vision/.DS_Store

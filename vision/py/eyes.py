@@ -358,7 +358,7 @@ def run_eyes():
 
             eye_frame = render.render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, "open", pupil_radius=pupil_radius)
             if blit_open_bottom_to_top:
-                blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
+                blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
                 blit_open_bottom_to_top = False
             elif blink_state == "closed":
                 overlay_left = render.render_blink_overlay(mirror=False)
@@ -368,11 +368,11 @@ def run_eyes():
                     composite_left.paste(overlay_left, (0, 0))
                     composite_right = eye_frame.copy()
                     composite_right.paste(overlay_right, (0, 0))
-                    blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(composite_left), _apply_eye_shape_right(composite_right), reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
+                    blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(composite_left), _apply_eye_shape_right(composite_right), reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
                 else:
-                    blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+                    blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
             else:
-                blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+                blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
             time.sleep(max(0.0, frame_dt - (time.monotonic() - now)))
         return
 

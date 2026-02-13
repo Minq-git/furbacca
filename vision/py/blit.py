@@ -1,9 +1,12 @@
 """
 RGB565 packing and blit to one or both GC9A01 displays. One byte order for all (big-endian).
 NumPy path is much faster (15–30 FPS). If you see a blue tint with NumPy, set EYES_NUMPY_SWAP_RB=1.
+Double-buffer: async worker thread does blocking SPI so the main loop can render the next frame.
 """
 import os
+import queue
 import struct
+import threading
 
 try:
     from PIL import Image as PILImage
@@ -25,6 +28,48 @@ EYE_SIZE = config.EYE_SIZE
 _NUMPY_SWAP_RB = os.environ.get("EYES_NUMPY_SWAP_RB", "").strip().lower() in ("1", "true", "yes")
 # Force fallback (slower, correct colors) when NumPy path gives wrong colors despite channel check.
 _USE_NUMPY_BLIT = os.environ.get("EYES_USE_NUMPY_BLIT", "1").strip().lower() not in ("0", "false", "no")
+
+# Async blit: depth 1 so we only care about the most recent frame; drops older pending frame if full.
+_blit_queue = queue.Queue(maxsize=1)
+
+
+def _blit_worker():
+    """Background thread: processes both eyes as a single atomic task."""
+    while True:
+        task = _blit_queue.get()
+        if task is None:
+            break
+ 
+        # Unpack the full face update
+        left_eye, left_buf, right_eye, right_buf = task
+        
+        # Execute SPI writes consecutively
+        if left_eye is not None and left_buf is not None:
+            left_eye.blit_buffer(left_buf, 0, 0, EYE_SIZE, EYE_SIZE)
+        
+        if right_eye is not None and right_buf is not None:
+            right_eye.blit_buffer(right_buf, 0, 0, EYE_SIZE, EYE_SIZE)
+            
+        _blit_queue.task_done()
+
+
+_worker_thread = threading.Thread(target=_blit_worker, daemon=True)
+_worker_thread.start()
+
+
+def blit_async(display, buffer):
+    """Non-blocking handoff to SPI thread. If queue full, drop pending frame and replace (reduces input lag)."""
+    if display is None or buffer is None:
+        return
+    try:
+        if _blit_queue.full():
+            try:
+                _blit_queue.get_nowait()
+            except queue.Empty:
+                pass
+        _blit_queue.put_nowait((display, buffer))
+    except queue.Full:
+        pass
 
 
 def rgb565(r, g, b):
@@ -165,3 +210,41 @@ def blit_pil_to_both(left_eye, right_eye, left_img, right_img=None, reverse_rows
             right_eye.blit_buffer(buf_right, 0, 0, EYE_SIZE, EYE_SIZE)
     else:
         blit_buffer_row_by_row_both(left_eye, right_eye, buf_left, buf_right, reverse_rows=reverse_rows, outside_in=outside_in, inside_out=inside_out, partial_rows=partial_rows)
+
+
+def blit_pil_to_both_async(left_eye, right_eye, left_img, right_img=None, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
+    """
+    Hands off both eye buffers to the queue as a single task to ensure 
+    displays stay in sync and prevent one eye from dropping out.
+    """
+    if left_img is None:
+        return
+
+    # Fallback to synchronous blit if special row ordering is requested (e.g., specific animations)
+    if reverse_rows or outside_in or inside_out or partial_rows is not None:
+        blit_pil_to_both(left_eye, right_eye, left_img, right_img, reverse_rows, outside_in, inside_out, partial_rows)
+        return
+
+    # Prepare buffers using the optimized NumPy path
+    buf_left = pil_to_rgb565_buffer(left_img)
+    if buf_left is None:
+        return
+        
+    actual_right = right_img if right_img is not None else left_img
+    buf_right = pil_to_rgb565_buffer(actual_right)
+    if buf_right is None:
+        buf_right = buf_left
+
+    # Atomic handoff to the SPI worker
+    try:
+        if _blit_queue.full():
+            try:
+                # Drop the stale frame if we are rendering faster than the bus can send
+                _blit_queue.get_nowait()
+            except queue.Empty:
+                pass
+        
+        # Put all four components in as a single tuple
+        _blit_queue.put_nowait((left_eye, buf_left, right_eye, buf_right))
+    except queue.Full:
+        pass
