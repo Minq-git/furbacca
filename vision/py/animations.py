@@ -22,15 +22,21 @@ def get_animation(name, **kwargs):
 
 def _shiver():
     """
-    Short pupil jiggle (e.g. from SW-420 vibration / Matter.js impulse).
-    Small fast x/y offsets then back to centre.
+    Simulates a physical jiggle/vibration. 
+    Starts with high frequency/amplitude and decays rapidly.
     """
     return [
-        (0.04, 0.22, 0.0),
-        (0.04, -0.18, 0.04),
-        (0.04, 0.14, -0.04),
-        (0.04, -0.08, 0.0),
-        (0.06, 0.0, 0.0),
+        # Initial sharp impact
+        (0.001,  0.40,  0.08, "focused"), 
+        (0.001, -0.35, -0.06, "focused"),
+        # First decay bounce
+        (0.001,  0.25,  0.04, "relaxed"),
+        (0.001, -0.18, -0.03, "relaxed"),
+        # Settling micro-vibrations
+        (0.002,  0.08,  0.02, "relaxed"),
+        (0.002, -0.04, -0.01, "relaxed"),
+        # Final rest
+        (0.05,  0.00,  0.00, "relaxed"),
     ]
 
 

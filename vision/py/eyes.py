@@ -160,6 +160,8 @@ def run_eyes():
         animation_index = 0
         segment_start_x, segment_start_y = 0.0, 0.0
         segment_end_x, segment_end_y = 0.0, 0.0
+        last_impulse_at = 0.0
+        SHIVER_DEBOUNCE_S = 0.28  # don't restart shiver if we started one recently
 
         def _start_animation(name):
             nonlocal animation_segments, animation_start_time, animation_index
@@ -182,7 +184,7 @@ def run_eyes():
                     msg = json.loads(data.decode())
                     action = msg.get("action")
                     if action == "blink":
-                        if animated_blink.can_trigger(now):
+                        if not animation_segments and animated_blink.can_trigger(now):
                             animated_blink.trigger(now)
                             print("🐾 Logic: Blinked both eyes.")
                     elif action == "look":
@@ -215,13 +217,15 @@ def run_eyes():
                         if anim_name:
                             _start_animation(anim_name)
                     elif action == "impulse":
-                        _start_animation("shiver")
+                        if (now - last_impulse_at) >= SHIVER_DEBOUNCE_S:
+                            last_impulse_at = now
+                            _start_animation("shiver")
                 except BlockingIOError:
                     break
                 except json.JSONDecodeError:
                     pass
 
-            if animated_blink.phase is None and now >= next_auto_blink:
+            if not animation_segments and animated_blink.phase is None and now >= next_auto_blink:
                 animated_blink.trigger(now)
                 next_auto_blink = now + blink.next_auto_blink_delay()
 
