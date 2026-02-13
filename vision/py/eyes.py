@@ -75,7 +75,7 @@ def run_eyes():
     render.preload_all_types()
     
     check_base = render.build_eye_base_sclera_iris()
-    
+
     use_animated = (
         config.EYES_ANIMATED and not config.EYES_GRADIENT and not config.EYES_RAINBOW
         and assets.HAS_PIL and render.build_eye_base_sclera_iris() is not None
@@ -183,15 +183,25 @@ def run_eyes():
                 except (BlockingIOError, json.JSONDecodeError):
                     break
 
-            # --- Blink & State Advancement ---
+            # --- 1. Auto-blink Trigger ---
+            # Trigger ONLY if the timer is up and we aren't already blinking
             if not animation_segments and not animated_blink.is_closed and now >= next_auto_blink:
                 animated_blink.trigger(now)
-                next_auto_blink = now + blink.next_auto_blink_delay()
+                # Important: DO NOT update next_auto_blink here. 
+                # Let the advance() function decide the next time.
 
+            # --- 2. Blink & State Advancement ---
+            # This is where blink.py manages the duration and the NEXT delay
             just_opened, next_delay = animated_blink.advance(now)
+            
             if just_opened:
                 blit_open_bottom_to_top = True
-                if next_delay: next_auto_blink = now + next_delay
+                # Use the custom delay from blink.py (total_s * 3 + random)
+                if next_delay is not None: 
+                    next_auto_blink = now + next_delay
+                else:
+                    # Fallback only if advance failed
+                    next_auto_blink = now + blink.next_auto_blink_delay()
 
             # --- Animation Segment Processing (Readable) ---
             if animation_segments:
@@ -290,10 +300,24 @@ def run_eyes():
             elif animated_blink.is_closed:
                 overlay_l = render.render_blink_overlay(mirror=False)
                 overlay_r = render.render_blink_overlay(mirror=True)
-                if overlay_l and overlay_r:
-                    comp_l, comp_r = eye_frame.copy(), eye_frame.copy()
-                    comp_l.paste(overlay_l, (0,0))
-                    comp_r.paste(overlay_r, (0,0))
+                if overlay_l and overlay_r and np is not None:
+                    # Composite overlay in NumPy (works whether eye_frame is PIL or ndarray)
+                    def _composite_overlay(frame, overlay_pil):
+                        ov = np.array(overlay_pil, dtype=np.uint8)
+                        # Use full overlay (black eyelids + line) so closed eye shows black + line
+                        from PIL import Image
+                        return Image.fromarray(ov.copy())
+                    comp_l = _composite_overlay(eye_frame, overlay_l)
+                    comp_r = _composite_overlay(eye_frame, overlay_r)
+                    blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(comp_l), _apply_eye_shape_right(comp_r), outside_in=True)
+                elif overlay_l and overlay_r:
+                    # PIL path when numpy unavailable (eye_frame assumed PIL from render)
+                    from PIL import Image
+                    pil_frame = Image.fromarray(eye_frame) if (np is not None and isinstance(eye_frame, np.ndarray)) else eye_frame
+                    comp_l = pil_frame.copy()
+                    comp_l.paste(overlay_l, (0, 0))
+                    comp_r = pil_frame.copy()
+                    comp_r.paste(overlay_r, (0, 0))
                     blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(comp_l), _apply_eye_shape_right(comp_r), outside_in=True)
             else:
                 blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame))

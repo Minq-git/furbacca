@@ -149,7 +149,40 @@ def blit_pil_to_both(left_eye, right_eye, left_img, right_img=None, reverse_rows
     else:
         blit_buffer_row_by_row_both(left_eye, right_eye, buf_left, buf_right, reverse_rows, outside_in, inside_out, partial_rows)
 
+def _row_order_outside_in():
+    """Row indices top→bottom then bottom→top so lids appear to close from edges toward center."""
+    order = []
+    for i in range((EYE_SIZE + 1) // 2):
+        order.append(i)
+        if EYE_SIZE - 1 - i != i:
+            order.append(EYE_SIZE - 1 - i)
+    return order
+
+
+def _row_order_inside_out():
+    """Row indices center outward for opening (reverse of outside_in)."""
+    order = _row_order_outside_in()
+    return order[::-1]
+
+
 def blit_buffer_row_by_row_both(left_eye, right_eye, buf_left, buf_right, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
-    """Logic for row-by-row updates (blinks/opening)."""
-    # ... [Keep your existing implementation of this function here] ...
-    pass
+    """Blit buffer row-by-row for organic blink: outside_in = close from edges; inside_out = open from center."""
+    row_bytes = EYE_SIZE * 2
+    if outside_in:
+        order = _row_order_outside_in()
+    elif inside_out:
+        order = _row_order_inside_out()
+    elif reverse_rows:
+        order = list(range(EYE_SIZE - 1, -1, -1))
+    else:
+        order = list(range(EYE_SIZE))
+    if partial_rows is not None:
+        order = [y for y in order if y in partial_rows]
+    for y in order:
+        start = y * row_bytes
+        row_left = buf_left[start : start + row_bytes]
+        row_right = buf_right[start : start + row_bytes]
+        if left_eye is not None and row_left:
+            left_eye.blit_buffer(row_left, 0, y, EYE_SIZE, 1)
+        if right_eye is not None and row_right:
+            right_eye.blit_buffer(row_right, 0, y, EYE_SIZE, 1)
