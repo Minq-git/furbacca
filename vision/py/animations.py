@@ -1,58 +1,65 @@
 """
-Preset eye animations. Each animation is a list of segments.
-Segment format: (duration_sec, target_x, target_y) or (duration_sec, target_x, target_y, pupil_mode).
-target_x, target_y in [-1, 1]. pupil_mode optional: "wide" | "focused" | "relaxed" (overrides normal pupil size for that segment).
+Preset eye animations for Furbacca.
+Each animation is a list of AnimationSegment objects.
 """
 import random
+from typing import List, Optional, NamedTuple
 
+# Descriptive labels for pupil modes
+PUPIL_RELAXED = "relaxed"
+PUPIL_FOCUSED = "focused"
+PUPIL_WIDE = "wide"
 
-def get_animation(name, **kwargs):
+class AnimationSegment(NamedTuple):
+    duration: float
+    x: float
+    y: float
+    pupil_mode: str = PUPIL_RELAXED
+
+def get_animation(name: str, **kwargs) -> List[AnimationSegment]:
     """
-    Return list of segments for the named animation, or [] if unknown.
-    name: e.g. "nervous_look", "shiver"
-    kwargs: optional overrides (e.g. n_repeats for nervous_look).
+    Registry for named animations.
     """
     name = (name or "").strip().lower()
-    if name == "nervous_look":
-        return _nervous_look(**kwargs)
-    if name == "shiver":
-        return _shiver()
-    return []
+    
+    animations_map = {
+        "nervous_look": _nervous_look,
+        "shiver": _shiver,
+    }
+    
+    func = animations_map.get(name)
+    return func(**kwargs) if func else []
 
-
-def _shiver():
+def _shiver() -> List[AnimationSegment]:
     """
-    Simulates a physical jiggle/vibration. 
-    Starts with high frequency/amplitude and decays rapidly.
+    High-frequency vibration with rapid decay.
     """
     return [
-        # Initial sharp impact
-        (0.001,  0.40,  0.08, "focused"), 
-        (0.001, -0.35, -0.06, "focused"),
-        # First decay bounce
-        (0.001,  0.25,  0.04, "relaxed"),
-        (0.001, -0.18, -0.03, "relaxed"),
-        # Settling micro-vibrations
-        (0.002,  0.08,  0.02, "relaxed"),
-        (0.002, -0.04, -0.01, "relaxed"),
-        # Final rest
-        (0.05,  0.00,  0.00, "relaxed"),
+        # Impact
+        AnimationSegment(0.001,  0.40,  0.08, PUPIL_FOCUSED), 
+        AnimationSegment(0.001, -0.35, -0.06, PUPIL_FOCUSED),
+        # Decay
+        AnimationSegment(0.001,  0.25,  0.04, PUPIL_RELAXED),
+        AnimationSegment(0.001, -0.18, -0.03, PUPIL_RELAXED),
+        # Settle
+        AnimationSegment(0.002,  0.08,  0.02, PUPIL_RELAXED),
+        AnimationSegment(0.002, -0.04, -0.01, PUPIL_RELAXED),
+        # Rest
+        AnimationSegment(0.050,  0.00,  0.00, PUPIL_RELAXED),
     ]
 
-
-def _nervous_look(n_repeats=None):
+def _nervous_look(n_repeats: Optional[int] = None) -> List[AnimationSegment]:
     """
-    Look left/right with focused pupils, then re-centre and go wide, then relaxed.
-    n_repeats: number of left-right cycles (default random 2–3).
+    Rapid side-to-side scanning with focused pupils.
     """
     if n_repeats is None:
         n_repeats = random.randint(2, 3)
     n_repeats = max(1, min(5, int(n_repeats)))
-    # Focused pupils while looking left and right
+
     segments = []
     for _ in range(n_repeats):
-        segments.append((0.28, -1.0, 0.0, "focused"))   # look left
-        segments.append((0.28, 1.0, 0.0, "focused"))     # look right
-    # Re-centre, then relax
-    segments.append((0.9, 0.0, 0.0, "relaxed"))        # move to centre, back to normal
+        segments.append(AnimationSegment(0.28, -1.0, 0.0, PUPIL_FOCUSED)) # Left
+        segments.append(AnimationSegment(0.28,  1.0, 0.0, PUPIL_FOCUSED)) # Right
+        
+    segments.append(AnimationSegment(0.90, 0.0, 0.0, PUPIL_RELAXED)) # Re-center
     return segments
