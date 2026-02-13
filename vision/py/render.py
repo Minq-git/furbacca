@@ -108,22 +108,23 @@ def build_eye_base_sclera_iris():
     # Convert to PIL so eyes.py can validate HAS_PIL and basic rendering
     return Image.fromarray(arr)
 
-def _get_eye_base_cached_numpy(px, py):
+def _get_eye_base_cached_numpy(px, py, force_type=None):
     """Retrieves quantized gaze base from cache as a NumPy array."""
     cx, cy = config.EYE_SIZE // 2, config.EYE_SIZE // 2
     step = config.EYE_GAZE_CACHE_STEP
     
     qx_idx = round(((px - cx) / 35.0) / step)
     qy_idx = round(((py - cy) / 35.0) / step)
-    eye_type = config.get_eye_type()
+    
+    # Use forced type for pre-loading, otherwise use current config
+    eye_type = force_type if force_type else config.get_eye_type()
     key = (eye_type, qx_idx, qy_idx)
     
     if key not in _gaze_cache_numpy:
         qpx = int(cx + (qx_idx * step) * 35)
         qpy = int(cy + (qy_idx * step) * 35)
-        _gaze_cache_numpy[key] = build_eye_base_sclera_iris_at_center(qpx, qpy, size=config.EYE_BUILD_SIZE)
+        _gaze_cache_numpy[key] = build_eye_base_sclera_iris_at_center(qpx, qpy, eye_type=eye_type, size=config.EYE_BUILD_SIZE)
         
-    # Return a copy so the pupil drawing doesn't bake into the cache
     return _gaze_cache_numpy[key].copy()
 
 def _draw_pupil_numpy(base_arr, px, py, r, eye_type):
@@ -192,3 +193,23 @@ def render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, blink_state="op
         result = result.resize((config.EYE_SIZE, config.EYE_SIZE), resample)
         
     return result
+
+def preload_all_types():
+    """
+    Pre-loads textures and initial gaze mappings for all eye types.
+    Run this at startup to ensure switching is instantaneous.
+    """
+    print("  Pre-loading eye textures...")
+    # These match the types supported by assets.py
+    eye_types = ["default", "human", "dragon", "demon"] 
+    
+    center = config.EYE_SIZE // 2
+    
+    for etype in eye_types:
+        print(f"    - Loading: {etype}")
+        # 1. Populate texture cache
+        _get_textures_numpy(etype)
+        
+        # 2. Populate initial centered gaze cache
+        # This triggers the expensive spherical sampling once per type
+        _get_eye_base_cached_numpy(center, center, force_type=etype)

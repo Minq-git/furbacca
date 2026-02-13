@@ -70,6 +70,12 @@ def run_eyes():
         return
 
     print("👀 Furbacca Vision Online (Optimized).")
+    # --- PRE-LOAD ASSETS ---
+    # This happens before the animation engine starts
+    render.preload_all_types()
+    
+    check_base = render.build_eye_base_sclera_iris()
+    
     use_animated = (
         config.EYES_ANIMATED and not config.EYES_GRADIENT and not config.EYES_RAINBOW
         and assets.HAS_PIL and render.build_eye_base_sclera_iris() is not None
