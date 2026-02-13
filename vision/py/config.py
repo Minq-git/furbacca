@@ -26,7 +26,7 @@ EYE_GAZE_CACHE_STEP = 0.1
 EYE_BUILD_SIZE = int(os.environ.get("EYE_BUILD_SIZE", "240"))  # 240 = full res; lower for faster builds
 
 # --- Animated eyes: timing & motion (eyes.py loop) ---
-ANIM_FPS = int(os.environ.get("ANIM_FPS", "60"))
+ANIM_FPS = int(os.environ.get("ANIM_FPS", "30"))
 EASE_TABLE_SIZE = 256
 IDLE_LOOK_TIMEOUT_S = 0.2
 MOVE_DURATION_MIN_S = 0.072
