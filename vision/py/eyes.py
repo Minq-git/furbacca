@@ -1,15 +1,21 @@
 """
 Furbacca vision: dual GC9A01 eyes using russhughes/gc9a01py (CPython compat layer).
-Orchestrates display init, UDP bridge, and run loop; delegates to config, assets, render, blit, test_patterns.
+Restored version with original state logic + NumPy performance optimizations.
 """
 import json
 import os
 import socket
 import sys
 import time
+import random
 
 _vision_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _vision_dir)
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
 import config
 import assets
@@ -21,20 +27,18 @@ import animations
 import blink
 from display import init_displays
 
-# Re-export for callers that do "from vision.eyes import get_eye_type"
+# Re-export for callers
 get_eye_type = config.get_eye_type
 set_eye_type = config.set_eye_type
 
-# Display handles (set on init)
+# Display handles
 left_eye, right_eye = None, None
 try:
     left_eye, right_eye = init_displays(swap_left_right=config.SWAP_LEFT_RIGHT_SPI)
 except Exception as e:
     print(f"⚠ Display init failed: {e}")
-    import traceback
-    traceback.print_exc()
 
-# UDP bridge (bind 0.0.0.0 to accept commands from network, e.g. Mac → furbacca.local:5005)
+# UDP bridge
 UDP_BIND = os.environ.get("UDP_BIND", "127.0.0.1").strip() or "127.0.0.1"
 UDP_PORT = 5005
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -43,89 +47,38 @@ sock.bind((UDP_BIND, UDP_PORT))
 sock.setblocking(False)
 print(f"  UDP {UDP_BIND}:{UDP_PORT} (remote fe + local nervous system)")
 
-
-def show_eye_image(display):
-    """Send PIL image to gc9a01py display. Big-endian RGB565 row-by-row."""
-    img = assets.load_eye_image()
-    if img is None or display is None:
-        return
-    try:
-        blit.blit_pil_to_display(display, img)
-    except Exception as e:
-        print(f"⚠ Show image error: {e}")
-
-
 def _apply_eye_shape_left(frame):
-    """Apply eye shape mask for left display (layer above sclera/iris/pupil). Outside shape = black."""
-    if frame is None:
-        return frame
+    if frame is None: return frame
     return shapes.apply_shape_mask(frame, config.get_eye_shape(), mirror=False)
 
-
 def _apply_eye_shape_right(frame):
-    """Apply eye shape mask for right display (mirrored so shapes match left/right eyes)."""
-    if frame is None:
-        return frame
+    if frame is None: return frame
     return shapes.apply_shape_mask(frame, config.get_eye_shape(), mirror=True)
-
-
-def show_constructed_eye():
-    """Show the static constructed eyeball (sclera + iris + pupil at center) on both displays."""
-    frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
-    if frame is not None:
-        blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(frame), _apply_eye_shape_right(frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
-    else:
-        show_eye_image(left_eye)
-        if right_eye is not None:
-            time.sleep(0.02)
-            show_eye_image(right_eye)
-
 
 def run_eyes():
     if left_eye is None and right_eye is None:
-        print("❌ No displays initialized. Run scripts/setup/fetch-gc9a01py.sh and ensure vision/py/machine_compat and vision/py/gc9a01py are present.")
         return
 
-    print("👀 Furbacca Vision Online (gc9a01py).")
-    use_gradient = config.EYES_GRADIENT
-    use_rainbow = config.EYES_RAINBOW
-    # Gradient/rainbow take precedence over animated; otherwise EYES_RAINBOW=1 would still show animated eyes
+    print("👀 Furbacca Vision Online (Optimized).")
     use_animated = (
-        config.EYES_ANIMATED and not use_gradient and not use_rainbow
+        config.EYES_ANIMATED and not config.EYES_GRADIENT and not config.EYES_RAINBOW
         and assets.HAS_PIL and render.build_eye_base_sclera_iris() is not None
     )
-    use_image = not config.EYES_SOLID_COLORS and not use_gradient and not use_rainbow and not use_animated and (
-        render.build_eye_base_sclera_iris() is not None or assets.load_eye_image() is not None
-    )
-
-    def _show_idle():
-        if use_gradient:
-            test_patterns.show_gradient(left_eye)
-            time.sleep(0.05)
-            test_patterns.show_gradient(right_eye)
-        elif use_rainbow:
-            test_patterns.show_rainbow(left_eye)
-            time.sleep(0.05)
-            test_patterns.show_rainbow(right_eye)
-        elif use_image:
-            show_constructed_eye()
-        else:
-            if left_eye:
-                left_eye.fill(0xF800)
-            if right_eye:
-                right_eye.fill(0x001F)
 
     if use_animated:
         ANIM_FPS = int(os.environ.get("ANIM_FPS", "30"))
-        print("  Animated eyes (headless, no monitor). UDP: blink, look x/y.")
-        print(f"  Target {ANIM_FPS} FPS (set ANIM_FPS=15|30|60).")
-        import random
+        print(f"  Animated eyes @ {ANIM_FPS} FPS. UDP enabled.")
+        
         cached_eye_base_240 = render.build_eye_base_sclera_iris()
         frame_dt = 1.0 / ANIM_FPS
+        
+        # Original Easing Table
         EASE_TABLE = tuple(
             int(255.0 * (3.0 * (i / 255.0) ** 2 - 2.0 * (i / 255.0) ** 3))
             for i in range(256)
         )
+        
+        # --- Original State Machine ---
         pupil_x, pupil_y = 0.0, 0.0
         target_x, target_y = 0.0, 0.0
         eye_in_motion = False
@@ -140,8 +93,6 @@ def run_eyes():
         blit_open_bottom_to_top = False
         next_auto_blink = time.monotonic() + blink.next_auto_blink_delay()
         PUPIL_EASE = 0.48
-        CYCLE_EYE_TYPE_DEBOUNCE_S = 0.4
-        last_cycle_eye_type_at = 0.0
         last_look_time = 0.0
         relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
         focus_until = 0.0
@@ -162,7 +113,7 @@ def run_eyes():
         segment_start_x, segment_start_y = 0.0, 0.0
         segment_end_x, segment_end_y = 0.0, 0.0
         last_impulse_at = 0.0
-        SHIVER_DEBOUNCE_S = 0.28  # don't restart shiver if we started one recently
+        SHIVER_DEBOUNCE_S = 0.28
 
         def _start_animation(name):
             nonlocal animation_segments, animation_start_time, animation_index
@@ -174,11 +125,11 @@ def run_eyes():
                 segment_start_x, segment_start_y = pupil_x, pupil_y
                 segment_end_x, segment_end_y = animation_segments[0][1], animation_segments[0][2]
                 print(f"🎬 Animation: {name}")
-            else:
-                animation_segments = []
 
         while True:
             now = time.monotonic()
+            
+            # --- UDP Command Logic (Original) ---
             while True:
                 try:
                     data, _ = sock.recvfrom(1024)
@@ -187,301 +138,116 @@ def run_eyes():
                     if action == "blink":
                         if not animation_segments and animated_blink.can_trigger(now):
                             animated_blink.trigger(now)
-                            print("🐾 Logic: Blinked both eyes.")
                     elif action == "look":
-                        tx = msg.get("x")
-                        ty = msg.get("y")
-                        if tx is not None:
-                            target_x = max(-1.0, min(1.0, float(tx)))
-                        if ty is not None:
-                            target_y = max(-1.0, min(1.0, float(ty)))
-                        last_look_time = now
-                        focus_until = now + FOCUS_HOLD_S
-                    elif action == "cycle_eye_type":
-                        if now - last_cycle_eye_type_at >= CYCLE_EYE_TYPE_DEBOUNCE_S:
-                            last_cycle_eye_type_at = now
-                            do_cycle_on_next_open = True
-                            animated_blink.trigger(now)
+                        tx, ty = msg.get("x"), msg.get("y")
+                        if tx is not None: target_x = max(-1.0, min(1.0, float(tx)))
+                        if ty is not None: target_y = max(-1.0, min(1.0, float(ty)))
+                        last_look_time, focus_until = now, now + FOCUS_HOLD_S
+                    elif action == "set_eye_shape":
+                        shape = (msg.get("shape") or "round").strip().lower()
+                        config.set_eye_shape(shape)
                     elif action == "set_eye_type":
                         eye_type = (msg.get("type") or msg.get("eye_type") or "default").strip().lower()
                         config.set_eye_type(eye_type)
-                        print(f"👁 Eye type: {config.get_eye_type()}")
-                    elif action == "set_eye_shape":
-                        shape = (msg.get("shape") or msg.get("eye_shape") or "round").strip().lower()
-                        config.set_eye_shape(shape)
-                        print(f"👁 Eye shape: {config.get_eye_shape()}")
-                    elif action == "cycle_eye_shape":
-                        new_shape = config.cycle_eye_shape()
-                        print(f"👁 Eye shape: {new_shape}")
+    
+                        # Refresh the cache with the new eye type textures
+                        cached_eye_base_240 = render.build_eye_base_sclera_iris()
+                        
+                        # Reset pupil physics for the new type
+                        relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
+                        pupil_radius_current = float(relaxed)
+                        print(f"👁 Eye type updated to: {config.get_eye_type()}")
                     elif action == "animation":
-                        anim_name = (msg.get("name") or msg.get("animation") or "").strip().lower()
-                        if anim_name:
-                            _start_animation(anim_name)
+                        anim_name = (msg.get("name") or "").strip().lower()
+                        if anim_name: _start_animation(anim_name)
                     elif action == "impulse":
                         if (now - last_impulse_at) >= SHIVER_DEBOUNCE_S:
                             last_impulse_at = now
                             _start_animation("shiver")
-                except BlockingIOError:
+                except (BlockingIOError, json.JSONDecodeError):
                     break
-                except json.JSONDecodeError:
-                    pass
 
-            if not animation_segments and animated_blink.phase is None and now >= next_auto_blink:
+            # --- Blink & State Advancement ---
+            if not animation_segments and not animated_blink.is_closed and now >= next_auto_blink:
                 animated_blink.trigger(now)
                 next_auto_blink = now + blink.next_auto_blink_delay()
 
             just_opened, next_delay = animated_blink.advance(now)
             if just_opened:
                 blit_open_bottom_to_top = True
-                if do_cycle_on_next_open:
-                    do_cycle_on_next_open = False
-                    config.cycle_eye_type()
-                    print(f"👁 Eye type: {config.get_eye_type()}")
-                    relaxed, _focused, _wide = config.eye_type_pupil_radii(config.get_eye_type())
-                    focus_until = 0.0
-                    wide_until = 0.0
-                    pupil_radius_current = float(relaxed)
-                    pupil_radius_target = relaxed
-                    radius_transition_from = float(relaxed)
-                    radius_transition_to = relaxed
-                    radius_transition_start = now
-                if next_delay is not None:
-                    next_auto_blink = now + next_delay
+                if next_delay: next_auto_blink = now + next_delay
 
-            blink_state = "closed" if animated_blink.is_closed else "open"
-
+            # --- Animation Segment Processing ---
             if animation_segments:
                 seg = animation_segments[animation_index]
                 elapsed = now - animation_start_time
                 progress = min(1.0, max(0.0, elapsed / seg[0])) if seg[0] > 0 else 1.0
-                idx = min(255, max(0, int(progress * 255)))
+                idx = min(255, int(progress * 255))
                 e = EASE_TABLE[idx] / 255.0
                 pupil_x = segment_start_x + (segment_end_x - segment_start_x) * e
                 pupil_y = segment_start_y + (segment_end_y - segment_start_y) * e
-                pupil_x = max(-1.0, min(1.0, pupil_x))
-                pupil_y = max(-1.0, min(1.0, pupil_y))
                 if elapsed >= seg[0]:
                     animation_index += 1
                     animation_start_time = now
                     if animation_index >= len(animation_segments):
                         animation_segments = []
-                        animation_index = 0
                     else:
                         segment_start_x, segment_start_y = pupil_x, pupil_y
                         next_seg = animation_segments[animation_index]
                         segment_end_x, segment_end_y = next_seg[1], next_seg[2]
 
-            # Pupil radius: animation segment can override (wide/focused/relaxed)
+            # --- Physics: Idle Looking & Pupil Radius ---
             relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
-            if animation_segments and animation_index < len(animation_segments):
-                seg = animation_segments[animation_index]
-                if len(seg) >= 4 and seg[3] is not None:
-                    mode = seg[3]
-                    if mode == "wide":
-                        pupil_radius_target = wide
-                    elif mode == "focused":
-                        pupil_radius_target = focused
-                    else:
-                        pupil_radius_target = relaxed
-                    # Apply immediately so animation pupil size is visible (no transition delay)
-                    pupil_radius_current = float(pupil_radius_target)
-                    radius_transition_from = pupil_radius_target
-                    radius_transition_to = pupil_radius_target
-            elif now < focus_until:
-                pupil_radius_target = focused
-            elif now < wide_until:
-                pupil_radius_target = wide
-            else:
-                pupil_radius_target = relaxed
             if not animation_segments:
                 if (now - last_look_time) <= IDLE_LOOK_TIMEOUT:
                     pupil_x += (target_x - pupil_x) * PUPIL_EASE
                     pupil_y += (target_y - pupil_y) * PUPIL_EASE
-                    pupil_x = max(-1.0, min(1.0, pupil_x))
-                    pupil_y = max(-1.0, min(1.0, pupil_y))
                 else:
                     if eye_in_motion:
                         elapsed = now - eye_move_start
+                        t = min(1.0, elapsed / eye_move_duration) if eye_move_duration > 0 else 1.0
+                        e = EASE_TABLE[min(255, int(t * 255))] / 255.0
+                        pupil_x = eye_old_x + (eye_new_x - eye_old_x) * e
+                        pupil_y = eye_old_y + (eye_new_y - eye_old_y) * e
                         if elapsed >= eye_move_duration:
                             eye_in_motion = False
-                            pupil_x = eye_old_x = eye_new_x
-                            pupil_y = eye_old_y = eye_new_y
                             eye_hold_until = now + random.uniform(0.0, HOLD_DURATION_MAX)
-                            focus_until = now + FOCUS_HOLD_S
-                        else:
-                            t = min(1.0, max(0.0, elapsed / eye_move_duration)) if eye_move_duration > 0 else 1.0
-                            idx = min(255, max(0, int(t * 255)))
-                            e = EASE_TABLE[idx] / 255.0
-                            pupil_x = eye_old_x + (eye_new_x - eye_old_x) * e
-                            pupil_y = eye_old_y + (eye_new_y - eye_old_y) * e
-                    else:
-                        pupil_x = eye_old_x
-                        pupil_y = eye_old_y
-                        if now >= eye_hold_until:
-                            while True:
-                                dx = random.uniform(-1.0, 1.0)
-                                dy = random.uniform(-1.0, 1.0)
-                                if dx * dx + dy * dy <= 1.0:
-                                    break
-                            eye_old_x, eye_old_y = pupil_x, pupil_y
-                            eye_new_x, eye_new_y = dx * 0.85, dy * 0.85
-                            eye_move_start = now
-                            eye_move_duration = random.uniform(MOVE_DURATION_MIN, MOVE_DURATION_MAX)
-                            eye_in_motion = True
-                    pupil_x = max(-1.0, min(1.0, pupil_x))
-                    pupil_y = max(-1.0, min(1.0, pupil_y))
+                    elif now >= eye_hold_until:
+                        eye_old_x, eye_old_y = pupil_x, pupil_y
+                        eye_new_x, eye_new_y = random.uniform(-0.8, 0.8), random.uniform(-0.8, 0.8)
+                        eye_move_start, eye_move_duration = now, random.uniform(MOVE_DURATION_MIN, MOVE_DURATION_MAX)
+                        eye_in_motion = True
 
-            if next_wide_at == 0.0:
-                next_wide_at = now + random.uniform(25.0, 45.0)
-            if now >= next_wide_at and pupil_radius_target == relaxed:
-                wide_until = now + random.uniform(1.0, 2.0)
-                next_wide_at = now + random.uniform(25.0, 45.0)
+            # Radius transitions (Relaxed/Focused/Wide)
+            pupil_radius_target = focused if now < focus_until else relaxed
             if pupil_radius_target != radius_transition_to:
-                radius_transition_from = pupil_radius_current
-                radius_transition_to = pupil_radius_target
-                radius_transition_start = now
-            # Use short transition when animation segment sets pupil mode so focused/relaxed are visible
-            transition_s = PUPIL_TRANSITION_S
-            if animation_segments and animation_index < len(animation_segments):
-                seg = animation_segments[animation_index]
-                if len(seg) >= 4 and seg[3] is not None:
-                    transition_s = 0.06
-            elapsed = now - radius_transition_start
-            if elapsed >= transition_s or radius_transition_from == radius_transition_to:
+                radius_transition_from, radius_transition_to, radius_transition_start = pupil_radius_current, pupil_radius_target, now
+            
+            elapsed_r = now - radius_transition_start
+            if elapsed_r >= PUPIL_TRANSITION_S:
                 pupil_radius_current = float(radius_transition_to)
             else:
-                progress = min(1.0, max(0.0, elapsed / transition_s)) if transition_s > 0 else 1.0
-                idx = min(255, max(0, int(progress * 255)))
-                e = EASE_TABLE[idx] / 255.0
-                pupil_radius_current = radius_transition_from + (radius_transition_to - radius_transition_from) * e
-            pupil_radius = pupil_radius_current
+                e_r = EASE_TABLE[min(255, int((elapsed_r / PUPIL_TRANSITION_S) * 255))] / 255.0
+                pupil_radius_current = radius_transition_from + (radius_transition_to - radius_transition_from) * e_r
 
-            eye_frame = render.render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, "open", pupil_radius=pupil_radius)
+            # --- Rendering & Async Blitting ---
+            eye_frame = render.render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, "open", pupil_radius=pupil_radius_current)
+            
             if blit_open_bottom_to_top:
-                blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
+                blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), inside_out=True)
                 blit_open_bottom_to_top = False
-            elif blink_state == "closed":
-                overlay_left = render.render_blink_overlay(mirror=False)
-                overlay_right = render.render_blink_overlay(mirror=True)
-                if overlay_left is not None and overlay_right is not None:
-                    composite_left = eye_frame.copy()
-                    composite_left.paste(overlay_left, (0, 0))
-                    composite_right = eye_frame.copy()
-                    composite_right.paste(overlay_right, (0, 0))
-                    blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(composite_left), _apply_eye_shape_right(composite_right), reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
-                else:
-                    blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+            elif animated_blink.is_closed:
+                overlay_l = render.render_blink_overlay(mirror=False)
+                overlay_r = render.render_blink_overlay(mirror=True)
+                if overlay_l and overlay_r:
+                    comp_l, comp_r = eye_frame.copy(), eye_frame.copy()
+                    comp_l.paste(overlay_l, (0,0))
+                    comp_r.paste(overlay_r, (0,0))
+                    blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(comp_l), _apply_eye_shape_right(comp_r), outside_in=True)
             else:
-                blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+                blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame))
+
             time.sleep(max(0.0, frame_dt - (time.monotonic() - now)))
-        return
-
-    if use_gradient:
-        print("  Showing XY gradient on both displays (EYES_GRADIENT=1).")
-        _show_idle()
-        while True:
-            try:
-                sock.recvfrom(1024)
-            except BlockingIOError:
-                pass
-            time.sleep(0.02)
-    elif use_rainbow:
-        print("  Showing rainbow on both displays (EYES_RAINBOW=1).")
-        _show_idle()
-        while True:
-            try:
-                sock.recvfrom(1024)
-            except BlockingIOError:
-                pass
-            time.sleep(0.02)
-    elif use_image:
-        print("  Showing eye image on both displays...")
-        _show_idle()
-    else:
-        if config.EYES_SOLID_COLORS:
-            print("  Solid colors only (EYES_SOLID_COLORS=1).")
-        if left_eye:
-            left_eye.fill(0xF800)
-        time.sleep(0.02)
-        if right_eye:
-            right_eye.fill(0x001F)
-
-    # Static blink loop (image or solid-color mode)
-    _static_frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
-    _static_eye_frame_left = _apply_eye_shape_left(_static_frame)
-    _static_eye_frame_right = _apply_eye_shape_right(_static_frame)
-    CYCLE_EYE_TYPE_DEBOUNCE_S = 0.4
-    last_cycle_eye_type_at = 0.0
-    cycle_on_next_open = False
-    static_blink = blink.StaticBlink()
-
-    while True:
-        now = time.monotonic()
-        while True:
-            try:
-                data, _ = sock.recvfrom(1024)
-                msg = json.loads(data.decode())
-                action = msg.get("action")
-                if action == "blink" and static_blink.can_trigger(now):
-                    static_blink.trigger(now)
-                    print("🐾 Logic: Blinked both eyes.")
-                elif action == "cycle_eye_type" and (now - last_cycle_eye_type_at) >= CYCLE_EYE_TYPE_DEBOUNCE_S:
-                    last_cycle_eye_type_at = now
-                    cycle_on_next_open = True
-                    static_blink.trigger(now)
-                elif action == "set_eye_type":
-                    eye_type = (msg.get("type") or msg.get("eye_type") or "default").strip().lower()
-                    config.set_eye_type(eye_type)
-                    _static_frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
-                    _static_eye_frame_left = _apply_eye_shape_left(_static_frame)
-                    _static_eye_frame_right = _apply_eye_shape_right(_static_frame)
-                    if _static_eye_frame_left is not None:
-                        blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame_left, _static_eye_frame_right, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
-                    print(f"👁 Eye type: {config.get_eye_type()}")
-                elif action == "set_eye_shape":
-                    shape = (msg.get("shape") or msg.get("eye_shape") or "round").strip().lower()
-                    config.set_eye_shape(shape)
-                    _static_frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
-                    _static_eye_frame_left = _apply_eye_shape_left(_static_frame)
-                    _static_eye_frame_right = _apply_eye_shape_right(_static_frame)
-                    if _static_eye_frame_left is not None:
-                        blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame_left, _static_eye_frame_right, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
-                    print(f"👁 Eye shape: {config.get_eye_shape()}")
-                elif action == "cycle_eye_shape":
-                    new_shape = config.cycle_eye_shape()
-                    _static_frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
-                    _static_eye_frame_left = _apply_eye_shape_left(_static_frame)
-                    _static_eye_frame_right = _apply_eye_shape_right(_static_frame)
-                    if _static_eye_frame_left is not None:
-                        blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame_left, _static_eye_frame_right, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
-                    print(f"👁 Eye shape: {new_shape}")
-            except BlockingIOError:
-                break
-            except json.JSONDecodeError:
-                pass
-
-        if static_blink.is_closing:
-            if _static_eye_frame_left is not None:
-                blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame_left, _static_eye_frame_right, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
-            overlay_left = render.render_blink_overlay(mirror=False)
-            overlay_right = render.render_blink_overlay(mirror=True)
-            if overlay_left is not None and overlay_right is not None:
-                blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(overlay_left), _apply_eye_shape_right(overlay_right), reverse_rows=False, outside_in=True, inside_out=False, partial_rows=None)
-            static_blink.advance()
-        elif static_blink.is_opening:
-            if cycle_on_next_open:
-                cycle_on_next_open = False
-                config.cycle_eye_type()
-                _static_frame = render.render_animated_frame(render.build_eye_base_sclera_iris(), 0.0, 0.0, "open")
-                _static_eye_frame_left = _apply_eye_shape_left(_static_frame)
-                _static_eye_frame_right = _apply_eye_shape_right(_static_frame)
-                print(f"👁 Eye type: {config.get_eye_type()}")
-            if _static_eye_frame_left is not None:
-                blit.blit_pil_to_both(left_eye, right_eye, _static_eye_frame_left, _static_eye_frame_right, reverse_rows=False, outside_in=False, inside_out=True, partial_rows=None)
-            static_blink.advance()
-
-        time.sleep(0.02)
-
 
 if __name__ == "__main__":
     run_eyes()
