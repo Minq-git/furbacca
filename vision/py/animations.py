@@ -15,6 +15,7 @@ class AnimationSegment(NamedTuple):
     x: float
     y: float
     pupil_mode: str = PUPIL_RELAXED
+    trigger_blink: bool = False  # When True, trigger a blink at the start of this segment (allowed during animation)
 
 def get_animation(name: str, **kwargs) -> List[AnimationSegment]:
     """
@@ -25,6 +26,7 @@ def get_animation(name: str, **kwargs) -> List[AnimationSegment]:
     animations_map = {
         "nervous_look": _nervous_look,
         "shiver": _shiver,
+        "double_blink": _double_blink,
     }
     
     func = animations_map.get(name)
@@ -63,3 +65,19 @@ def _nervous_look(n_repeats: Optional[int] = None) -> List[AnimationSegment]:
         
     segments.append(AnimationSegment(0.90, 0.0, 0.0, PUPIL_RELAXED)) # Re-center
     return segments
+
+def _double_blink() -> List[AnimationSegment]:
+    """
+    Two rapid blinks with pupil constriction to test system responsiveness.
+    trigger_blink=True on first frame of each "blink" so the blink runs during the animation.
+    """
+    return [
+        # First quick blink: move slightly and focus
+        AnimationSegment(0.05,  0.1,  0.1, PUPIL_RELAXED, trigger_blink=True),
+        AnimationSegment(0.05,  0.0,  0.0, PUPIL_FOCUSED),
+        # Brief pause between blinks
+        AnimationSegment(0.10,  0.0,  0.0, PUPIL_FOCUSED),
+        # Second blink: wide pupils for a "surprised" look
+        AnimationSegment(0.05, -0.1, -0.1, PUPIL_FOCUSED, trigger_blink=True),
+        AnimationSegment(0.05,  0.0,  0.0, PUPIL_RELAXED),
+    ]

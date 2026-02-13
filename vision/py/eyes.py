@@ -128,19 +128,27 @@ def run_eyes():
         animation_index = 0
         segment_start_x, segment_start_y = 0.0, 0.0
         segment_end_x, segment_end_y = 0.0, 0.0
+        last_blink_triggered_segment_index = -1  # so we only trigger once per segment
         last_impulse_at = 0.0
         SHIVER_DEBOUNCE_S = 0.28
 
         def _start_animation(name):
             nonlocal animation_segments, animation_start_time, animation_index
             nonlocal segment_start_x, segment_start_y, segment_end_x, segment_end_y
-            animation_segments = animations.get_animation(name)
+            nonlocal last_blink_triggered_segment_index
+            # Don't start a new animation while one is already running (prevents crash/weird state)
             if animation_segments:
-                animation_start_time = time.monotonic()
-                animation_index = 0
-                segment_start_x, segment_start_y = pupil_x, pupil_y
-                segment_end_x, segment_end_y = animation_segments[0][1], animation_segments[0][2]
-                print(f"🎬 Animation: {name}")
+                return
+            segments = animations.get_animation(name)
+            if not segments:
+                return
+            animation_segments = segments
+            last_blink_triggered_segment_index = -1
+            animation_start_time = time.monotonic()
+            animation_index = 0
+            segment_start_x, segment_start_y = pupil_x, pupil_y
+            segment_end_x, segment_end_y = animation_segments[0][1], animation_segments[0][2]
+            print(f"🎬 Animation: {name}")
 
         while True:
             now = time.monotonic()
@@ -206,6 +214,10 @@ def run_eyes():
             # --- Animation Segment Processing (Readable) ---
             if animation_segments:
                 seg = animation_segments[animation_index]
+                # Programmed blink: segment can request a blink even during animation (no blocker)
+                if getattr(seg, "trigger_blink", False) and animation_index != last_blink_triggered_segment_index and animated_blink.can_trigger(now):
+                    animated_blink.trigger(now)
+                    last_blink_triggered_segment_index = animation_index
                 elapsed = now - animation_start_time
                 
                 progress = min(1.0, max(0.0, elapsed / seg.duration)) if seg.duration > 0 else 1.0
@@ -220,6 +232,7 @@ def run_eyes():
                     animation_start_time = now
                     if animation_index >= len(animation_segments):
                         animation_segments = []
+                        last_blink_triggered_segment_index = -1
                     else:
                         segment_start_x, segment_start_y = pupil_x, pupil_y
                         next_seg = animation_segments[animation_index]
