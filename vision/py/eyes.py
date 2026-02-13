@@ -165,14 +165,16 @@ def run_eyes():
                     elif action == "set_eye_type":
                         eye_type = (msg.get("type") or msg.get("eye_type") or "default").strip().lower()
                         config.set_eye_type(eye_type)
-    
-                        # Refresh the cache with the new eye type textures
                         cached_eye_base_240 = render.build_eye_base_sclera_iris()
-                        
-                        # Reset pupil physics for the new type
                         relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
                         pupil_radius_current = float(relaxed)
                         print(f"👁 Eye type updated to: {config.get_eye_type()}")
+                    elif action == "cycle_eye_type":
+                        config.cycle_eye_type()
+                        cached_eye_base_240 = render.build_eye_base_sclera_iris()
+                        relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
+                        pupil_radius_current = float(relaxed)
+                        print(f"👁 Eye type cycled to: {config.get_eye_type()}")
                     elif action == "animation":
                         anim_name = (msg.get("name") or "").strip().lower()
                         if anim_name: _start_animation(anim_name)

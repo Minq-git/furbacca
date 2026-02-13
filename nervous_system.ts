@@ -8,12 +8,11 @@ const visionHost = process.env.VISION_HOST ?? "127.0.0.1";
 console.log("--- Furbacca Nervous System: Modular Edition ---");
 console.log(`Eyes: ${visionHost}:5005 | Touch: BCM 17 (head), 22 (belly), ${VIBE_BCM} (vibration)`);
 
-/**
- * Placeholder for belly touch (BCM 22). Expand with fan, eyes, or other behaviors.
- */
 function handleBellyTouch(): void {
-  console.log("🐾 Belly touch");
+  console.log("🐾 Belly touch: Cycling species");
   eyes.sendCommand("cycle_eye_type");
+  // Add a haptic-style visual response
+  eyes.sendCommand("look", { x: 0, y: 0, pupil_mode: "wide" }); 
 }
 
 setInterval(() => {

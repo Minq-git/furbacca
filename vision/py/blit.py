@@ -64,17 +64,17 @@ def blit_pil_to_both_async(left_eye, right_eye, left_img, right_img=None, revers
         blit_pil_to_both(left_eye, right_eye, left_img, right_img, reverse_rows, outside_in, inside_out, partial_rows)
         return
 
-    # Generate buffers
+    # Generate buffers (copy so worker has its own bytes; avoids one eye blacking if main loop overwrites)
     buf_left = pil_to_rgb565_buffer(left_img)
     if buf_left is None:
         return
-        
     actual_right = right_img if right_img is not None else left_img
     buf_right = pil_to_rgb565_buffer(actual_right)
     if buf_right is None:
         buf_right = buf_left
+    buf_left = bytes(buf_left)
+    buf_right = bytes(buf_right)
 
-    # Atomic Task Handoff
     try:
         if _blit_queue.full():
             try:
