@@ -9,13 +9,29 @@ import random
 def get_animation(name, **kwargs):
     """
     Return list of segments for the named animation, or [] if unknown.
-    name: e.g. "nervous_look"
+    name: e.g. "nervous_look", "shiver"
     kwargs: optional overrides (e.g. n_repeats for nervous_look).
     """
     name = (name or "").strip().lower()
     if name == "nervous_look":
         return _nervous_look(**kwargs)
+    if name == "shiver":
+        return _shiver()
     return []
+
+
+def _shiver():
+    """
+    Short pupil jiggle (e.g. from SW-420 vibration / Matter.js impulse).
+    Small fast x/y offsets then back to centre.
+    """
+    return [
+        (0.04, 0.22, 0.0),
+        (0.04, -0.18, 0.04),
+        (0.04, 0.14, -0.04),
+        (0.04, -0.08, 0.0),
+        (0.06, 0.0, 0.0),
+    ]
 
 
 def _nervous_look(n_repeats=None):

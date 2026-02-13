@@ -26,4 +26,9 @@ export class EyeBridge {
   public cycleEyeShape() {
     this.sendCommand('cycle_eye_shape');
   }
+
+  /** Apply a short pupil jiggle (e.g. from SW-420 vibration / Matter.js impulse). */
+  public impulse() {
+    this.sendCommand('impulse');
+  }
 }

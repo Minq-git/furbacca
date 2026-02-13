@@ -214,6 +214,8 @@ def run_eyes():
                         anim_name = (msg.get("name") or msg.get("animation") or "").strip().lower()
                         if anim_name:
                             _start_animation(anim_name)
+                    elif action == "impulse":
+                        _start_animation("shiver")
                 except BlockingIOError:
                     break
                 except json.JSONDecodeError:
