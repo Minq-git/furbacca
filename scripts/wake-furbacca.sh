@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Start eyes (background) and nervous system (foreground) in one terminal.
-# Ctrl+C or exit stops both; eyes are blanked on exit.
-# Run from repo root, or the script will cd there.
+# Start eyes (vision/py/eyes.py) + nervous system. One terminal; Ctrl+C stops both.
+# Run from repo root, or the script will cd there. Sync from Mac (push-furbacca) if you see "vision/eyes.py: No such file".
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,20 +8,36 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 cd "$REPO_DIR"
 
+# Refactor check: eyes live in vision/py/ (pull latest if missing)
+if [[ ! -f vision/py/eyes.py ]]; then
+  echo "❌ vision/py/eyes.py not found. Sync from your Mac: push-furbacca"
+  exit 1
+fi
+
+# If something else is on 5005 (e.g. old systemd), remote + touch won't work
+if command -v ss &>/dev/null && ss -ulnp 2>/dev/null | grep -q ':5005 '; then
+  echo "⚠ Port 5005 already in use. Stop other eyes first: sudo systemctl stop furbacca-eyes"
+  echo "  Then run wake-furbacca again."
+  exit 1
+fi
+
 EYES_PID=""
 cleanup() {
   if [[ -n "$EYES_PID" ]] && kill -0 "$EYES_PID" 2>/dev/null; then
     kill "$EYES_PID" 2>/dev/null || true
     wait "$EYES_PID" 2>/dev/null || true
   fi
-  python3 vision/blank_displays.py 2>/dev/null || true
+  python3 vision/py/blank_displays.py 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-# Start eyes in background (UDP 5005, bind 0.0.0.0 for remote commands)
+# Bind 0.0.0.0 so remote (fe) and local (nervous system) commands both work
+export UDP_BIND=0.0.0.0
+
+# Start eyes in background (UDP 5005)
 (
   source env/bin/activate
-  UDP_BIND=0.0.0.0 python3 vision/eyes.py
+  python3 vision/py/eyes.py
 ) &
 EYES_PID=$!
 

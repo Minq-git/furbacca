@@ -1,6 +1,6 @@
 # Eye graphics for Furbacca
 
-**vision/eyes.py** uses textures from this folder for the animated eyes (sclera + iris + pupil). Any size is resized to 240×240.
+**vision/py/eyes.py** uses textures from this folder for the animated eyes (sclera + iris + pupil). Any size is resized to 240×240.
 
 ## Assets used
 
@@ -22,4 +22,4 @@ Setup-fresh already runs this. To fetch or refresh assets (from Adafruit Pi_Eyes
 ./scripts/fetch-eye-graphics.sh
 ```
 
-Then run **vision/eyes.py** as usual.
+Then run **vision/py/eyes.py** as usual.

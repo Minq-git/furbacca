@@ -1,5 +1,5 @@
 """
-Load eye assets from vision/graphics (PIL): iris, sclera, single-eye image. Cached per type.
+Load eye assets from vision/py/graphics (PIL): iris, sclera, single-eye image. Cached per type.
 """
 import os
 
@@ -23,7 +23,7 @@ def graphics_dir():
 
 
 def load_eye_image():
-    """Load 240x240 image from vision/graphics/ (PIL). Fallback for static/non-animated mode."""
+    """Load 240x240 image from vision/py/graphics/ (PIL). Fallback for static/non-animated mode."""
     global _eye_image_pil
     if _eye_image_pil is not None:
         return _eye_image_pil

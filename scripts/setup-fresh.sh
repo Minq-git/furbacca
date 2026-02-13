@@ -18,18 +18,18 @@ else
   echo "Venv already exists."
 fi
 
-# 2. Activate and pip install (vision/eyes.py deps)
+# 2. Activate and pip install (vision/py/eyes.py deps)
 echo "Installing pip packages..."
 # shellcheck source=/dev/null
 source env/bin/activate
 pip install --quiet --upgrade pip
 pip install --quiet spidev RPi.GPIO Pillow
 
-# 3. Fetch gc9a01py driver (required for vision/eyes.py)
+# 3. Fetch gc9a01py driver (required for vision/py/eyes.py)
 echo "Fetching gc9a01py driver..."
 bash scripts/fetch-gc9a01py.sh
 
-# 4. Fetch eye graphics (iris.jpg, eye.svg, sclera.png, etc. into vision/graphics)
+# 4. Fetch eye graphics (iris.jpg, eye.svg, sclera.png, etc. into vision/py/graphics)
 echo "Fetching eye graphics..."
 bash scripts/fetch-eye-graphics.sh
 
@@ -37,6 +37,6 @@ echo ""
 echo "=== Setup complete ==="
 echo "Activate venv and run eyes:"
 echo "  source env/bin/activate"
-echo "  python vision/eyes.py"
+echo "  python vision/py/eyes.py"
 echo ""
 echo "SPI config: instruction.md (§3.1)"

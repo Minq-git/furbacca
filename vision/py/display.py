@@ -22,6 +22,62 @@ def _install_compat():
     time.sleep_ms = lambda ms: _sleep(ms / 1000.0)
 
 
+def _reinit_gc9a01_registers(disp):
+    """Re-send GC9A01 init register sequence (no RST). Used for left panel after right's hard_reset() resets both."""
+    disp._write(0xEF)
+    disp._write(0xEB, b'\x14')
+    disp._write(0xFE)
+    disp._write(0xEF)
+    disp._write(0xEB, b'\x14')
+    disp._write(0x84, b'\x40')
+    disp._write(0x85, b'\xFF')
+    disp._write(0x86, b'\xFF')
+    disp._write(0x87, b'\xFF')
+    disp._write(0x88, b'\x0A')
+    disp._write(0x89, b'\x21')
+    disp._write(0x8A, b'\x00')
+    disp._write(0x8B, b'\x80')
+    disp._write(0x8C, b'\x01')
+    disp._write(0x8D, b'\x01')
+    disp._write(0x8E, b'\xFF')
+    disp._write(0x8F, b'\xFF')
+    disp._write(0xB6, b'\x00\x00')
+    disp._write(0x3A, b'\x55')
+    disp._write(0x90, b'\x08\x08\x08\x08')
+    disp._write(0xBD, b'\x06')
+    disp._write(0xBC, b'\x00')
+    disp._write(0xFF, b'\x60\x01\x04')
+    disp._write(0xC3, b'\x13')
+    disp._write(0xC4, b'\x13')
+    disp._write(0xC9, b'\x22')
+    disp._write(0xBE, b'\x11')
+    disp._write(0xE1, b'\x10\x0E')
+    disp._write(0xDF, b'\x21\x0c\x02')
+    disp._write(0xF0, b'\x45\x09\x08\x08\x26\x2A')
+    disp._write(0xF1, b'\x43\x70\x72\x36\x37\x6F')
+    disp._write(0xF2, b'\x45\x09\x08\x08\x26\x2A')
+    disp._write(0xF3, b'\x43\x70\x72\x36\x37\x6F')
+    disp._write(0xED, b'\x1B\x0B')
+    disp._write(0xAE, b'\x77')
+    disp._write(0xCD, b'\x63')
+    disp._write(0x70, b'\x07\x07\x04\x0E\x0F\x09\x07\x08\x03')
+    disp._write(0xE8, b'\x34')
+    disp._write(0x62, b'\x18\x0D\x71\xED\x70\x70\x18\x0F\x71\xEF\x70\x70')
+    disp._write(0x63, b'\x18\x11\x71\xF1\x70\x70\x18\x13\x71\xF3\x70\x70')
+    disp._write(0x64, b'\x28\x29\xF1\x01\xF1\x00\x07')
+    disp._write(0x66, b'\x3C\x00\xCD\x67\x45\x45\x10\x00\x00\x00')
+    disp._write(0x67, b'\x00\x3C\x00\x00\x00\x01\x54\x10\x32\x98')
+    disp._write(0x74, b'\x10\x85\x80\x00\x00\x4E\x00')
+    disp._write(0x98, b'\x3e\x07')
+    disp._write(0x35)
+    disp._write(0x21)
+    disp._write(0x11)
+    time.sleep_ms(120)
+    disp._write(0x29)
+    time.sleep_ms(20)
+    disp.rotation(4)
+
+
 def init_displays(swap_left_right=False):
     """
     Create both displays via gc9a01py (Python owns SPI and DC pin).
@@ -36,7 +92,7 @@ def init_displays(swap_left_right=False):
 
     gc9a01py_lib = os.path.join(_vision_dir, "gc9a01py", "lib")
     if not os.path.isdir(gc9a01py_lib):
-        print("⚠ vision/gc9a01py/lib not found. Run: bash scripts/fetch-gc9a01py.sh")
+        print("⚠ vision/py/gc9a01py/lib not found. Run: bash scripts/fetch-gc9a01py.sh")
         return None, None
 
     sys.path.insert(0, gc9a01py_lib)
@@ -64,8 +120,10 @@ def init_displays(swap_left_right=False):
         left_eye = GC9A01(spi_left, dc=dc, cs=None, reset=reset, backlight=backlight, rotation=4)
         time.sleep_ms(20)
         right_eye = GC9A01(spi_right, dc=dc, cs=None, reset=reset, backlight=None, rotation=4)
-        # Right's init did hard_reset() and reset both panels; left was left in power-on state. Re-init left (no reset to avoid resetting right again).
-        left_eye.reinit(do_reset=False)
+        # Both panels share RST: right's hard_reset() just reset both, so left is in power-on state. Re-send init registers to left (no RST toggle).
+        _reinit_gc9a01_registers(left_eye)
+        if left_eye.backlight:
+            left_eye.backlight.value(1)
         print("✅ Hardware: gc9a01py displays ready (left, right).")
         return left_eye, right_eye
     except Exception as e:

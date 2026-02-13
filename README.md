@@ -12,22 +12,20 @@ An AI-powered, Matter-enabled animatronic build based on the 2012 Hasbro Furby, 
 
 ## 🚀 Starting the services
 
-From the repo root on the Pi you can start everything with one command:
+**Use `wake-furbacca` to start every service** (eyes + nervous system) from the repo root on the Pi:
 
-**One command (eyes + nervous system in the same terminal):**
 ```bash
 ./scripts/wake-furbacca.sh
 ```
-Or alias it and run from anywhere:
+Or on the Pi, alias once and run from anywhere (alias must run the **script**, not an old `python vision/eyes.py` command):
 ```bash
 alias wake-furbacca='~/furbacca/scripts/wake-furbacca.sh'
 wake-furbacca
 ```
-This starts the eyes in the background (UDP 5005, `UDP_BIND=0.0.0.0` for remote commands) and the nervous system in the foreground. Both log to the same terminal. Ctrl+C stops both and blanks the displays.
+If you see `vision/eyes.py: No such file`, your Pi alias is wrong—run `alias wake-furbacca` and fix it to the line above, or run `~/furbacca/scripts/wake-furbacca.sh` directly.
+This starts the eyes in the background (UDP 5005, `UDP_BIND=0.0.0.0` for remote commands) and the nervous system in the foreground (touch, sounds, eye commands). Both log to the same terminal. Ctrl+C stops both and blanks the displays.
 
-**Separate processes (two terminals):**
-- **Eyes only:** `./scripts/run-eyes.sh` (or an alias with `UDP_BIND=0.0.0.0` in front of the `python` call).
-- **Nervous system only:** `npm start` (use `sudo npm start` if GPIO needs it).
+**Optional — separate processes (two terminals):** Only if you need eyes or nervous system alone: `./scripts/run-eyes.sh` for eyes; `npm start` for nervous system (use `sudo npm start` if GPIO needs it).
 
 ---
 
@@ -58,7 +56,7 @@ Types: `default`, `human`, `dragon`, `demon`.
 ## 🔧 Setup
 
 ### Vision (Python / eyes)
-Eyes: **vision/eyes.py** (UDP 5005), [gc9a01py](https://github.com/russhughes/gc9a01py). Pinout and SPI: **instruction.md** §3.1.
+Eyes: **vision/py/eyes.py** (UDP 5005), [gc9a01py](https://github.com/russhughes/gc9a01py). Pinout and SPI: **instruction.md** §3.1.
 
 ```bash
 cd ~/furbacca
@@ -78,13 +76,13 @@ Or: `python3 -m venv env`, `source env/bin/activate`, `pip install spidev RPi.GP
 
 **Test modes** (run with `source env/bin/activate`):
 ```bash
-python vision/eyes.py
-EYES_ANIMATED=0 python vision/eyes.py
-EYES_GRADIENT=1 python vision/eyes.py
-EYE_TYPE=dragon python vision/eyes.py
-EYE_SHAPE=sharp python vision/eyes.py
+python vision/py/eyes.py
+EYES_ANIMATED=0 python vision/py/eyes.py
+EYES_GRADIENT=1 python vision/py/eyes.py
+EYE_TYPE=dragon python vision/py/eyes.py
+EYE_SHAPE=sharp python vision/py/eyes.py
 ```
-Eye assets: **vision/graphics**. Refresh with `./scripts/fetch-eye-graphics.sh`.
+Eye assets: **vision/py/graphics**. Refresh with `./scripts/fetch-eye-graphics.sh`.
 
 ### Nervous system (Node.js)
 ```bash
@@ -111,13 +109,25 @@ Run with `npm start` (or `sudo npm start` for GPIO). See **Starting the services
 ---
 
 ## 🤖 Commands & automation
-- **`wake-furbacca`** — start the eye service (alias for run-eyes).
-- **`sudo systemctl status furbacca-eyes`** — if eyes run as a service.
-- **`push-furbacca`** — (Mac) sync code to the Pi.
+- **`wake-furbacca`** — start all services (eyes + nervous system). Use this.
+- **`sudo systemctl status furbacca-eyes`** — if you run eyes as a service (see below).
+- **`push-furbacca`** — (Mac) rsync project to the Pi. Use **`--delete`** so the Pi loses old paths (e.g. `vision/eyes.py` after refactor) and matches your Mac layout. Exclude Pi-only dirs so rsync doesn't delete them: `vision/py/gc9a01py` (fetched on the Pi by `fetch-gc9a01py.sh`; not on the Mac), and optionally `vision/waveshare-lcd-code`, `vision/gc9a01py` (old leftovers). Add to `~/.zshrc`:
+  ```bash
+  alias push-furbacca='rsync -avz --delete --exclude node_modules --exclude .git --exclude env --exclude dist --exclude vision/py/gc9a01py --exclude vision/waveshare-lcd-code --exclude vision/gc9a01py /Users/brent/Documents/Code/Furbacca/ minqz@furbacca.local:~/furbacca/'
+  ```
+  Then run `push-furbacca` before testing on the Pi; Pi keeps its own `env`, `dist`, and `vision/py/gc9a01py`. After a refactor, `--delete` removes leftover files on the Pi (e.g. old `vision/eyes.py`) so `wake-furbacca` runs the new code.
+
+**Systemd (eyes only):** To run eyes as a service with UDP on 0.0.0.0, copy and edit the unit:
+`sudo cp scripts/furbacca-eyes.service /etc/systemd/system/`
+Edit `User`, `WorkingDirectory`, and `ExecStart` paths to match your Pi user and repo path, then:
+`sudo systemctl daemon-reload && sudo systemctl enable --now furbacca-eyes`
 
 ---
 
 ## 📝 Troubleshooting
 - **Permission denied:** `sudo chown -R $USER:$USER .`
+- **push-furbacca: cannot delete non-empty directory: vision/py/gc9a01py** — That dir is created on the Pi by `fetch-gc9a01py.sh` and isn't on the Mac, so `--delete` tries to remove it. Add `--exclude vision/py/gc9a01py` to your alias so rsync leaves it on the Pi.
+- **push-furbacca: Permission denied (13) when deleting** — Some files on the Pi may be owned by root or another user. Use `--exclude` for those Pi-only dirs, or on the Pi run once: `sudo chown -R minqz:minqz ~/furbacca`, then run `push-furbacca` again.
 - **Module not found:** Run `source env/bin/activate` before Python/eyes.
 - **Eyes / SPI:** Enable SPI (`dtparam=spi=on`), see **instruction.md** §3.1.
+- **fe / touch not working, ss shows 127.0.0.1:5005:** (1) Sync from Mac with **`--delete`**: `push-furbacca` (alias must include `--delete` so the Pi loses old `vision/eyes.py` and only has `vision/py/`). (2) On the Pi, stop any old eyes: `sudo systemctl stop furbacca-eyes`. (3) Run `wake-furbacca` from `~/furbacca`; you should see `UDP 0.0.0.0:5005` and then `--- Furbacca Nervous System: Modular Edition ---`. If you see "vision/py/eyes.py not found", run push-furbacca again. If you see "Port 5005 already in use", stop the other process first.
