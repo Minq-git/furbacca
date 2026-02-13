@@ -6,6 +6,8 @@ import sys
 import time
 import os
 
+import config
+
 _vision_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Inject MicroPython compat before importing gc9a01py
@@ -78,6 +80,20 @@ def _reinit_gc9a01_registers(disp):
     disp.rotation(4)
 
 
+_HARDWARE_STATUS_FILE = ".furbacca-hardware.json"
+
+
+def _write_display_status(ok: bool) -> None:
+    """Write display init result for nervous_system to read (repo root = cwd when run from wake-furbacca)."""
+    try:
+        path = os.path.join(os.getcwd(), _HARDWARE_STATUS_FILE)
+        with open(path, "w") as f:
+            import json as _json
+            _json.dump({"displays": "ok" if ok else "fail"}, f)
+    except Exception:
+        pass
+
+
 def init_displays(swap_left_right=False):
     """
     Create both displays via gc9a01py (Python owns SPI and DC pin).
@@ -93,6 +109,7 @@ def init_displays(swap_left_right=False):
     gc9a01py_lib = os.path.join(_vision_dir, "gc9a01py", "lib")
     if not os.path.isdir(gc9a01py_lib):
         print("⚠ vision/py/gc9a01py/lib not found. Run: bash scripts/setup/fetch-gc9a01py.sh")
+        _write_display_status(False)
         return None, None
 
     sys.path.insert(0, gc9a01py_lib)
@@ -114,6 +131,7 @@ def init_displays(swap_left_right=False):
         from gc9a01py import GC9A01
     except ImportError as e:
         print(f"⚠ Could not import gc9a01py: {e}")
+        _write_display_status(False)
         return None, None
 
     try:
@@ -124,10 +142,11 @@ def init_displays(swap_left_right=False):
         _reinit_gc9a01_registers(left_eye)
         if left_eye.backlight:
             left_eye.backlight.value(1)
-        print("✅ Hardware: gc9a01py displays ready (left, right).")
+        _write_display_status(True)
         return left_eye, right_eye
     except Exception as e:
         print(f"⚠ GC9A01 init failed: {e}")
         import traceback
         traceback.print_exc()
+        _write_display_status(False)
         return None, None

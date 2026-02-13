@@ -11,4 +11,5 @@ print(json.dumps({
     "WARMUP_MS": config.WARMUP_MS,
     "WARMUP_BEIGE": list(config.WARMUP_BEIGE),
     "WARMUP_GREEN": list(config.WARMUP_GREEN),
+    "STATUS_FAIL_RED": list(config.STATUS_FAIL_RED),
 }))

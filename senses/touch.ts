@@ -41,6 +41,75 @@ export class TouchSenses {
     }
   }
 
+  /** Label width for hardware table rows (must match vision/py/display.py). */
+  static readonly HARDWARE_LABEL_WIDTH = 34;
+
+  /**
+   * Verify head touch GPIO (BCM 17) is readable. Only runs on Linux.
+   */
+  static checkHeadTouch(chip: number): { ok: boolean; message: string } {
+    if (process.platform !== "linux") {
+      return { ok: true, message: "" };
+    }
+    try {
+      execSync(`gpioget -c ${chip} --numeric ${OFFSET_HEAD}`, {
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      return { ok: true, message: "" };
+    } catch (e: unknown) {
+      const err = e instanceof Error ? e.message : String(e);
+      return {
+        ok: false,
+        message: `Head touch GPIO (17): ${err.trim().split("\n")[0] ?? err}. Check wiring and gpiod.`,
+      };
+    }
+  }
+
+  /**
+   * Verify belly touch GPIO (BCM 22) is readable. Only runs on Linux.
+   */
+  static checkBellyTouch(chip: number): { ok: boolean; message: string } {
+    if (process.platform !== "linux") {
+      return { ok: true, message: "" };
+    }
+    try {
+      execSync(`gpioget -c ${chip} --numeric ${OFFSET_BELLY}`, {
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      return { ok: true, message: "" };
+    } catch (e: unknown) {
+      const err = e instanceof Error ? e.message : String(e);
+      return {
+        ok: false,
+        message: `Belly touch GPIO (22): ${err.trim().split("\n")[0] ?? err}. Check wiring and gpiod.`,
+      };
+    }
+  }
+
+  /**
+   * Verify vibration GPIO line (BCM 23) is readable. Only runs on Linux.
+   */
+  static checkVibration(chip: number): { ok: boolean; message: string } {
+    if (process.platform !== "linux") {
+      return { ok: true, message: "" };
+    }
+    try {
+      execSync(`gpioget -c ${chip} --numeric ${OFFSET_VIBE}`, {
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      return { ok: true, message: "" };
+    } catch (e: unknown) {
+      const err = e instanceof Error ? e.message : String(e);
+      return {
+        ok: false,
+        message: `Vibration GPIO (23): ${err.trim().split("\n")[0] ?? err}. Check wiring and gpiod.`,
+      };
+    }
+  }
+
   /**
    * Start event-driven watch using gpiomon. Calls callback immediately on GPIO edges.
    * Returns a stop function. If gpiomon is not available, returns null (use poll() instead).

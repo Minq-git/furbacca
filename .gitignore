@@ -1,6 +1,7 @@
 .cursor
 .vscode
 .DS_Store
+.furbacca-hardware.json
 
 node_modules
 dist

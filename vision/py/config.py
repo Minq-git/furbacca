@@ -31,6 +31,7 @@ WARMUP_MS = 1800
 # Spinner/loading-bar colors (RGB); render.py and nervous_system use these
 WARMUP_BEIGE = (78, 62, 48)
 WARMUP_GREEN = (34, 197, 94)  # terminal green
+STATUS_FAIL_RED = (220, 53, 69)  # hardware table: red ✕ when not detected
 
 # --- Animated eyes: timing & motion (eyes.py loop) ---
 ANIM_FPS = int(os.environ.get("ANIM_FPS", "30"))

@@ -75,7 +75,6 @@ def run_eyes():
     if left_eye is None and right_eye is None:
         return
 
-    print("👀 Furbacca Vision Online (Optimized).")
     # Pre-load other eye types in background; current type loads on first frame (faster startup)
     _current_type = config.get_eye_type()
     _preload_thread = threading.Thread(
@@ -93,7 +92,7 @@ def run_eyes():
         frame_dt = 1.0 / config.ANIM_FPS
         EASE_INDEX_MAX = config.EASE_TABLE_SIZE - 1
 
-        print(f"👀 Animated eyes @ {config.ANIM_FPS} FPS. UDP enabled.")
+        print(f"Furbacca Vision Online: Animated @ {config.ANIM_FPS} FPS.")
         cached_eye_base_240 = None  # First frame fills cache for current type
 
         # Smoothstep easing: 3t² - 2t³ over [0,1]
