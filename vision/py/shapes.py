@@ -115,7 +115,7 @@ def get_shape_mask_numpy(shape_name, size, mirror=False):
         dist = x_off**2 / (size*0.45)**2 + (y_idx - cy)**2 / (size*0.35)**2 <= 1.0
         mask = dist & (x_off - (y_idx - cy) * 1.5 >= -size * 0.2)
 
-    elif shape_name == "concerned":
+    elif shape_name == "concern":
         # Same as stern but inverse x (brow on other side)
         x_off = x_idx - cx
         dist = x_off**2 / (size*0.45)**2 + (y_idx - cy)**2 / (size*0.35)**2 <= 1.0
@@ -164,7 +164,7 @@ def get_blink_line(shape_name, size):
         offset = int((size / 2) * tan15)
         return ((0, cy - offset), (size, cy + offset))
 
-    if shape_name in ("stern", "concerned"):
+    if shape_name in ("stern", "concern"):
         # Slant follows the heavy brow cut
         return ((int(size * 0.05), int(size * 0.4)), (int(size * 0.95), int(size * 0.8)))
         

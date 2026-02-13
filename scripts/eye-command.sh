@@ -56,7 +56,7 @@ case "$1" in
     echo "  host    optional; e.g. furbacca.local (default 127.0.0.1)" >&2
     echo "  command one of: cycle_eye_shape, shape <shape>, blink, cycle_eye_type, type <type>, anim <name>, nervous_look, shiver" >&2
     echo "  anim    anim <name> — nervous_look, shiver (or use nervous_look / shiver directly)" >&2
-    echo "  shapes  round, sharp, half_moon, bean, oval, tilted, dome, pill, anime, concerned, glare, gemini, heart, kawaii, stern, sus" >&2
+    echo "  shapes  round, sharp, half_moon, bean, oval, tilted, dome, pill, anime, concern, glare, gemini, heart, kawaii, stern, sus" >&2
     echo "  types   default, human, dragon, demon" >&2
     echo "Examples:" >&2
     echo "  $0 anim nervous_look" >&2
