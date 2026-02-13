@@ -73,13 +73,13 @@ def get_shape_mask_numpy(shape_name, size, mirror=False):
         yr = (x_idx - cx) * sin_a + (y_idx - cy) * cos_a
         mask = (xr**2 / rx**2) + (yr**2 / ry**2) <= 1.0
 
-    elif shape_name == "half_moon":
-        # Rounded bottom, flat top (y >= cy)
+    elif shape_name == "dome":
+        # Arched top, flat bottom (y <= cy)
         dist = (x_idx - cx)**2 + (y_idx - cy)**2 <= (size/2.0)**2
         mask = dist & (y_idx >= cy)
         
-    elif shape_name == "dome":
-        # Arched top, flat bottom (y <= cy)
+    elif shape_name == "half_moon":
+        # Rounded bottom, flat top (y >= cy)
         dist = (x_idx - cx)**2 + (y_idx - cy)**2 <= (size/2.0)**2
         mask = dist & (y_idx <= cy)
 

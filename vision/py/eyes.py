@@ -82,7 +82,7 @@ def run_eyes():
     )
 
     if use_animated:
-        ANIM_FPS = int(os.environ.get("ANIM_FPS", "30"))
+        ANIM_FPS = int(os.environ.get("ANIM_FPS", "60"))
         print(f"  Animated eyes @ {ANIM_FPS} FPS. UDP enabled.")
         
         cached_eye_base_240 = render.build_eye_base_sclera_iris()
