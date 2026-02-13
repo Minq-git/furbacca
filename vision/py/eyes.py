@@ -49,11 +49,21 @@ print(f"  UDP {UDP_BIND}:{UDP_PORT} (remote fe + local nervous system)")
 
 def _apply_eye_shape_left(frame):
     if frame is None: return frame
-    return shapes.apply_shape_mask(frame, config.get_eye_shape(), mirror=False)
+    # frame is a PIL Image; convert to array for NumPy masking
+    arr = np.array(frame)
+    masked_arr = shapes.apply_shape_mask_numpy(arr, config.get_eye_shape(), mirror=False)
+    # Convert back to PIL Image so blit.py can handle it correctly
+    from PIL import Image
+    return Image.fromarray(masked_arr)
 
 def _apply_eye_shape_right(frame):
     if frame is None: return frame
-    return shapes.apply_shape_mask(frame, config.get_eye_shape(), mirror=True)
+    # frame is a PIL Image; convert to array for NumPy masking
+    arr = np.array(frame)
+    masked_arr = shapes.apply_shape_mask_numpy(arr, config.get_eye_shape(), mirror=True)
+    # Convert back to PIL Image so blit.py can handle it correctly
+    from PIL import Image
+    return Image.fromarray(masked_arr)
 
 def run_eyes():
     if left_eye is None and right_eye is None:
@@ -177,16 +187,19 @@ def run_eyes():
                 blit_open_bottom_to_top = True
                 if next_delay: next_auto_blink = now + next_delay
 
-            # --- Animation Segment Processing ---
+            # --- Animation Segment Processing (Readable) ---
             if animation_segments:
                 seg = animation_segments[animation_index]
                 elapsed = now - animation_start_time
-                progress = min(1.0, max(0.0, elapsed / seg[0])) if seg[0] > 0 else 1.0
+                
+                progress = min(1.0, max(0.0, elapsed / seg.duration)) if seg.duration > 0 else 1.0
                 idx = min(255, int(progress * 255))
                 e = EASE_TABLE[idx] / 255.0
-                pupil_x = segment_start_x + (segment_end_x - segment_start_x) * e
-                pupil_y = segment_start_y + (segment_end_y - segment_start_y) * e
-                if elapsed >= seg[0]:
+
+                pupil_x = segment_start_x + (seg.x - segment_start_x) * e
+                pupil_y = segment_start_y + (seg.y - segment_start_y) * e
+                
+                if elapsed >= seg.duration:
                     animation_index += 1
                     animation_start_time = now
                     if animation_index >= len(animation_segments):
@@ -194,7 +207,8 @@ def run_eyes():
                     else:
                         segment_start_x, segment_start_y = pupil_x, pupil_y
                         next_seg = animation_segments[animation_index]
-                        segment_end_x, segment_end_y = next_seg[1], next_seg[2]
+
+                        segment_end_x, segment_end_y = next_seg.x, next_seg.y
 
             # --- Physics: Idle Looking & Pupil Radius ---
             relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
@@ -218,16 +232,47 @@ def run_eyes():
                         eye_move_start, eye_move_duration = now, random.uniform(MOVE_DURATION_MIN, MOVE_DURATION_MAX)
                         eye_in_motion = True
 
-            # Radius transitions (Relaxed/Focused/Wide)
-            pupil_radius_target = focused if now < focus_until else relaxed
+            # --- Pupil Radius: Logic with Animation Overrides ---
+            relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
+            
+            if animation_segments and animation_index < len(animation_segments):
+                seg = animation_segments[animation_index]
+                # Check for pupil_mode override in the current segment
+                if seg.pupil_mode == "wide":
+                    pupil_radius_target = wide
+                elif seg.pupil_mode == "focused":
+                    pupil_radius_target = focused
+                else:
+                    pupil_radius_target = relaxed
+                
+                # Apply immediately for animations to feel snappy
+                pupil_radius_current = float(pupil_radius_target)
+                radius_transition_from = pupil_radius_target
+                radius_transition_to = pupil_radius_target
+            elif now < focus_until:
+                pupil_radius_target = focused
+            elif now < wide_until:
+                pupil_radius_target = wide
+            else:
+                pupil_radius_target = relaxed
+
+            # --- Transition Smoothing ---
             if pupil_radius_target != radius_transition_to:
-                radius_transition_from, radius_transition_to, radius_transition_start = pupil_radius_current, pupil_radius_target, now
+                radius_transition_from = pupil_radius_current
+                radius_transition_to = pupil_radius_target
+                radius_transition_start = now
+            
+            # Use faster transitions during animations
+            transition_s = 0.06 if animation_segments else PUPIL_TRANSITION_S
             
             elapsed_r = now - radius_transition_start
-            if elapsed_r >= PUPIL_TRANSITION_S:
+            if elapsed_r >= transition_s or radius_transition_from == radius_transition_to:
                 pupil_radius_current = float(radius_transition_to)
             else:
-                e_r = EASE_TABLE[min(255, int((elapsed_r / PUPIL_TRANSITION_S) * 255))] / 255.0
+                # Smoothly ease the radius change
+                progress = min(1.0, elapsed_r / transition_s)
+                idx = min(255, int(progress * 255))
+                e_r = EASE_TABLE[idx] / 255.0
                 pupil_radius_current = radius_transition_from + (radius_transition_to - radius_transition_from) * e_r
 
             # --- Rendering & Async Blitting ---
