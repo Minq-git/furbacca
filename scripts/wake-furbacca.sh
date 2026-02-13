@@ -23,6 +23,15 @@ fi
 
 EYES_PID=""
 cleanup() {
+  # Close eyelids before shutting down (graceful shutdown)
+  if command -v python3 >/dev/null 2>&1; then
+    EYE_CMD='{"action":"eyes_close"}' EYE_HOST="${EYE_UDP_HOST:-127.0.0.1}" EYE_PORT="${EYE_UDP_PORT:-5005}" python3 -c '
+import socket, os
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.sendto(os.environ.get("EYE_CMD", "{}").encode(), (os.environ["EYE_HOST"], int(os.environ["EYE_PORT"])))
+' 2>/dev/null || true
+    sleep 0.25
+  fi
   if [[ -n "$EYES_PID" ]] && kill -0 "$EYES_PID" 2>/dev/null; then
     kill "$EYES_PID" 2>/dev/null || true
     wait "$EYES_PID" 2>/dev/null || true

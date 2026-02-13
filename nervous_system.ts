@@ -32,11 +32,14 @@ function onTouch(sensor: "head" | "belly" | "shiver", active: boolean): void {
 const stopEventWatch = touch.startEventWatch(onTouch);
 if (stopEventWatch) {
   console.log("  Touch: event-driven (gpiomon)");
+  eyes.openEyes(); // Eyes stay closed until nervous system is ready
   process.on("SIGINT", () => {
+    eyes.closeEyes();
     stopEventWatch();
     process.exit(0);
   });
 } else {
   console.log("  Touch: polling every 20ms (install gpiomon for event-driven)");
   setInterval(() => touch.poll(onTouch), 20);
+  eyes.openEyes();
 }

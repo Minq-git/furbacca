@@ -4,11 +4,18 @@ Restored version with original state logic + NumPy performance optimizations.
 """
 import json
 import os
+import signal
 import socket
 import sys
 import threading
 import time
 import random
+
+_shutdown_requested = False
+
+def _handle_shutdown(signum, frame):
+    global _shutdown_requested
+    _shutdown_requested = True
 
 _vision_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _vision_dir)
@@ -107,10 +114,20 @@ def run_eyes():
         next_auto_blink = time.monotonic() + blink.next_auto_blink_delay()
         last_look_time = 0.0
         relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
+        # Stay closed until nervous system sends eyes_open (graceful startup)
+        lids_held_closed = True
         # One synchronous frame so both displays get a stable image before async (reduces right-eye crash at startup)
         first_frame = render.render_animated_frame(cached_eye_base_240, 0.0, 0.0, "open", pupil_radius=relaxed)
         if first_frame is not None:
-            blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(first_frame), _apply_eye_shape_right(first_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+            if lids_held_closed:
+                overlay_l = render.render_blink_overlay(mirror=False)
+                overlay_r = render.render_blink_overlay(mirror=True)
+                if overlay_l and overlay_r:
+                    blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(overlay_l), _apply_eye_shape_right(overlay_r), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+                else:
+                    blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(first_frame), _apply_eye_shape_right(first_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+            else:
+                blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(first_frame), _apply_eye_shape_right(first_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
         focus_until = 0.0
         wide_until = 0.0
         next_wide_at = 0.0
@@ -128,6 +145,9 @@ def run_eyes():
         segment_end_x, segment_end_y = 0.0, 0.0
         last_blink_triggered_segment_index = config.SEGMENT_INDEX_NONE
         last_impulse_at = 0.0
+
+        signal.signal(signal.SIGINT, _handle_shutdown)
+        signal.signal(signal.SIGTERM, _handle_shutdown)
 
         def _start_animation(name, replace=False):
             nonlocal animation_segments, animation_start_time, animation_index
@@ -149,16 +169,22 @@ def run_eyes():
             print(f"🎬 Animation: {name}")
 
         while True:
+            if _shutdown_requested:
+                break
             now = time.monotonic()
-            
             # --- UDP Command Logic (Original) ---
             while True:
                 try:
                     data, _ = sock.recvfrom(config.UDP_RECV_SIZE)
                     msg = json.loads(data.decode())
                     action = msg.get("action")
-                    if action == "blink":
-                        if not animation_segments and animated_blink.can_trigger(now):
+                    if action == "eyes_open":
+                        lids_held_closed = False
+                        _start_animation("double_blink", replace=True)  # wake-up double blink
+                    elif action == "eyes_close":
+                        lids_held_closed = True
+                    elif action == "blink":
+                        if not lids_held_closed and not animation_segments and animated_blink.can_trigger(now):
                             animated_blink.trigger(now)
                     elif action == "look":
                         tx, ty = msg.get("x"), msg.get("y")
@@ -194,8 +220,8 @@ def run_eyes():
                     break
 
             # --- 1. Auto-blink Trigger ---
-            # Trigger ONLY if the timer is up and we aren't already blinking
-            if not animation_segments and not animated_blink.is_closed and now >= next_auto_blink:
+            # Trigger ONLY if the timer is up and we aren't already blinking (disabled while lids held closed at startup)
+            if not lids_held_closed and not animation_segments and not animated_blink.is_closed and now >= next_auto_blink:
                 animated_blink.trigger(now)
                 # Important: DO NOT update next_auto_blink here. 
                 # Let the advance() function decide the next time.
@@ -312,7 +338,7 @@ def run_eyes():
             if blit_open_bottom_to_top:
                 blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), inside_out=True)
                 blit_open_bottom_to_top = False
-            elif animated_blink.is_closed:
+            elif animated_blink.is_closed or lids_held_closed:
                 overlay_l = render.render_blink_overlay(mirror=False)
                 overlay_r = render.render_blink_overlay(mirror=True)
                 if overlay_l and overlay_r and np is not None:
@@ -340,4 +366,21 @@ def run_eyes():
             time.sleep(max(0.0, frame_dt - (time.monotonic() - now)))
 
 if __name__ == "__main__":
-    run_eyes()
+    try:
+        run_eyes()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if left_eye is not None and right_eye is not None:
+            try:
+                overlay_l = render.render_blink_overlay(mirror=False)
+                overlay_r = render.render_blink_overlay(mirror=True)
+                if overlay_l and overlay_r:
+                    blit.blit_pil_to_both(
+                        left_eye, right_eye,
+                        _apply_eye_shape_left(overlay_l), _apply_eye_shape_right(overlay_r),
+                        reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None,
+                    )
+            except Exception:
+                pass
+        sys.exit(0)

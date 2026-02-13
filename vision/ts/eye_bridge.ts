@@ -6,6 +6,8 @@ const PORT = 5005;
 const PAYLOAD_IMPULSE = Buffer.from(JSON.stringify({ action: "impulse" }));
 const PAYLOAD_BLINK = Buffer.from(JSON.stringify({ action: "blink" }));
 const PAYLOAD_CYCLE_EYE_TYPE = Buffer.from(JSON.stringify({ action: "cycle_eye_type" }));
+const PAYLOAD_EYES_OPEN = Buffer.from(JSON.stringify({ action: "eyes_open" }));
+const PAYLOAD_EYES_CLOSE = Buffer.from(JSON.stringify({ action: "eyes_close" }));
 
 /** Cache for animation messages by name (replace flag varies). */
 const animationCache = new Map<string, Buffer>();
@@ -59,6 +61,16 @@ export class EyeBridge {
   /** Blink: uses pre-allocated buffer. */
   public blink(): void {
     this.send(PAYLOAD_BLINK);
+  }
+
+  /** Open lids (after startup: call when nervous system is ready). */
+  public openEyes(): void {
+    this.send(PAYLOAD_EYES_OPEN);
+  }
+
+  /** Close lids (e.g. before shutdown). */
+  public closeEyes(): void {
+    this.send(PAYLOAD_EYES_CLOSE);
   }
 
   /** Cycle eye type (belly): uses pre-allocated buffer. */
