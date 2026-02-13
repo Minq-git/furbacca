@@ -73,6 +73,11 @@ export class EyeBridge {
     this.send(PAYLOAD_EYES_CLOSE);
   }
 
+  /** Warmup: send startup step 0..(steps-1) for spinner color (beige → green); tie to nervous_system startup. */
+  public warmup(step: number): void {
+    this.sendCommand("warmup", { step: Math.max(0, step) });
+  }
+
   /** Cycle eye type (belly): uses pre-allocated buffer. */
   public cycleEyeType(): void {
     this.send(PAYLOAD_CYCLE_EYE_TYPE);

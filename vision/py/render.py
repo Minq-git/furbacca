@@ -137,22 +137,30 @@ def _draw_pupil_numpy(base_arr, px, py, r, eye_type):
         mask = (x_grid - px) ** 2 + (y_grid - py) ** 2 <= r ** 2
     base_arr[mask] = 0
 
-def render_spinner(angle_rad, mirror=False):
+def render_spinner(angle_rad, mirror=True, color_phase=0.0):
     """
-    Vectorized NumPy spinner: Creates a smooth rotating ring with a gap.
-    No PIL polygons = no weird geometric artifacts.
+    Vectorized NumPy spinner: smooth rotating ring with a gap.
+    color_phase in [0, 1]: 0 = beige, 1 = green (one-way transition over startup).
     """
     size = config.EYE_SIZE
     # 1. Create coordinate grid
     y_idx, x_idx = np.indices((size, size), dtype=np.float32)
     cx, cy = size / 2.0, size / 2.0
-    
-    # 2. Distance check for the ring (donut)
-    r_out = size * 0.40
-    r_in = size * 0.22
+
+    # 2. Ring matches default eye iris/pupil size (same as build_eye_base sclera/iris)
+    r_out = config.IRIS_R * config.EYE_LAYER_VIEWPORT_SCALE  # iris outer edge
+    r_in = float(config.eye_type_pupil_radii("default")[0])   # relaxed pupil = inner edge
     dist_sq = (x_idx - cx)**2 + (y_idx - cy)**2
     ring_mask = (dist_sq <= r_out**2) & (dist_sq >= r_in**2)
-    
+
+    # Softer AA edges: wider falloff so the ring doesn't look stepped
+    dist = np.sqrt(dist_sq)
+    half_width = (r_out - r_in) / 2.0
+    mid_r = (r_out + r_in) / 2.0
+    edge_dist = np.abs(dist - mid_r) - half_width
+    falloff_px = 3.0  # spread over ~3 px for smoother blend
+    edge_mask = np.clip(1.0 - edge_dist / falloff_px, 0, 1)
+
     # 3. Angular check for the gap (all angles in [0, 2π] for consistent comparison)
     pixel_angles = np.arctan2(y_idx - cy, x_idx - cx)  # [-π, π]
     pixel_angles = np.where(pixel_angles < 0, pixel_angles + 2 * math.pi, pixel_angles)  # [0, 2π]
@@ -165,18 +173,34 @@ def render_spinner(angle_rad, mirror=False):
         gap_mask = (pixel_angles >= a0) & (pixel_angles <= a1)
     else:
         gap_mask = (pixel_angles >= a0) | (pixel_angles <= a1)
-        
-    # 4. Final Image Construction
-    # Start with black, fill ring where gap isn't present
+
+    # Angular distance from a0 (trailing edge of C) so we can fade in the gap
+    two_pi = 2 * math.pi
+    d = np.where(pixel_angles >= a0, pixel_angles - a0, (two_pi - a0) + pixel_angles)
+    t = np.clip(d / gap_width, 0.0, 1.0)  # t=0 at C edge (beige), t=1 into gap (black)
+
+    # 4. Ring color: step from beige to green (from config)
+    beige = np.array(config.WARMUP_BEIGE, dtype=np.float64)
+    green = np.array(config.WARMUP_GREEN, dtype=np.float64)
+    num_steps = config.EYE_WARMUP_STEPS
+    p = max(0, min(1, color_phase))
+    step = min(int(round(p * (num_steps - 1))), num_steps - 1)
+    blend_t = step / (num_steps - 1) if num_steps > 1 else 0
+    ring_color = (1 - blend_t) * beige + blend_t * green
+
     out_arr = np.zeros((size, size, 3), dtype=np.uint8)
     final_mask = ring_mask & ~gap_mask
-    
-    # Iris-like muted beige (78, 62, 48)
-    out_arr[final_mask] = [78, 62, 48]
-    
+    out_arr[final_mask] = np.clip(ring_color, 0, 255).astype(np.uint8)
+    gap_ring_mask = ring_mask & gap_mask
+    blend = (1.0 - t[gap_ring_mask])[:, np.newaxis] * ring_color
+    out_arr[gap_ring_mask] = np.clip(blend, 0, 255).astype(np.uint8)
+
+    # Apply soft edge mask for organic, anti-aliased inner/outer ring edges
+    out_arr = np.clip(out_arr.astype(np.float64) * edge_mask[:, :, np.newaxis], 0, 255).astype(np.uint8)
+
     if mirror:
         out_arr = np.flip(out_arr, axis=1)
-        
+
     return Image.fromarray(out_arr)
 
 

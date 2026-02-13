@@ -53,7 +53,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 sock.bind((UDP_BIND, UDP_PORT))
 sock.setblocking(False)
-print(f"  UDP {UDP_BIND}:{UDP_PORT} (remote fe + local nervous system)")
+print(f"ᯤ UDP {UDP_BIND}:{UDP_PORT} (remote fe + local nervous system)")
 
 def _apply_eye_shape_left(frame):
     if frame is None: return frame
@@ -117,12 +117,15 @@ def run_eyes():
         relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
         # Stay closed until nervous system sends eyes_open (graceful startup); show spinner during wait
         lids_held_closed = True
+        warmup_step = 0  # 0..EYE_WARMUP_STEPS-1 from nervous system; spinner color steps beige→green
         # One synchronous frame so both displays get a stable image before async (reduces right-eye crash at startup)
         first_frame = render.render_animated_frame(cached_eye_base_240, 0.0, 0.0, "open", pupil_radius=relaxed)
         if first_frame is not None:
             if lids_held_closed:
-                spin_l = render.render_spinner(-time.monotonic() * 5.0, mirror=False)
-                spin_r = render.render_spinner(-time.monotonic() * 5.0, mirror=True)
+                _t = time.monotonic()
+                color_phase = warmup_step / max(1, config.EYE_WARMUP_STEPS - 1)
+                spin_l = render.render_spinner(-_t * 3.2, mirror=False, color_phase=color_phase)
+                spin_r = render.render_spinner(-_t * 3.2, mirror=True, color_phase=color_phase)
                 if spin_l and spin_r:
                     blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(spin_l), _apply_eye_shape_right(spin_r), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
                 else:
@@ -184,6 +187,10 @@ def run_eyes():
                         _start_animation("double_blink", replace=True)  # wake-up double blink
                     elif action == "eyes_close":
                         lids_held_closed = True
+                    elif action == "warmup":
+                        s = msg.get("step")
+                        if s is not None:
+                            warmup_step = max(0, min(config.EYE_WARMUP_STEPS - 1, int(s)))
                     elif action == "blink":
                         if not lids_held_closed and not animation_segments and animated_blink.can_trigger(now):
                             animated_blink.trigger(now)
@@ -340,9 +347,9 @@ def run_eyes():
                 blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), inside_out=True)
                 blit_open_bottom_to_top = False
             elif lids_held_closed:
-                # Startup spinner while waiting for eyes_open (time-based for smooth, consistent spin)
-                spin_l = render.render_spinner(-now * 5.0, mirror=False)
-                spin_r = render.render_spinner(-now * 5.0, mirror=True)
+                color_phase = warmup_step / max(1, config.EYE_WARMUP_STEPS - 1)
+                spin_l = render.render_spinner(-now * 3.2, mirror=False, color_phase=color_phase)
+                spin_r = render.render_spinner(-now * 3.2, mirror=True, color_phase=color_phase)
                 if spin_l and spin_r:
                     blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(spin_l), _apply_eye_shape_right(spin_r))
             elif animated_blink.is_closed:

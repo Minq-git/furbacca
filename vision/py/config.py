@@ -25,6 +25,13 @@ EYE_TYPE_CYCLE = ("default", "human", "dragon", "demon")
 EYE_GAZE_CACHE_STEP = 0.1
 EYE_BUILD_SIZE = int(os.environ.get("EYE_BUILD_SIZE", "240"))  # 240 = full res; lower for faster builds
 
+# Warmup: spinner steps beige→green; nervous_system.ts reads these via vision/py/export_warmup_config.py
+EYE_WARMUP_STEPS = 8
+WARMUP_MS = 1800
+# Spinner/loading-bar colors (RGB); render.py and nervous_system use these
+WARMUP_BEIGE = (78, 62, 48)
+WARMUP_GREEN = (34, 197, 94)  # terminal green
+
 # --- Animated eyes: timing & motion (eyes.py loop) ---
 ANIM_FPS = int(os.environ.get("ANIM_FPS", "30"))
 EASE_TABLE_SIZE = 256
