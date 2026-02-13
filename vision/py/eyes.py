@@ -115,16 +115,16 @@ def run_eyes():
         next_auto_blink = time.monotonic() + blink.next_auto_blink_delay()
         last_look_time = 0.0
         relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
-        # Stay closed until nervous system sends eyes_open (graceful startup)
+        # Stay closed until nervous system sends eyes_open (graceful startup); show spinner during wait
         lids_held_closed = True
         # One synchronous frame so both displays get a stable image before async (reduces right-eye crash at startup)
         first_frame = render.render_animated_frame(cached_eye_base_240, 0.0, 0.0, "open", pupil_radius=relaxed)
         if first_frame is not None:
             if lids_held_closed:
-                overlay_l = render.render_blink_overlay(mirror=False)
-                overlay_r = render.render_blink_overlay(mirror=True)
-                if overlay_l and overlay_r:
-                    blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(overlay_l), _apply_eye_shape_right(overlay_r), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+                spin_l = render.render_spinner(-time.monotonic() * 5.0, mirror=False)
+                spin_r = render.render_spinner(-time.monotonic() * 5.0, mirror=True)
+                if spin_l and spin_r:
+                    blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(spin_l), _apply_eye_shape_right(spin_r), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
                 else:
                     blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(first_frame), _apply_eye_shape_right(first_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
             else:
@@ -339,21 +339,24 @@ def run_eyes():
             if blit_open_bottom_to_top:
                 blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), inside_out=True)
                 blit_open_bottom_to_top = False
-            elif animated_blink.is_closed or lids_held_closed:
+            elif lids_held_closed:
+                # Startup spinner while waiting for eyes_open (time-based for smooth, consistent spin)
+                spin_l = render.render_spinner(-now * 5.0, mirror=False)
+                spin_r = render.render_spinner(-now * 5.0, mirror=True)
+                if spin_l and spin_r:
+                    blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(spin_l), _apply_eye_shape_right(spin_r))
+            elif animated_blink.is_closed:
                 overlay_l = render.render_blink_overlay(mirror=False)
                 overlay_r = render.render_blink_overlay(mirror=True)
                 if overlay_l and overlay_r and np is not None:
-                    # Composite overlay in NumPy (works whether eye_frame is PIL or ndarray)
                     def _composite_overlay(frame, overlay_pil):
                         ov = np.array(overlay_pil, dtype=np.uint8)
-                        # Use full overlay (black eyelids + line) so closed eye shows black + line
                         from PIL import Image
                         return Image.fromarray(ov.copy())
                     comp_l = _composite_overlay(eye_frame, overlay_l)
                     comp_r = _composite_overlay(eye_frame, overlay_r)
                     blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(comp_l), _apply_eye_shape_right(comp_r), outside_in=True)
                 elif overlay_l and overlay_r:
-                    # PIL path when numpy unavailable (eye_frame assumed PIL from render)
                     from PIL import Image
                     pil_frame = Image.fromarray(eye_frame) if (np is not None and isinstance(eye_frame, np.ndarray)) else eye_frame
                     comp_l = pil_frame.copy()

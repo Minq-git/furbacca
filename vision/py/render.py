@@ -137,6 +137,49 @@ def _draw_pupil_numpy(base_arr, px, py, r, eye_type):
         mask = (x_grid - px) ** 2 + (y_grid - py) ** 2 <= r ** 2
     base_arr[mask] = 0
 
+def render_spinner(angle_rad, mirror=False):
+    """
+    Vectorized NumPy spinner: Creates a smooth rotating ring with a gap.
+    No PIL polygons = no weird geometric artifacts.
+    """
+    size = config.EYE_SIZE
+    # 1. Create coordinate grid
+    y_idx, x_idx = np.indices((size, size), dtype=np.float32)
+    cx, cy = size / 2.0, size / 2.0
+    
+    # 2. Distance check for the ring (donut)
+    r_out = size * 0.40
+    r_in = size * 0.22
+    dist_sq = (x_idx - cx)**2 + (y_idx - cy)**2
+    ring_mask = (dist_sq <= r_out**2) & (dist_sq >= r_in**2)
+    
+    # 3. Angular check for the gap (all angles in [0, 2π] for consistent comparison)
+    pixel_angles = np.arctan2(y_idx - cy, x_idx - cx)  # [-π, π]
+    pixel_angles = np.where(pixel_angles < 0, pixel_angles + 2 * math.pi, pixel_angles)  # [0, 2π]
+
+    a0 = angle_rad % (2 * math.pi)
+    gap_width = math.radians(60)
+    a1 = (a0 + gap_width) % (2 * math.pi)
+
+    if a0 < a1:
+        gap_mask = (pixel_angles >= a0) & (pixel_angles <= a1)
+    else:
+        gap_mask = (pixel_angles >= a0) | (pixel_angles <= a1)
+        
+    # 4. Final Image Construction
+    # Start with black, fill ring where gap isn't present
+    out_arr = np.zeros((size, size, 3), dtype=np.uint8)
+    final_mask = ring_mask & ~gap_mask
+    
+    # Iris-like muted beige (78, 62, 48)
+    out_arr[final_mask] = [78, 62, 48]
+    
+    if mirror:
+        out_arr = np.flip(out_arr, axis=1)
+        
+    return Image.fromarray(out_arr)
+
+
 def render_blink_overlay(mirror=False):
     """
     Blink layer: black + eyelid line following the eye shape.
