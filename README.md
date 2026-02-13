@@ -126,6 +126,11 @@ Edit `User`, `WorkingDirectory`, and `ExecStart` paths to match your Pi user and
 
 ## 📝 Troubleshooting
 - **Permission denied:** `sudo chown -R $USER:$USER .`
+- **wake-furbacca says "can't open file ... vision/eyes.py"** — The Pi is still using an old alias or script that runs `vision/eyes.py` instead of the repo script. **Find it:** On the Pi run `type wake-furbacca` (or `which wake-furbacca` if it's a script). If it's an **alias**, edit `~/.bashrc` or `~/.zshrc` and set:
+  ```bash
+  alias wake-furbacca='~/furbacca/scripts/wake-furbacca.sh'
+  ```
+  If it's a **script** (e.g. in `~/bin` or `/usr/local/bin`), either replace its contents with a one-liner that runs the repo script, or delete it and use the alias above. Then `source ~/.zshrc` (or `~/.bashrc`) or open a new shell and run `wake-furbacca` again.
 - **push-furbacca: cannot delete non-empty directory: vision/py/gc9a01py** — That dir is created on the Pi by `scripts/setup/fetch-gc9a01py.sh` and isn't on the Mac, so `--delete` tries to remove it. Add `--exclude vision/py/gc9a01py` to your alias so rsync leaves it on the Pi.
 - **push-furbacca: Permission denied (13) when deleting** — Some files on the Pi may be owned by root or another user. Use `--exclude` for those Pi-only dirs, or on the Pi run once: `sudo chown -R minqz:minqz ~/furbacca`, then run `push-furbacca` again.
 - **Module not found:** Run `source env/bin/activate` before Python/eyes.

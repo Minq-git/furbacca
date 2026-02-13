@@ -4,7 +4,7 @@
 
 | Script | When to use |
 |--------|-------------|
-| **wake-furbacca.sh** | Start everything: eyes + nervous system (touch, sounds, UDP). One command; run from repo root or alias it. |
+| **wake-furbacca.sh** | Start everything: eyes + nervous system (touch, sounds, UDP). Run from repo root or alias on the Pi: `alias wake-furbacca='~/furbacca/scripts/wake-furbacca.sh'`. If you get "vision/eyes.py: No such file", your alias/script points to the old path—see README § Troubleshooting. |
 | **run-eyes.sh** | Eyes only (vision/py/eyes.py). Use when you want eyes in one terminal and nervous system in another. |
 | **eye-command.sh** | Send commands to eyes (blink, shape, type) while eyes are running. On Pi: `./scripts/eye-command.sh shape sharp`. From Mac: `./scripts/eye-command.sh furbacca.local type dragon`. |
 | **setup-fresh.sh** | One-time (or re-run) setup on the Pi: venv, pip deps, gc9a01py driver, eye graphics. Run from repo root. |
