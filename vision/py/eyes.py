@@ -253,8 +253,8 @@ def run_eyes():
             if animation_segments:
                 seg = animation_segments[animation_index]
                 elapsed = now - animation_start_time
-                progress = min(1.0, elapsed / seg[0])
-                idx = min(255, int(progress * 255))
+                progress = min(1.0, max(0.0, elapsed / seg[0])) if seg[0] > 0 else 1.0
+                idx = min(255, max(0, int(progress * 255)))
                 e = EASE_TABLE[idx] / 255.0
                 pupil_x = segment_start_x + (segment_end_x - segment_start_x) * e
                 pupil_y = segment_start_y + (segment_end_y - segment_start_y) * e
@@ -309,8 +309,8 @@ def run_eyes():
                             eye_hold_until = now + random.uniform(0.0, HOLD_DURATION_MAX)
                             focus_until = now + FOCUS_HOLD_S
                         else:
-                            t = elapsed / eye_move_duration
-                            idx = min(255, int(t * 255))
+                            t = min(1.0, max(0.0, elapsed / eye_move_duration)) if eye_move_duration > 0 else 1.0
+                            idx = min(255, max(0, int(t * 255)))
                             e = EASE_TABLE[idx] / 255.0
                             pupil_x = eye_old_x + (eye_new_x - eye_old_x) * e
                             pupil_y = eye_old_y + (eye_new_y - eye_old_y) * e
@@ -350,8 +350,8 @@ def run_eyes():
             if elapsed >= transition_s or radius_transition_from == radius_transition_to:
                 pupil_radius_current = float(radius_transition_to)
             else:
-                progress = elapsed / transition_s
-                idx = min(255, int(progress * 255))
+                progress = min(1.0, max(0.0, elapsed / transition_s)) if transition_s > 0 else 1.0
+                idx = min(255, max(0, int(progress * 255)))
                 e = EASE_TABLE[idx] / 255.0
                 pupil_radius_current = radius_transition_from + (radius_transition_to - radius_transition_from) * e
             pupil_radius = pupil_radius_current

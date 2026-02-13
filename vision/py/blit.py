@@ -34,9 +34,10 @@ def rgb565(r, g, b):
 
 
 def _pil_to_rgb565_numpy(img):
-    """Fast path: whole-image RGB565 via NumPy. Exact fallback masking + uint16 promotion (avoids blue tint from bit-promotion)."""
+    """Fast path: whole-image RGB565 via NumPy. 180° rotation only (GC9A01 hardware requirement).
+    Orientation only; pupil gaze is handled by the caller (left/right images with same pupil_x/y, mirrored shapes)."""
     arr = np.array(img, dtype=np.uint8)
-    arr = np.flip(arr, axis=(0, 1)).copy()  # rotate 180 (GC9A01 orientation)
+    arr = np.flip(arr, axis=(0, 1)).copy()  # 180° rotation (view then copy for contiguous .tobytes())
     if _NUMPY_SWAP_RB:
         r = arr[:, :, 2].astype(np.uint16)
         g = arr[:, :, 1].astype(np.uint16)
@@ -45,7 +46,6 @@ def _pil_to_rgb565_numpy(img):
         r = arr[:, :, 0].astype(np.uint16)
         g = arr[:, :, 1].astype(np.uint16)
         b = arr[:, :, 2].astype(np.uint16)
-    # Same logic as fallback: mask first so no garbage bits shift into other channels
     rgb565_u16 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
     return rgb565_u16.astype(">u2").tobytes()
 
@@ -143,15 +143,14 @@ def blit_pil_to_display(display, img):
 
 
 def blit_pil_to_both(left_eye, right_eye, left_img, right_img=None, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
-    """Blit PIL image(s) to both displays. If right_img is None, use left_img for both (no mirror). Otherwise left to left display, right to right (for mirrored shapes)."""
+    """Blit PIL image(s) to both displays. Pass two images (same pupil_x/y, mirrored shapes) so both eyes look in the same direction. If right_img is None, use left_img for both."""
     if left_img is None:
         return
-    if right_img is None:
-        right_img = left_img
     buf_left = pil_to_rgb565_buffer(left_img)
-    buf_right = pil_to_rgb565_buffer(right_img)
     if buf_left is None:
         return
+    actual_right = right_img if right_img is not None else left_img
+    buf_right = pil_to_rgb565_buffer(actual_right)
     if buf_right is None:
         buf_right = buf_left
     if not reverse_rows and not outside_in and not inside_out and partial_rows is None:
