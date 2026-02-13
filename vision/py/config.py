@@ -25,6 +25,25 @@ EYE_TYPE_CYCLE = ("default", "human", "dragon", "demon")
 EYE_GAZE_CACHE_STEP = 0.1
 EYE_BUILD_SIZE = int(os.environ.get("EYE_BUILD_SIZE", "240"))  # 240 = full res; lower for faster builds
 
+# --- Animated eyes: timing & motion (eyes.py loop) ---
+ANIM_FPS = int(os.environ.get("ANIM_FPS", "60"))
+EASE_TABLE_SIZE = 256
+IDLE_LOOK_TIMEOUT_S = 0.2
+MOVE_DURATION_MIN_S = 0.072
+MOVE_DURATION_MAX_S = 0.144
+HOLD_DURATION_MAX_S = 3.0
+PUPIL_EASE_FACTOR = 0.48
+FOCUS_HOLD_S = 0.35
+PUPIL_TRANSITION_S = 0.5
+PUPIL_TRANSITION_ANIM_S = 0.06
+SHIVER_DEBOUNCE_S = 0.28
+LOOK_CLAMP_MIN = -1.0
+LOOK_CLAMP_MAX = 1.0
+IDLE_WANDER_MIN = -0.8
+IDLE_WANDER_MAX = 0.8
+UDP_RECV_SIZE = 1024
+SEGMENT_INDEX_NONE = -1
+
 # Eye shape mask — layer above sclera/iris/pupil
 _eye_shape_raw = os.environ.get("EYE_SHAPE", "round").strip().lower()
 _current_eye_shape = None
