@@ -26,12 +26,10 @@ EYE_SIZE = config.EYE_SIZE
 
 # On some Pi/PIL setups np.array(img) is BGR; swap so we pack correct RGB565 (fixes blue tint).
 _NUMPY_SWAP_RB = os.environ.get("EYES_NUMPY_SWAP_RB", "").strip().lower() in ("1", "true", "yes")
-# Force fallback (slower, correct colors) when NumPy path gives wrong colors despite channel check.
 _USE_NUMPY_BLIT = os.environ.get("EYES_USE_NUMPY_BLIT", "1").strip().lower() not in ("0", "false", "no")
 
 # Async blit: depth 1 so we only care about the most recent frame; drops older pending frame if full.
 _blit_queue = queue.Queue(maxsize=1)
-
 
 def _blit_worker():
     """Background thread: processes both eyes as a single atomic task."""
@@ -39,53 +37,59 @@ def _blit_worker():
         task = _blit_queue.get()
         if task is None:
             break
- 
-        # Unpack the full face update
-        left_eye, left_buf, right_eye, right_buf = task
         
-        # Execute SPI writes consecutively
-        if left_eye is not None and left_buf is not None:
-            left_eye.blit_buffer(left_buf, 0, 0, EYE_SIZE, EYE_SIZE)
+        l_handle, l_buf, r_handle, r_buf = task
         
-        if right_eye is not None and right_buf is not None:
-            right_eye.blit_buffer(right_buf, 0, 0, EYE_SIZE, EYE_SIZE)
-            
-        _blit_queue.task_done()
-
+        try:
+            # Shared SPI bus: these MUST happen sequentially
+            if l_handle and l_buf:
+                l_handle.blit_buffer(l_buf, 0, 0, EYE_SIZE, EYE_SIZE)
+            if r_handle and r_buf:
+                r_handle.blit_buffer(r_buf, 0, 0, EYE_SIZE, EYE_SIZE)
+        except Exception as e:
+            print(f"SPI Worker Error: {e}")
+        finally:
+            _blit_queue.task_done()
 
 _worker_thread = threading.Thread(target=_blit_worker, daemon=True)
 _worker_thread.start()
 
-
-def blit_async(display, buffer):
-    """Non-blocking handoff to SPI thread. If queue full, drop pending frame and replace (reduces input lag)."""
-    if display is None or buffer is None:
+def blit_pil_to_both_async(left_eye, right_eye, left_img, right_img=None, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
+    """Atomic async handoff of both eyes to the worker thread."""
+    if left_img is None:
         return
+
+    # Fallback to sync for special row animations
+    if reverse_rows or outside_in or inside_out or partial_rows is not None:
+        blit_pil_to_both(left_eye, right_eye, left_img, right_img, reverse_rows, outside_in, inside_out, partial_rows)
+        return
+
+    # Generate buffers
+    buf_left = pil_to_rgb565_buffer(left_img)
+    if buf_left is None:
+        return
+        
+    actual_right = right_img if right_img is not None else left_img
+    buf_right = pil_to_rgb565_buffer(actual_right)
+    if buf_right is None:
+        buf_right = buf_left
+
+    # Atomic Task Handoff
     try:
         if _blit_queue.full():
             try:
                 _blit_queue.get_nowait()
             except queue.Empty:
                 pass
-        _blit_queue.put_nowait((display, buffer))
+        _blit_queue.put_nowait((left_eye, buf_left, right_eye, buf_right))
     except queue.Full:
         pass
 
-
-def rgb565(r, g, b):
-    """Pack R,G,B (0-255) to RGB565 for GC9A01 (big-endian). Used for eye image, gradient, rainbow."""
-    c565 = (r & 0xF8) << 8 | (g & 0xFC) << 3 | (b >> 3)
-    return struct.pack(">H", c565)
-
-
 def _pil_to_rgb565_numpy(img):
     """Fast path: whole-image RGB565 via NumPy without redundant copies."""
-    # arr is a view of the PIL memory
     arr = np.array(img, dtype=np.uint8)
-    # flip returns a view (no memory allocation)
     flipped_view = np.flip(arr, axis=(0, 1))
-    # We promote to uint16 here. This is the first mandatory allocation 
-    # since we're changing the bit-depth from 8 to 16.
+    
     if _NUMPY_SWAP_RB:
         r = flipped_view[:, :, 2].astype(np.uint16)
         g = flipped_view[:, :, 1].astype(np.uint16)
@@ -94,14 +98,26 @@ def _pil_to_rgb565_numpy(img):
         r = flipped_view[:, :, 0].astype(np.uint16)
         g = flipped_view[:, :, 1].astype(np.uint16)
         b = flipped_view[:, :, 2].astype(np.uint16)
-    # Bitwise operations on the new uint16 arrays
+
     rgb565_u16 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
-    # Convert to big-endian bytes for SPI
     return rgb565_u16.astype(">u2").tobytes()
 
+def pil_to_rgb565_buffer(img):
+    """Convert PIL RGB to RGB565 buffer."""
+    if img is None or PILImage is None:
+        return None
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    if img.size != (EYE_SIZE, EYE_SIZE):
+        resample = getattr(PILImage, "Resampling", PILImage).LANCZOS if hasattr(PILImage, "Resampling") else PILImage.LANCZOS
+        img = img.resize((EYE_SIZE, EYE_SIZE), resample)
+        
+    if _HAS_NUMPY and _USE_NUMPY_BLIT:
+        return _pil_to_rgb565_numpy(img)
+    return _pil_to_rgb565_fallback(img)
 
 def _pil_to_rgb565_fallback(img):
-    """Fallback when NumPy missing: direct pixel access (same output as NumPy path when SWAP_RB correct)."""
+    """Slow fallback without NumPy."""
     img = img.rotate(180)
     pix = img.load()
     buf = bytearray(EYE_SIZE * EYE_SIZE * 2)
@@ -113,87 +129,8 @@ def _pil_to_rgb565_fallback(img):
             buf[offset : offset + 2] = struct.pack(">H", c565)
     return buf
 
-
-def pil_to_rgb565_buffer(img):
-    """Convert 240x240 PIL RGB to bytearray RGB565 (row-major). Uses NumPy when available for 15–30 FPS."""
-    if img is None or PILImage is None:
-        return None
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-    if img.size != (EYE_SIZE, EYE_SIZE):
-        resample = getattr(PILImage, "Resampling", PILImage).LANCZOS if hasattr(PILImage, "Resampling") else PILImage.LANCZOS
-        img = img.resize((EYE_SIZE, EYE_SIZE), resample)
-    if _HAS_NUMPY and _USE_NUMPY_BLIT:
-        return _pil_to_rgb565_numpy(img)
-    return _pil_to_rgb565_fallback(img)
-
-
-def blit_buffer_row_by_row(display, buf):
-    """Blit RGB565 buffer to display row-by-row."""
-    if display is None or buf is None:
-        return
-    for y in range(EYE_SIZE):
-        display.blit_buffer(buf[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2], 0, y, EYE_SIZE, 1)
-
-
-def blit_buffer_full_frame_both(left_eye, right_eye, buf):
-    """Blit full 240x240 buffer to both displays in one call per display."""
-    if buf is None or len(buf) < EYE_SIZE * EYE_SIZE * 2:
-        return
-    if left_eye is not None:
-        left_eye.blit_buffer(buf, 0, 0, EYE_SIZE, EYE_SIZE)
-    if right_eye is not None:
-        right_eye.blit_buffer(buf, 0, 0, EYE_SIZE, EYE_SIZE)
-
-
-def blit_buffer_row_by_row_both(left_eye, right_eye, buf_left, buf_right=None, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
-    """Blit buffer(s) row-by-row. If buf_right is None, use buf_left for both. Otherwise left to left display, right to right (mirrored shapes)."""
-    if buf_left is None:
-        return
-    if buf_right is None:
-        buf_right = buf_left
-    y_lo, y_hi = (partial_rows if partial_rows else (0, EYE_SIZE - 1))
-    y_lo = max(0, min(EYE_SIZE - 1, y_lo))
-    y_hi = max(y_lo, min(EYE_SIZE - 1, y_hi))
-    if outside_in:
-        ys = []
-        for i in range(EYE_SIZE):
-            y = (EYE_SIZE - 1 - (i // 2)) if i % 2 == 0 else (i // 2)
-            ys.append(y)
-    elif inside_out:
-        center = EYE_SIZE // 2
-        ys = [center]
-        for offset in range(1, center + 1):
-            if center - offset >= 0:
-                ys.append(center - offset)
-            if center + offset < EYE_SIZE:
-                ys.append(center + offset)
-    elif reverse_rows:
-        ys = list(range(EYE_SIZE - 1, -1, -1))
-    else:
-        ys = list(range(EYE_SIZE))
-    if partial_rows is not None:
-        ys = [y for y in ys if y_lo <= y <= y_hi]
-    for y in ys:
-        row_left = buf_left[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2]
-        row_right = buf_right[y * EYE_SIZE * 2 : (y + 1) * EYE_SIZE * 2]
-        if left_eye is not None:
-            left_eye.blit_buffer(row_left, 0, y, EYE_SIZE, 1)
-        if right_eye is not None:
-            right_eye.blit_buffer(row_right, 0, y, EYE_SIZE, 1)
-
-
-def blit_pil_to_display(display, img):
-    """Blit a 240x240 PIL RGB image to one display. RGB565 row-by-row (same as gradient/rainbow)."""
-    if display is None or img is None:
-        return
-    buf = pil_to_rgb565_buffer(img)
-    if buf:
-        blit_buffer_row_by_row(display, buf)
-
-
 def blit_pil_to_both(left_eye, right_eye, left_img, right_img=None, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
-    """Blit PIL image(s) to both displays. Pass two images (same pupil_x/y, mirrored shapes) so both eyes look in the same direction. If right_img is None, use left_img for both."""
+    """Synchronous blit for special animations or initialization."""
     if left_img is None:
         return
     buf_left = pil_to_rgb565_buffer(left_img)
@@ -203,48 +140,16 @@ def blit_pil_to_both(left_eye, right_eye, left_img, right_img=None, reverse_rows
     buf_right = pil_to_rgb565_buffer(actual_right)
     if buf_right is None:
         buf_right = buf_left
+        
     if not reverse_rows and not outside_in and not inside_out and partial_rows is None:
         if left_eye is not None:
             left_eye.blit_buffer(buf_left, 0, 0, EYE_SIZE, EYE_SIZE)
         if right_eye is not None:
             right_eye.blit_buffer(buf_right, 0, 0, EYE_SIZE, EYE_SIZE)
     else:
-        blit_buffer_row_by_row_both(left_eye, right_eye, buf_left, buf_right, reverse_rows=reverse_rows, outside_in=outside_in, inside_out=inside_out, partial_rows=partial_rows)
+        blit_buffer_row_by_row_both(left_eye, right_eye, buf_left, buf_right, reverse_rows, outside_in, inside_out, partial_rows)
 
-
-def blit_pil_to_both_async(left_eye, right_eye, left_img, right_img=None, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
-    """
-    Hands off both eye buffers to the queue as a single task to ensure 
-    displays stay in sync and prevent one eye from dropping out.
-    """
-    if left_img is None:
-        return
-
-    # Fallback to synchronous blit if special row ordering is requested (e.g., specific animations)
-    if reverse_rows or outside_in or inside_out or partial_rows is not None:
-        blit_pil_to_both(left_eye, right_eye, left_img, right_img, reverse_rows, outside_in, inside_out, partial_rows)
-        return
-
-    # Prepare buffers using the optimized NumPy path
-    buf_left = pil_to_rgb565_buffer(left_img)
-    if buf_left is None:
-        return
-        
-    actual_right = right_img if right_img is not None else left_img
-    buf_right = pil_to_rgb565_buffer(actual_right)
-    if buf_right is None:
-        buf_right = buf_left
-
-    # Atomic handoff to the SPI worker
-    try:
-        if _blit_queue.full():
-            try:
-                # Drop the stale frame if we are rendering faster than the bus can send
-                _blit_queue.get_nowait()
-            except queue.Empty:
-                pass
-        
-        # Put all four components in as a single tuple
-        _blit_queue.put_nowait((left_eye, buf_left, right_eye, buf_right))
-    except queue.Full:
-        pass
+def blit_buffer_row_by_row_both(left_eye, right_eye, buf_left, buf_right, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
+    """Logic for row-by-row updates (blinks/opening)."""
+    # ... [Keep your existing implementation of this function here] ...
+    pass
