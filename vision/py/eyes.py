@@ -76,16 +76,17 @@ def run_eyes():
         return
 
     print("👀 Furbacca Vision Online (Optimized).")
-    # Pre-load current eye type only so first frame is fast; other types load in background
-    check_base = render.build_eye_base_sclera_iris()
-    def _preload_background():
-        render.preload_all_types()
-    _preload_thread = threading.Thread(target=_preload_background, daemon=True)
+    # Pre-load other eye types in background; current type loads on first frame (faster startup)
+    _current_type = config.get_eye_type()
+    _preload_thread = threading.Thread(
+        target=lambda: render.preload_all_types(skip_type=_current_type),
+        daemon=True,
+    )
     _preload_thread.start()
 
     use_animated = (
         config.EYES_ANIMATED and not config.EYES_GRADIENT and not config.EYES_RAINBOW
-        and assets.HAS_PIL and render.build_eye_base_sclera_iris() is not None
+        and assets.HAS_PIL
     )
 
     if use_animated:
@@ -93,7 +94,7 @@ def run_eyes():
         EASE_INDEX_MAX = config.EASE_TABLE_SIZE - 1
 
         print(f"👀 Animated eyes @ {config.ANIM_FPS} FPS. UDP enabled.")
-        cached_eye_base_240 = render.build_eye_base_sclera_iris()
+        cached_eye_base_240 = None  # First frame fills cache for current type
 
         # Smoothstep easing: 3t² - 2t³ over [0,1]
         EASE_TABLE = tuple(

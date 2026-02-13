@@ -194,22 +194,20 @@ def render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, blink_state="op
         
     return result
 
-def preload_all_types():
+def preload_all_types(skip_type=None):
     """
     Pre-loads textures and initial gaze mappings for all eye types.
-    Run this at startup to ensure switching is instantaneous.
+    Run in background at startup so switching is instantaneous.
+    skip_type: if set, skip this type (main thread will load it on first frame).
     """
-    print("  Pre-loading eye textures...")
-    # These match the types supported by assets.py
-    eye_types = ["default", "human", "dragon", "demon"] 
-    
+    eye_types = ["default", "human", "dragon", "demon"]
     center = config.EYE_SIZE // 2
-    
+
     for etype in eye_types:
-        print(f"    - Loading: {etype}")
-        # 1. Populate texture cache
-        _get_textures_numpy(etype)
-        
-        # 2. Populate initial centered gaze cache
-        # This triggers the expensive spherical sampling once per type
-        _get_eye_base_cached_numpy(center, center, force_type=etype)
+        if skip_type and etype == skip_type:
+            continue
+        try:
+            _get_textures_numpy(etype)
+            _get_eye_base_cached_numpy(center, center, force_type=etype)
+        except Exception:
+            pass
