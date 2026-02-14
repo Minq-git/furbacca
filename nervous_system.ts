@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { TouchSenses, VIBE_BCM } from "./senses/touch";
 import { EyeBridge } from "./vision/ts/eye_bridge";
+import { MatterLobe } from "./vision/ts/matter_lobe";
 
 function loadWarmupConfig(): {
   EYE_WARMUP_STEPS: number;
@@ -103,6 +104,8 @@ console.log(sep);
 const touch = new TouchSenses(0);
 const eyes = new EyeBridge();
 
+const matter = new MatterLobe(eyes, touch);
+
 const visionHost = process.env.VISION_HOST ?? "127.0.0.1";
 
 console.log("+------+ Furbacca Nervous System: Modular Edition +------+");
@@ -197,6 +200,7 @@ function startWarmupThenOpen(): void {
 const stopEventWatch = touch.startEventWatch(onTouch);
 if (stopEventWatch) {
   console.log("  🫳  Touch: event-driven (gpiomon).");
+  matter.start().catch(console.error);
   startWarmupThenOpen();
   process.on("SIGINT", () => {
     eyes.closeEyes();
@@ -205,6 +209,7 @@ if (stopEventWatch) {
   });
 } else {
   console.log("  ⏳ Touch: polling every 20ms (install gpiomon for event-driven)");
+  matter.start().catch(console.error);
   setInterval(() => touch.poll(onTouch), 20);
   startWarmupThenOpen();
 }

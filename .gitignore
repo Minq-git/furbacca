@@ -1,4 +1,5 @@
 .cursor
+.nvmrc
 .vscode
 .DS_Store
 .furbacca-hardware.json
