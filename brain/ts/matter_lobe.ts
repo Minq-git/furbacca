@@ -13,7 +13,7 @@ import * as dgram from "dgram";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { msg, substitute } from "../../messages.js";
-import { EyeBridge } from "./eye_bridge.js";
+import { EyeBridge } from "../../vision/ts/eye_bridge.js";
 import { TouchSenses } from "../../senses/touch.js";
 
 const MATTER_UDP_PORT = 5540;
@@ -137,11 +137,16 @@ export class MatterLobe {
       }
       await import("@project-chip/matter-node.js");
       const { ServerNode } = await import("@matter/node");
-      const {
-        ExtendedColorLightDeviceDefinition,
-        GenericSwitchDeviceDefinition,
-        GenericSwitchRequirements,
-      } = await import("@matter/node/devices");
+      const devices = await import("@matter/node/devices");
+      const { GenericSwitchDeviceDefinition, GenericSwitchRequirements } = devices;
+      const { ExtendedColorLightDeviceDefinition, ExtendedColorLightRequirements } = devices;
+      const { createFurbaccaExtendedColorLight, EyeBridgeForIdentify } = await import(
+        "./furbacca_identify_server.js"
+      );
+      const FurbaccaExtendedColorLightDeviceDefinition = createFurbaccaExtendedColorLight(
+        ExtendedColorLightDeviceDefinition as { with: (...behaviors: unknown[]) => unknown },
+        ExtendedColorLightRequirements as { IdentifyServer: new (...args: unknown[]) => { endpoint: unknown } }
+      );
 
       status(substitute(msg.matter_lobe.status.checking_port, { port: String(MATTER_UDP_PORT) }));
       if (!(await isUdpPortFree(MATTER_UDP_PORT))) {
@@ -154,10 +159,10 @@ export class MatterLobe {
       const node = this.matterNode as Awaited<ReturnType<typeof ServerNode.create>>;
       status(msg.matter_lobe.status.node_created);
 
-      // Endpoint 1: Eyes (Extended Color Light)
-      // Extended Color Light mandates CT; provide all required attributes. id: "eyes" silences fallback ID warning.
+      // Endpoint 1: Eyes (Extended Color Light with custom Identify triggerEffect → Furbacca animations)
+      node.env.set(EyeBridgeForIdentify, this.eyes);
       const eyeEndpoint = await node.add(
-        ExtendedColorLightDeviceDefinition as unknown as Parameters<typeof node.add>[0],
+        FurbaccaExtendedColorLightDeviceDefinition as unknown as Parameters<typeof node.add>[0],
         {
           id: "eyes",
           colorControl: {

@@ -121,7 +121,7 @@ async function startMatterIfEnabled(): Promise<string[] | undefined> {
     return undefined;
   }
   const matterLogBuffer: string[] = [];
-  const { MatterLobe } = await import("./vision/ts/matter_lobe.js");
+  const { MatterLobe } = await import("./brain/ts/matter_lobe.js");
   const matter = new MatterLobe(eyes, touch);
   matterLobe = matter;
   try {
