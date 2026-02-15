@@ -53,5 +53,6 @@ EYES_PID=$!
 # Give eyes a moment to bind
 sleep 1
 
+echo "Initializing nervous system..."
 # Nervous system in foreground (sensors, sends blink/cycle to eyes)
 npm start
