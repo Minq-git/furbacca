@@ -10,12 +10,44 @@
  * Lazy-loaded when start() runs. UDP 5540; pairing data in .matter/
  */
 import * as dgram from "dgram";
+import * as fs from "fs/promises";
+import * as path from "path";
 import { msg, substitute } from "../../messages.js";
 import { EyeBridge } from "./eye_bridge.js";
 import { TouchSenses } from "../../senses/touch.js";
 
 const MATTER_UDP_PORT = 5540;
 const MATTER_STARTUP_TIMEOUT_MS = 90_000;
+
+/** Keys in root.generalDiagnostics that can fail to parse after SDK/storage schema changes; remove before create so SDK re-initializes them. */
+const CORRUPT_GENERAL_DIAGNOSTICS_KEYS = ["__features__", "totalOperationalHoursCounter"];
+
+async function tidyMatterStorage(): Promise<void> {
+  const matterDir = process.env.HOME
+    ? path.join(process.env.HOME, ".matter")
+    : path.join(process.cwd(), ".matter");
+  try {
+    const entries = await fs.readdir(matterDir, { withFileTypes: true });
+    for (const ent of entries) {
+      if (!ent.isDirectory()) continue;
+      const subPath = path.join(matterDir, ent.name);
+      const files = await fs.readdir(subPath);
+      for (const file of files) {
+        try {
+          const decoded = decodeURIComponent(file);
+          const isCorrupt =
+            decoded.includes("generalDiagnostics") &&
+            CORRUPT_GENERAL_DIAGNOSTICS_KEYS.some((k) => decoded.endsWith(`.${k}`));
+          if (isCorrupt) await fs.unlink(path.join(subPath, file));
+        } catch {
+          /* ignore unlink/decode errors */
+        }
+      }
+    }
+  } catch {
+    /* .matter missing or unreadable is fine */
+  }
+}
 
 function isUdpPortFree(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -117,6 +149,7 @@ export class MatterLobe {
         throw new Error(`Matter requires UDP port ${MATTER_UDP_PORT}; it is already bound.`);
       }
       status(msg.matter_lobe.status.port_free);
+      await tidyMatterStorage();
       this.matterNode = await ServerNode.create();
       const node = this.matterNode as Awaited<ReturnType<typeof ServerNode.create>>;
       status(msg.matter_lobe.status.node_created);
@@ -298,6 +331,15 @@ export class MatterLobe {
       status(msg.matter_lobe.status.endpoints_ready);
       await node.start();
       status(msg.matter_lobe.status.online);
+
+      // Only show pairing/QR when uncommissioned; if already paired, remove those lines from the log buffer
+      const buffer = options?.matterLogBuffer;
+      if (buffer?.length && node.lifecycle.isCommissioned) {
+        const pairingQrPattern = /Commissioning|passcode|discriminator|pairing|uncommissioned|qrcode|QR code|manual pairing|▄|▀|█|project-chip\.github\.io/i;
+        for (let i = buffer.length - 1; i >= 0; i--) {
+          if (pairingQrPattern.test(buffer[i]!)) buffer.splice(i, 1);
+        }
+      }
     };
 
     await Promise.race([doStart(), timeoutPromise]);
