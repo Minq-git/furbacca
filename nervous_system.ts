@@ -107,6 +107,9 @@ const eyes = new EyeBridge();
 /** Matter Lobe is on by default. Set FURBACCA_MATTER=0 (or false) to disable for troubleshooting. Requires 64-bit Node on Pi. */
 const matterEnabled = process.env.FURBACCA_MATTER !== "0" && process.env.FURBACCA_MATTER !== "false";
 
+/** Set when Matter starts; used to forward touch to Matter and to close on SIGINT. */
+let matterLobe: { notifyTouch(sensor: "head" | "belly" | "shiver", active: boolean): void; close(): void } | null = null;
+
 /** If set (e.g. 0x60), belly touch runs chip-tool onoff on <nodeId> <endpoint>. Requires chip-tool (e.g. sudo snap install chip-tool). */
 const chipToolNodeId = process.env.CHIP_TOOL_NODE_ID?.trim() || undefined;
 const chipToolEndpoint = process.env.CHIP_TOOL_ENDPOINT ?? "0x1";
@@ -119,6 +122,7 @@ async function startMatterIfEnabled(): Promise<string[] | undefined> {
   const matterLogBuffer: string[] = [];
   const { MatterLobe } = await import("./vision/ts/matter_lobe.js");
   const matter = new MatterLobe(eyes, touch);
+  matterLobe = matter;
   try {
     await matter.start({ onStatus: () => {}, matterLogBuffer });
   } catch (e) {
@@ -159,6 +163,8 @@ function handleBellyTouch(): void {
 function onTouch(sensor: "head" | "belly" | "shiver", active: boolean): void {
   if (sensor === "head") headActive = active;
   else if (sensor === "belly") bellyActive = active;
+
+  matterLobe?.notifyTouch(sensor, active);
 
   if (!active) return;
   if (sensor === "head") {
@@ -225,7 +231,7 @@ function startWarmupThenOpen(matterLogBuffer?: string[]): void {
       process.stdout.write("\r" + CLEAR_LINE + warmupBar(WARMUP_STEPS, WARMUP_STEPS, "Opening eyes.") + "\n");
       eyes.openEyes();
       if (matterLogBuffer?.length) {
-        console.log("+----------+ Furbacca Matter Startup Logs +----------+");
+        console.log("+----------+ Furbacca Matter Startup Sequence +----------+");
         matterLogBuffer.forEach((line) => console.log(line));
       }
       console.log(sep);
@@ -235,23 +241,29 @@ function startWarmupThenOpen(matterLogBuffer?: string[]): void {
 
 const MATTER_LOBE_STATUS_LINES = [
   "Initializing (single stack 0.12)...",
-  "Checking UDP port 5540 ...",
+  "Checking UDP port 5540...",
   "Port free. Creating ServerNode (this may take a minute)...",
   "Node created. Adding endpoints...",
   "Endpoints ready. Starting node...",
-  "Online. Pairing code and QR above.",
+  "Online. Generating pairing code and QR below...",
 ];
 
 // Prefer event-driven (gpiomon) for minimal latency; fall back to 20ms polling
 const stopEventWatch = touch.startEventWatch(onTouch);
+function onShutdown(): void {
+  eyes.closeEyes();
+  matterLobe?.close();
+  if (stopEventWatch) {
+    stopEventWatch().then(() => process.exit(0));
+  } else {
+    process.exit(0);
+  }
+}
+process.on("SIGINT", () => onShutdown());
+
 if (stopEventWatch) {
   console.log("  🫳  Touch: event-driven (gpiomon).");
   if (matterEnabled) MATTER_LOBE_STATUS_LINES.forEach((msg) => console.log("  🧠 Matter Lobe: " + msg));
-  process.on("SIGINT", () => {
-    eyes.closeEyes();
-    stopEventWatch();
-    process.exit(0);
-  });
   startMatterIfEnabled().then((buffer) => startWarmupThenOpen(buffer));
 } else {
   console.log("  ⏳ Touch: polling every 20ms (install gpiomon for event-driven)");

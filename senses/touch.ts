@@ -112,9 +112,9 @@ export class TouchSenses {
 
   /**
    * Start event-driven watch using gpiomon. Calls callback immediately on GPIO edges.
-   * Returns a stop function. If gpiomon is not available, returns null (use poll() instead).
+   * Returns a stop function that returns a Promise resolved when gpiomon has exited (so GPIO is released). If gpiomon is not available, returns null (use poll() instead).
    */
-  startEventWatch(callback: TouchCallback): (() => void) | null {
+  startEventWatch(callback: TouchCallback): (() => Promise<void>) | null {
     if (!TouchSenses.hasGpiomon()) {
       return null;
     }
@@ -153,10 +153,22 @@ export class TouchSenses {
     proc.on("error", () => { this.gpiomonProcess = null; });
     proc.on("exit", () => { this.gpiomonProcess = null; });
     return () => {
-      if (this.gpiomonProcess) {
-        this.gpiomonProcess.kill("SIGTERM");
-        this.gpiomonProcess = null;
-      }
+      const p = this.gpiomonProcess;
+      this.gpiomonProcess = null;
+      if (!p) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        const done = () => {
+          clearTimeout(t);
+          resolve();
+        };
+        p.once("exit", done);
+        p.kill("SIGTERM");
+        const t = setTimeout(() => {
+          p.removeListener("exit", done);
+          try { p.kill("SIGKILL"); } catch { /* already gone */ }
+          resolve();
+        }, 2000);
+      });
     };
   }
 

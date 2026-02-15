@@ -40,14 +40,29 @@ function applyHueToSpecies(hue: number, eyes: EyeBridge): void {
   }
 }
 
+export type TouchSensor = "head" | "belly" | "shiver";
+
 export class MatterLobe {
   private eyes: EyeBridge;
   private touch: TouchSenses;
   private matterNode: unknown = undefined;
+  /** Set after endpoints are ready; used to forward touch events from nervous_system (single GPIO owner). */
+  private onTouchForMatter: ((sensor: TouchSensor, active: boolean) => void) | null = null;
 
   constructor(eyes: EyeBridge, touch: TouchSenses) {
     this.eyes = eyes;
     this.touch = touch;
+  }
+
+  /** Call when touch is event-driven (gpiomon). Do not use touch.poll() — it conflicts with gpiomon. */
+  notifyTouch(sensor: TouchSensor, active: boolean): void {
+    this.onTouchForMatter?.(sensor, active);
+  }
+
+  /** Release Matter node resources on shutdown. Call before process.exit for clean CTRL+C. */
+  close(): void {
+    this.onTouchForMatter = null;
+    // Matter SDK may not expose node.close(); OS will reclaim port/process on exit.
   }
 
   async start(options?: {
@@ -266,7 +281,8 @@ export class MatterLobe {
       const SHAKE_COOLDOWN_MS = 1500;
       let lastShakeEmitAt = 0;
 
-      this.touch.poll((sensor, active) => {
+      // Single source of touch: nervous_system (gpiomon). Do not call touch.poll() — it uses gpioget and conflicts with gpiomon.
+      this.onTouchForMatter = (sensor: TouchSensor, active: boolean) => {
         if (sensor === "belly" && active) emitMomentaryPress(bellyEv, "Belly Press");
         if (sensor === "head" && active) emitMomentaryPress(headEv, "Head Touch");
         if (sensor === "shiver" && active) {
@@ -276,7 +292,7 @@ export class MatterLobe {
             emitMomentaryPress(shakeEv, "Shake");
           }
         }
-      });
+      };
 
       status("Endpoints ready. Starting node...");
       await node.start();
