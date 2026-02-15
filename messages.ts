@@ -63,6 +63,7 @@ export const msg = raw as {
     udp_bind: string;
     opening_animated: string;
     animation: string;
+    eye_shape: string;
     eye_type: string;
   };
 };

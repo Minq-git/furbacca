@@ -202,6 +202,7 @@ def run_eyes():
                     elif action == "set_eye_shape":
                         shape = (msg.get("shape") or "round").strip().lower()
                         config.set_eye_shape(shape)
+                        print(messages.get("eyes", "eye_shape", shape=config.get_eye_shape()))
                     elif action == "set_eye_type":
                         eye_type = (msg.get("type") or msg.get("eye_type") or "default").strip().lower()
                         config.set_eye_type(eye_type)

@@ -1,61 +1,62 @@
 {
-  "nervous_system": {
-    "hardware_table_title": "+--------------+ Furbacca Hardware Status +--------------+",
-    "hardware_table_sep": "+-------------+---------------------+----------+---------+",
-    "hardware_table_header": "| Module Name | Position            | Pin      | Status  |",
-    "header": "+------+ Furbacca Nervous System: Modular Edition +------+",
-    "eyes_listening": "  👀 Eyes: listening at {host}:5005.",
-    "matter_lobe_enabled": "  🧠 Matter Lobe: enabled (Furbacca as light + switches).",
-    "chip_tool_belly": "  💡 chip-tool: belly touch → onoff on {nodeId} {endpoint}",
-    "head_touch_error": "  Head touch: {message}",
-    "belly_touch_error": "  Belly touch: {message}",
-    "vibration_error": "  Vibration: {message}",
-    "matter_disabled": "  🧠 Matter: disabled (FURBACCA_MATTER=0). Remove it or set FURBACCA_MATTER=1 to enable.",
-    "belly_cycling": "  🐾 Belly: cycling species",
-    "head_touch": "  🐾 Head: touch",
-    "shiver": "  🫨  Shiver: BCM {bcm}",
-    "matter_startup_logs_header": "+-----------+  Furbacca Matter Startup Logs  +-----------+",
-    "touch_event_driven": "  🫳  Touch: event-driven (gpiomon).",
-    "touch_polling": "  ⏳ Touch: polling every 20ms (install gpiomon for event-driven)",
-    "matter_lobe_prefix": "  🧠 Matter Lobe: "
-  },
-  "matter_lobe": {
-    "status": {
-      "initializing": "Initializing (single stack 0.12).",
-      "checking_port": "Checking UDP port {port}.",
-      "port_free": "Port free. Creating ServerNode...",
-      "node_created": "Node created. Adding endpoints.",
-      "endpoints_ready": "Endpoints ready. Starting node.",
-      "online": "Online. Generating pairing code and QR below..."
-    },
-    "status_order": ["initializing", "checking_port", "port_free", "node_created", "endpoints_ready", "online"],
-    "udp_port_in_use": "  🧠 Matter Lobe: UDP port {port} is in use. Free it or stop the other process.",
-    "onoff_changed": "  🧠 Matter: OnOff changed to {value}",
-    "brightness_set": "  🧠 Matter: Brightness/Level set to {level}",
-    "xy_x_set": "  🧠 Matter: XY x set to {x}",
-    "xy_y_set": "  🧠 Matter: XY y set to {y}",
-    "hue_set": "  🧠 Matter: Hue set to {hue}",
-    "identify_received": "  🧠 Matter: Identify command received!",
-    "switch_featuremap_warn": "  🧠 Matter: Could not set switch featureMap: {error}",
-    "broadcasting": "  🧠 Matter: Broadcasting {label} event",
-    "identify_on": "  🧠 Matter: Identify on {label}"
+  "audio": {
+    "aplay_failed": "[audio] aplay failed: {message}"
   },
   "eye_bridge": {
     "error": "Eye Bridge Error: {message}"
   },
-  "touch": {
-    "head_touch_gpio_error": "Head touch GPIO (17): {error}. Check wiring and gpiod.",
-    "belly_touch_gpio_error": "Belly touch GPIO (22): {error}. Check wiring and gpiod.",
-    "vibration_gpio_error": "Vibration GPIO (23): {error}. Check wiring and gpiod."
-  },
-  "audio": {
-    "aplay_failed": "[audio] aplay failed: {message}"
-  },
   "eyes": {
-    "display_init_failed": "⚠ Display init failed: {error}",
-    "udp_bind": "ᯤ UDP {bind}:{port}",
-    "opening_animated": "ᯤ Furbacca Eyes Opening... Animated @ {fps} FPS.",
     "animation": "  🎬 Animation: {name}",
-    "eye_type": "  👁  Eye type: {type}"
+    "display_init_failed": "⚠ Display init failed: {error}",
+    "eye_shape": "  👁  Eye shape: {shape}",
+    "eye_type": "  👁  Eye type: {type}",
+    "opening_animated": "ᯤ Furbacca Eyes Opening... Animated @ {fps} FPS.",
+    "udp_bind": "ᯤ UDP {bind}:{port}"
+  },
+  "matter_lobe": {
+    "brightness_set": "  🧠 Matter: Brightness/Level set to {level}",
+    "broadcasting": "  🧠 Matter: Broadcasting {label} event",
+    "hue_set": "  🧠 Matter: Hue set to {hue}",
+    "identify_on": "  🧠 Matter: Identify on {label}",
+    "identify_received": "  🧠 Matter: Identify command received!",
+    "onoff_changed": "  🧠 Matter: OnOff changed to {value}",
+    "status": {
+      "checking_port": "Checking UDP port {port}.",
+      "endpoints_ready": "Endpoints ready. Starting node.",
+      "initializing": "Initializing (single stack 0.12).",
+      "node_created": "Node created. Adding endpoints.",
+      "online": "Online. Generating pairing code and QR below...",
+      "port_free": "Port free. Creating ServerNode..."
+    },
+    "status_order": ["initializing", "checking_port", "port_free", "node_created", "endpoints_ready", "online"],
+    "switch_featuremap_warn": "  🧠 Matter: Could not set switch featureMap: {error}",
+    "udp_port_in_use": "  🧠 Matter Lobe: UDP port {port} is in use. Free it or stop the other process.",
+    "xy_x_set": "  🧠 Matter: XY x set to {x}",
+    "xy_y_set": "  🧠 Matter: XY y set to {y}"
+  },
+  "nervous_system": {
+    "belly_cycling": "  🐾 Belly: cycling species",
+    "belly_touch_error": "  Belly touch: {message}",
+    "chip_tool_belly": "  💡 chip-tool: belly touch → onoff on {nodeId} {endpoint}",
+    "eyes_listening": "  👀 Eyes: listening at {host}:5005.",
+    "hardware_table_header": "| Module Name | Position            | Pin      | Status  |",
+    "hardware_table_sep": "+-------------+---------------------+----------+---------+",
+    "hardware_table_title": "+--------------+ Furbacca Hardware Status +--------------+",
+    "header": "+------+ Furbacca Nervous System: Modular Edition +------+",
+    "head_touch": "  🐾 Head: touch",
+    "head_touch_error": "  Head touch: {message}",
+    "matter_disabled": "  🧠 Matter: disabled (FURBACCA_MATTER=0). Remove it or set FURBACCA_MATTER=1 to enable.",
+    "matter_lobe_enabled": "  🧠 Matter Lobe: enabled (Furbacca as light + switches).",
+    "matter_lobe_prefix": "  🧠 Matter Lobe: ",
+    "matter_startup_logs_header": "+-----------+  Furbacca Matter Startup Logs  +-----------+",
+    "shiver": "  🫨  Shiver: BCM {bcm}",
+    "touch_event_driven": "  🫳  Touch: event-driven (gpiomon).",
+    "touch_polling": "  ⏳ Touch: polling every 20ms (install gpiomon for event-driven)",
+    "vibration_error": "  Vibration: {message}"
+  },
+  "touch": {
+    "belly_touch_gpio_error": "Belly touch GPIO (22): {error}. Check wiring and gpiod.",
+    "head_touch_gpio_error": "Head touch GPIO (17): {error}. Check wiring and gpiod.",
+    "vibration_gpio_error": "Vibration GPIO (23): {error}. Check wiring and gpiod."
   }
 }
