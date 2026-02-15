@@ -50,7 +50,15 @@ export class MatterLobe {
     this.touch = touch;
   }
 
-  async start(): Promise<void> {
+  async start(options?: {
+    onStatus?: (msg: string) => void;
+    /** If set, Matter SDK log lines are buffered here instead of printed; caller prints after start() to keep order. */
+    matterLogBuffer?: string[];
+  }): Promise<void> {
+    const status = (msg: string) => {
+      if (options?.onStatus) options.onStatus(msg);
+      else console.log("  🧠 Matter Lobe: " + msg);
+    };
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(
         () =>
@@ -64,7 +72,21 @@ export class MatterLobe {
     });
 
     const doStart = async (): Promise<void> => {
-      console.log("  🧠 Matter Lobe: Initializing (single stack 0.12)...");
+      status("Initializing (single stack 0.12)...");
+      const general = await import("@matter/general");
+      const { Logger, LogLevel } = general;
+      const pairingQrPattern = /Commissioning|passcode|discriminator|pairing|uncommissioned|qrcode|QR code|manual pairing|▄|▀|█|project-chip\.github\.io/i;
+      const defaultDef = Logger.logger.find((l) => l.logIdentifier === "default");
+      if (defaultDef) {
+        const originalLog = defaultDef.log;
+        const buffer = options?.matterLogBuffer;
+        defaultDef.log = (level: number, formattedLog: string) => {
+          const shouldEmit = level >= LogLevel.WARN || pairingQrPattern.test(formattedLog);
+          if (!shouldEmit) return;
+          if (buffer) buffer.push(formattedLog);
+          else originalLog(level, formattedLog);
+        };
+      }
       await import("@project-chip/matter-node.js");
       const { ServerNode } = await import("@matter/node");
       const {
@@ -73,15 +95,15 @@ export class MatterLobe {
         GenericSwitchRequirements,
       } = await import("@matter/node/devices");
 
-      console.log("  🧠 Matter Lobe: Checking UDP port", MATTER_UDP_PORT, "...");
+      status(`Checking UDP port ${MATTER_UDP_PORT} ...`);
       if (!(await isUdpPortFree(MATTER_UDP_PORT))) {
         console.warn(`  🧠 Matter Lobe: UDP port ${MATTER_UDP_PORT} is in use. Free it or stop the other process.`);
         throw new Error(`Matter requires UDP port ${MATTER_UDP_PORT}; it is already bound.`);
       }
-      console.log("  🧠 Matter Lobe: Port free. Creating ServerNode (this may take a minute)...");
+      status("Port free. Creating ServerNode (this may take a minute)...");
       this.matterNode = await ServerNode.create();
       const node = this.matterNode as Awaited<ReturnType<typeof ServerNode.create>>;
-      console.log("  🧠 Matter Lobe: Node created. Adding endpoints...");
+      status("Node created. Adding endpoints...");
 
       // Endpoint 1: Eyes (Extended Color Light)
       // Extended Color Light mandates CT; provide all required attributes. id: "eyes" silences fallback ID warning.
@@ -160,6 +182,22 @@ export class MatterLobe {
           applyHueToSpecies(hue, this.eyes);
         });
 
+      // Identify: when user taps "Identify" in a smart home app, blink so they can see which device it is
+      const identify = (ev as Record<string, { startIdentifying?: { on: (cb: () => void) => void }; identifyTime$Changed?: { on: (cb: (v: unknown) => void) => void } }>).identify;
+      if (identify?.startIdentifying?.on) {
+        identify.startIdentifying.on(() => {
+          console.log("  🧠 Matter: Identify command received!");
+          this.eyes.blink();
+        });
+      } else if (identify?.identifyTime$Changed?.on) {
+        identify.identifyTime$Changed.on((v) => {
+          if ((v as number) > 0) {
+            console.log("  🧠 Matter: Identify command received!");
+            this.eyes.blink();
+          }
+        });
+      }
+
       const SwitchDevice = GenericSwitchDeviceDefinition.with(GenericSwitchRequirements.SwitchServer);
       const setMomentaryFeatureMap = async (
         endpoint: Awaited<ReturnType<InstanceType<typeof ServerNode>["add"]>>
@@ -194,22 +232,36 @@ export class MatterLobe {
         }, 100);
       };
 
+      // Stub Identify on switch endpoints (no eyes to blink; just log so the cluster is handled)
+      const attachIdentifyStub = (
+        endpoint: Awaited<ReturnType<InstanceType<typeof ServerNode>["add"]>>,
+        label: string
+      ) => {
+        const events = endpoint.events as Record<string, { startIdentifying?: { on: (cb: () => void) => void }; identifyTime$Changed?: { on: (cb: (v: unknown) => void) => void } }>;
+        const id = events?.identify;
+        if (id?.startIdentifying?.on) id.startIdentifying.on(() => console.log(`  🧠 Matter: Identify on ${label}`));
+        else if (id?.identifyTime$Changed?.on) id.identifyTime$Changed.on((v) => { if ((v as number) > 0) console.log(`  🧠 Matter: Identify on ${label}`); });
+      };
+
       const bellyEndpoint = await node.add(SwitchDevice as unknown as Parameters<typeof node.add>[0], {
         id: "belly",
       } as Parameters<typeof node.add>[1]);
       await setMomentaryFeatureMap(bellyEndpoint);
+      attachIdentifyStub(bellyEndpoint, "belly");
       const bellyEv = bellyEndpoint.events as SwitchEvents;
 
       const headEndpoint = await node.add(SwitchDevice as unknown as Parameters<typeof node.add>[0], {
         id: "head",
       } as Parameters<typeof node.add>[1]);
       await setMomentaryFeatureMap(headEndpoint);
+      attachIdentifyStub(headEndpoint, "head");
       const headEv = headEndpoint.events as SwitchEvents;
 
       const shakeEndpoint = await node.add(SwitchDevice as unknown as Parameters<typeof node.add>[0], {
         id: "shake",
       } as Parameters<typeof node.add>[1]);
       await setMomentaryFeatureMap(shakeEndpoint);
+      attachIdentifyStub(shakeEndpoint, "shake");
       const shakeEv = shakeEndpoint.events as SwitchEvents;
       const SHAKE_COOLDOWN_MS = 1500;
       let lastShakeEmitAt = 0;
@@ -226,9 +278,9 @@ export class MatterLobe {
         }
       });
 
-      console.log("  🧠 Matter Lobe: Endpoints ready. Starting node...");
+      status("Endpoints ready. Starting node...");
       await node.start();
-      console.log("  🧠 Matter Lobe: Online. Check logs for pairing QR code.");
+      status("Online. Generating pairing code and QR below...");
     };
 
     await Promise.race([doStart(), timeoutPromise]);

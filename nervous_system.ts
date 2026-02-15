@@ -91,7 +91,8 @@ const rows: string[] = [
   "| SW-420      | Vibration (Shiver)  | BCM 23   | " + statusCell(vibeState()) + " |",
 ];
 
-console.log("Initializing nervous system...");
+const tableTitle = "+--------------+ Furbacca Hardware Status +--------------+";
+console.log(tableTitle);
 console.log(sep);
 console.log(header);
 console.log(sep);
@@ -110,14 +111,20 @@ const matterEnabled = process.env.FURBACCA_MATTER !== "0" && process.env.FURBACC
 const chipToolNodeId = process.env.CHIP_TOOL_NODE_ID?.trim() || undefined;
 const chipToolEndpoint = process.env.CHIP_TOOL_ENDPOINT ?? "0x1";
 
-async function startMatterIfEnabled(): Promise<void> {
+async function startMatterIfEnabled(): Promise<string[] | undefined> {
   if (!matterEnabled) {
     console.log("  🧠 Matter: disabled (FURBACCA_MATTER=0). Remove it or set FURBACCA_MATTER=1 to enable.");
-    return;
+    return undefined;
   }
+  const matterLogBuffer: string[] = [];
   const { MatterLobe } = await import("./vision/ts/matter_lobe.js");
   const matter = new MatterLobe(eyes, touch);
-  matter.start().catch(console.error);
+  try {
+    await matter.start({ onStatus: () => {}, matterLogBuffer });
+  } catch (e) {
+    console.error(e);
+  }
+  return matterLogBuffer;
 }
 
 function chipToolOn(): void {
@@ -203,7 +210,7 @@ function warmupBar(filled: number, total: number, label: string): string {
 
 const CLEAR_LINE = "\x1b[K"; // clear from cursor to end of line
 
-function startWarmupThenOpen(): void {
+function startWarmupThenOpen(matterLogBuffer?: string[]): void {
   const stepMs = WARMUP_MS / WARMUP_STEPS;
   let step = 0;
   process.stdout.write(warmupBar(step, WARMUP_STEPS, WARMUP_STEP_LABELS[step] ?? "Starting"));
@@ -217,25 +224,38 @@ function startWarmupThenOpen(): void {
       clearInterval(tick);
       process.stdout.write("\r" + CLEAR_LINE + warmupBar(WARMUP_STEPS, WARMUP_STEPS, "Opening eyes.") + "\n");
       eyes.openEyes();
+      if (matterLogBuffer?.length) {
+        console.log("+----------+ Furbacca Matter Startup Logs +----------+");
+        matterLogBuffer.forEach((line) => console.log(line));
+      }
       console.log(sep);
     }
   }, stepMs);
 }
 
+const MATTER_LOBE_STATUS_LINES = [
+  "Initializing (single stack 0.12)...",
+  "Checking UDP port 5540 ...",
+  "Port free. Creating ServerNode (this may take a minute)...",
+  "Node created. Adding endpoints...",
+  "Endpoints ready. Starting node...",
+  "Online. Pairing code and QR above.",
+];
+
 // Prefer event-driven (gpiomon) for minimal latency; fall back to 20ms polling
 const stopEventWatch = touch.startEventWatch(onTouch);
 if (stopEventWatch) {
   console.log("  🫳  Touch: event-driven (gpiomon).");
-  startMatterIfEnabled();
-  startWarmupThenOpen();
+  if (matterEnabled) MATTER_LOBE_STATUS_LINES.forEach((msg) => console.log("  🧠 Matter Lobe: " + msg));
   process.on("SIGINT", () => {
     eyes.closeEyes();
     stopEventWatch();
     process.exit(0);
   });
+  startMatterIfEnabled().then((buffer) => startWarmupThenOpen(buffer));
 } else {
   console.log("  ⏳ Touch: polling every 20ms (install gpiomon for event-driven)");
-  startMatterIfEnabled();
+  if (matterEnabled) MATTER_LOBE_STATUS_LINES.forEach((msg) => console.log("  🧠 Matter Lobe: " + msg));
   setInterval(() => touch.poll(onTouch), 20);
-  startWarmupThenOpen();
+  startMatterIfEnabled().then((buffer) => startWarmupThenOpen(buffer));
 }
