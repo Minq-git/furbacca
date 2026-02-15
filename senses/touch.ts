@@ -20,11 +20,16 @@ export type TouchSensor = "head" | "belly" | "shiver";
 
 export type TouchCallback = (sensor: TouchSensor, active: boolean) => void;
 
+/** Consecutive polls with vibration detected before reporting "shiver" (reduces SW-420 noise). */
+const VIBE_DEBOUNCE_COUNT = 2;
+
 export class TouchSenses {
   private chipNum: number;
   private lastHead: number = 0;
   private lastBelly: number = 0;
   private lastVibe: number = 1;
+  private consecutiveVibeLow: number = 0;
+  private lastShiverReported: boolean = false;
   private gpiomonProcess: ChildProcess | null = null;
 
   constructor(chip: number) {
@@ -196,10 +201,17 @@ export class TouchSenses {
       this.lastBelly = belly;
       callback("belly", !!belly);
     }
-    if (vibe !== this.lastVibe) {
-      this.lastVibe = vibe;
-      if (vibe === 0) callback("shiver", true);
+    if (vibe === 0) {
+      this.consecutiveVibeLow++;
+      if (this.consecutiveVibeLow >= VIBE_DEBOUNCE_COUNT && !this.lastShiverReported) {
+        this.lastShiverReported = true;
+        callback("shiver", true);
+      }
+    } else {
+      this.consecutiveVibeLow = 0;
+      this.lastShiverReported = false;
     }
+    this.lastVibe = vibe;
   }
 }
 
