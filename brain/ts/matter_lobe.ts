@@ -137,6 +137,7 @@ export class MatterLobe {
       }
       await import("@project-chip/matter-node.js");
       const { ServerNode } = await import("@matter/node");
+      const { DeviceTypeId, VendorId } = await import("@matter/types");
       const devices = await import("@matter/node/devices");
       const { GenericSwitchDeviceDefinition, GenericSwitchRequirements } = devices;
       const { ExtendedColorLightDeviceDefinition, ExtendedColorLightRequirements } = devices;
@@ -155,7 +156,32 @@ export class MatterLobe {
       }
       status(msg.matter_lobe.status.port_free);
       await tidyMatterStorage();
-      this.matterNode = await ServerNode.create();
+      this.matterNode = await ServerNode.create(ServerNode.RootEndpoint, {
+        id: "node0",
+        network: { port: MATTER_UDP_PORT },
+        commissioning: {
+          passcode: 20202021,
+          discriminator: 3840,
+        },
+        productDescription: {
+          name: "Furbacca",
+          deviceType: DeviceTypeId(0x010d), // Extended Color Light
+        },
+        basicInformation: {
+          vendorName: "Minqz",
+          vendorId: VendorId(0xfff1, false), // 0xFFF1 = Test Vendor
+          productName: "Furbacca Smart Home Assistant",
+          productId: 0x8000,
+          nodeLabel: "Furbacca",
+          serialNumber: "FURB-001",
+          uniqueId: "Furbacca-001",
+          hardwareVersion: 1,
+          hardwareVersionString: "v1.0",
+          softwareVersion: 1,
+          softwareVersionString: "v1.0",
+          capabilityMinima: { caseSessionsPerFabric: 3, subscriptionsPerFabric: 3 },
+        },
+      });
       const node = this.matterNode as Awaited<ReturnType<typeof ServerNode.create>>;
       status(msg.matter_lobe.status.node_created);
 
