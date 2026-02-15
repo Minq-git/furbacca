@@ -93,6 +93,34 @@ npm run build
 ```
 Run with `npm start` (or `sudo npm start` for GPIO). See **Starting the services** above.
 
+### Matter: Furbacca as a device (optional)
+Matter is **on by default** when you run `wake-furbacca` (requires **64-bit Node** on the Pi, e.g. `node -p "process.arch"` → `arm64`). Furbacca exposes a composed device: **Endpoint 1** = Extended Color Light (eyes), **Endpoints 2–4** = Generic Switch (belly, head, vibration). Add him to Google Home / Apple Home via the pairing QR in the logs; pairing data is in `.matter/`. To disable for troubleshooting: **`FURBACCA_MATTER=0 wake-furbacca`**.
+
+### Matter via chip-tool (optional)
+You can also **control** other Matter devices (e.g. smart bulbs) from the Pi using **chip-tool**, and optionally have belly touch trigger chip-tool.
+
+Setup follows [Controlling a real Matter Smart Bulb with a Raspberry Pi](https://tomasmcguinness.com/2025/03/15/controlling-a-real-matter-smart-bulb-with-chip-tool/):
+
+1. **Install chip-tool (Snap)** on the Pi:
+   ```bash
+   sudo apt install snapd
+   # reboot, then:
+   sudo snap install chip-tool
+   ```
+2. **Commission a device** (e.g. add a bulb via iOS Home first, then pair chip-tool as a second controller). Put the device in pairing mode and use the new setup code:
+   ```bash
+   chip-tool pairing code 0x60 32591810417 --bypass-attestation-verifier true
+   ```
+   Use your device’s setup code (digits only). `0x60` is the node id chip-tool will use for this device.
+3. **Control the device:**
+   ```bash
+   chip-tool onoff on 0x60 0x1
+   chip-tool onoff off 0x60 0x1
+   ```
+   Endpoint `0x1` is typically the light; use `chip-tool basicinformation read vendor-name 0x60 0x0` to confirm the device.
+
+**Furbacca → bulb:** Set `CHIP_TOOL_NODE_ID` (e.g. `0x60`) and optionally `CHIP_TOOL_ENDPOINT` (default `0x1`). On **belly touch**, the nervous system will run `chip-tool onoff on <nodeId> <endpoint>` so the bulb turns on when you touch Furbacca’s belly. Omit the env vars to leave chip-tool control to scripts or manual commands.
+
 ---
 
 ## 🔌 Hardware (BCM / physical)
@@ -138,3 +166,4 @@ Edit `User`, `WorkingDirectory`, and `ExecStart` paths to match your Pi user and
 - **Module not found:** Run `source env/bin/activate` before Python/eyes.
 - **Eyes / SPI:** Enable SPI (`dtparam=spi=on`), see **instruction.md** §3.1.
 - **fe / touch not working, ss shows 127.0.0.1:5005:** (1) Sync from Mac with **`--delete`**: `push-furbacca` (alias must include `--delete` so the Pi loses old `vision/eyes.py` and only has `vision/py/`). (2) On the Pi, stop any old eyes: `sudo systemctl stop furbacca-eyes`. (3) Run `wake-furbacca` from `~/furbacca`; you should see `UDP 0.0.0.0:5005` and then `--- Furbacca Nervous System: Modular Edition ---`. If you see "vision/py/eyes.py not found", run push-furbacca again. If you see "Port 5005 already in use", stop the other process first.
+- **Touch dead / "gpioget: unable to request lines: Device or resource busy":** Another process is holding the touch GPIO pins (e.g. a previous `wake-furbacca`, `gpiomon`, or the eyes service). Stop all Furbacca processes (Ctrl+C in the terminal running wake-furbacca; `sudo systemctl stop furbacca-eyes` if eyes run as a service), then start again with a single `wake-furbacca`.

@@ -53,7 +53,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 sock.bind((UDP_BIND, UDP_PORT))
 sock.setblocking(False)
-print(f"ᯤ UDP {UDP_BIND}:{UDP_PORT} (remote fe + local nervous system)")
+print(f"ᯤ UDP {UDP_BIND}:{UDP_PORT}")
 
 def _apply_eye_shape_left(frame):
     if frame is None: return frame
@@ -92,7 +92,7 @@ def run_eyes():
         frame_dt = 1.0 / config.ANIM_FPS
         EASE_INDEX_MAX = config.EASE_TABLE_SIZE - 1
 
-        print(f"ᯤ Furbacca Vision Online: Animated @ {config.ANIM_FPS} FPS.")
+        print(f"ᯤ Furbacca Eyes Opening... Animated @ {config.ANIM_FPS} FPS.")
         cached_eye_base_240 = None  # First frame fills cache for current type
 
         # Smoothstep easing: 3t² - 2t³ over [0,1]

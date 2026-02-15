@@ -1,9 +1,8 @@
-import { execSync } from "child_process";
+import { execSync, spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { TouchSenses, VIBE_BCM } from "./senses/touch";
 import { EyeBridge } from "./vision/ts/eye_bridge";
-import { MatterLobe } from "./vision/ts/matter_lobe";
 
 function loadWarmupConfig(): {
   EYE_WARMUP_STEPS: number;
@@ -104,12 +103,38 @@ console.log(sep);
 const touch = new TouchSenses(0);
 const eyes = new EyeBridge();
 
-const matter = new MatterLobe(eyes, touch);
+/** Matter Lobe is on by default. Set FURBACCA_MATTER=0 (or false) to disable for troubleshooting. Requires 64-bit Node on Pi. */
+const matterEnabled = process.env.FURBACCA_MATTER !== "0" && process.env.FURBACCA_MATTER !== "false";
+
+/** If set (e.g. 0x60), belly touch runs chip-tool onoff on <nodeId> <endpoint>. Requires chip-tool (e.g. sudo snap install chip-tool). */
+const chipToolNodeId = process.env.CHIP_TOOL_NODE_ID?.trim() || undefined;
+const chipToolEndpoint = process.env.CHIP_TOOL_ENDPOINT ?? "0x1";
+
+async function startMatterIfEnabled(): Promise<void> {
+  if (!matterEnabled) {
+    console.log("  🧠 Matter: disabled (FURBACCA_MATTER=0). Remove it or set FURBACCA_MATTER=1 to enable.");
+    return;
+  }
+  const { MatterLobe } = await import("./vision/ts/matter_lobe.js");
+  const matter = new MatterLobe(eyes, touch);
+  matter.start().catch(console.error);
+}
+
+function chipToolOn(): void {
+  if (!chipToolNodeId) return;
+  const child = spawn("chip-tool", ["onoff", "on", chipToolNodeId, chipToolEndpoint], {
+    stdio: "ignore",
+    detached: true,
+  });
+  child.unref();
+}
 
 const visionHost = process.env.VISION_HOST ?? "127.0.0.1";
 
 console.log("+------+ Furbacca Nervous System: Modular Edition +------+");
 console.log(`  👀 Eyes: listening at ${visionHost}:5005.`);
+if (matterEnabled) console.log("  🧠 Matter Lobe: enabled (Furbacca as light + switches).");
+if (chipToolNodeId) console.log(`  💡 chip-tool: belly touch → onoff on ${chipToolNodeId} ${chipToolEndpoint}`);
 if (!headHw.ok && headHw.message) console.log(`  Head touch: ${headHw.message}`);
 if (!bellyHw.ok && bellyHw.message) console.log(`  Belly touch: ${bellyHw.message}`);
 if (!vibeHw.ok && vibeHw.message) console.log(`  Vibration: ${vibeHw.message}`);
@@ -121,6 +146,7 @@ function handleBellyTouch(): void {
   console.log("  🐾 Belly: cycling species");
   eyes.cycleEyeType();
   eyes.sendCommand("look", { x: 0, y: 0, pupil_mode: "wide" });
+  chipToolOn();
 }
 
 function onTouch(sensor: "head" | "belly" | "shiver", active: boolean): void {
@@ -200,7 +226,7 @@ function startWarmupThenOpen(): void {
 const stopEventWatch = touch.startEventWatch(onTouch);
 if (stopEventWatch) {
   console.log("  🫳  Touch: event-driven (gpiomon).");
-  matter.start().catch(console.error);
+  startMatterIfEnabled();
   startWarmupThenOpen();
   process.on("SIGINT", () => {
     eyes.closeEyes();
@@ -209,7 +235,7 @@ if (stopEventWatch) {
   });
 } else {
   console.log("  ⏳ Touch: polling every 20ms (install gpiomon for event-driven)");
-  matter.start().catch(console.error);
+  startMatterIfEnabled();
   setInterval(() => touch.poll(onTouch), 20);
   startWarmupThenOpen();
 }
