@@ -1,6 +1,7 @@
 import { execSync, spawn } from "child_process";
 import fs from "fs";
 import path from "path";
+import { msg, substitute } from "./messages.js";
 import { TouchSenses, VIBE_BCM } from "./senses/touch";
 import { EyeBridge } from "./vision/ts/eye_bridge";
 
@@ -72,8 +73,8 @@ function statusCell(state: StatusState): string {
   return padLeft + ansiRgb(r, g, b) + char + ANSI_RESET + padRight;
 }
 
-const sep = "+-------------+---------------------+----------+---------+";
-const header = "| Module Name | Position            | Pin      | Status  |";
+const sep = msg.nervous_system.hardware_table_sep;
+const header = msg.nervous_system.hardware_table_header;
 const displayState = (): StatusState =>
   displayStatus === "unknown" ? "unknown" : displayStatus === "ok" ? "ok" : "fail";
 const headState = (): StatusState =>
@@ -91,7 +92,7 @@ const rows: string[] = [
   "| SW-420      | Vibration (Shiver)  | BCM 23   | " + statusCell(vibeState()) + " |",
 ];
 
-const tableTitle = "+--------------+ Furbacca Hardware Status +--------------+";
+const tableTitle = msg.nervous_system.hardware_table_title;
 console.log(tableTitle);
 console.log(sep);
 console.log(header);
@@ -116,7 +117,7 @@ const chipToolEndpoint = process.env.CHIP_TOOL_ENDPOINT ?? "0x1";
 
 async function startMatterIfEnabled(): Promise<string[] | undefined> {
   if (!matterEnabled) {
-    console.log("  🧠 Matter: disabled (FURBACCA_MATTER=0). Remove it or set FURBACCA_MATTER=1 to enable.");
+    console.log(msg.nervous_system.matter_disabled);
     return undefined;
   }
   const matterLogBuffer: string[] = [];
@@ -142,19 +143,19 @@ function chipToolOn(): void {
 
 const visionHost = process.env.VISION_HOST ?? "127.0.0.1";
 
-console.log("+------+ Furbacca Nervous System: Modular Edition +------+");
-console.log(`  👀 Eyes: listening at ${visionHost}:5005.`);
-if (matterEnabled) console.log("  🧠 Matter Lobe: enabled (Furbacca as light + switches).");
-if (chipToolNodeId) console.log(`  💡 chip-tool: belly touch → onoff on ${chipToolNodeId} ${chipToolEndpoint}`);
-if (!headHw.ok && headHw.message) console.log(`  Head touch: ${headHw.message}`);
-if (!bellyHw.ok && bellyHw.message) console.log(`  Belly touch: ${bellyHw.message}`);
-if (!vibeHw.ok && vibeHw.message) console.log(`  Vibration: ${vibeHw.message}`);
+console.log(msg.nervous_system.header);
+console.log(substitute(msg.nervous_system.eyes_listening, { host: visionHost }));
+if (matterEnabled) console.log(msg.nervous_system.matter_lobe_enabled);
+if (chipToolNodeId) console.log(substitute(msg.nervous_system.chip_tool_belly, { nodeId: chipToolNodeId, endpoint: chipToolEndpoint }));
+if (!headHw.ok && headHw.message) console.log(substitute(msg.nervous_system.head_touch_error, { message: headHw.message }));
+if (!bellyHw.ok && bellyHw.message) console.log(substitute(msg.nervous_system.belly_touch_error, { message: bellyHw.message }));
+if (!vibeHw.ok && vibeHw.message) console.log(substitute(msg.nervous_system.vibration_error, { message: vibeHw.message }));
 
 let headActive = false;
 let bellyActive = false;
 
 function handleBellyTouch(): void {
-  console.log("  🐾 Belly: cycling species");
+  console.log(msg.nervous_system.belly_cycling);
   eyes.cycleEyeType();
   eyes.sendCommand("look", { x: 0, y: 0, pupil_mode: "wide" });
   chipToolOn();
@@ -168,13 +169,13 @@ function onTouch(sensor: "head" | "belly" | "shiver", active: boolean): void {
 
   if (!active) return;
   if (sensor === "head") {
-    console.log("  🐾 Head: touch");
+    console.log(msg.nervous_system.head_touch);
     eyes.blink();
     eyes.playAnimation("nervous_look", { replace: true });
   } else if (sensor === "belly") {
     handleBellyTouch();
   } else if (sensor === "shiver") {
-    console.log(`  🫨  Shiver: BCM ${VIBE_BCM}`);
+    console.log(substitute(msg.nervous_system.shiver, { bcm: String(VIBE_BCM) }));
     eyes.impulse();
   }
 }
@@ -231,7 +232,7 @@ function startWarmupThenOpen(matterLogBuffer?: string[]): void {
       process.stdout.write("\r" + CLEAR_LINE + warmupBar(WARMUP_STEPS, WARMUP_STEPS, "Opening eyes.") + "\n");
       eyes.openEyes();
       if (matterLogBuffer?.length) {
-        console.log("+----------+ Furbacca Matter Startup Sequence +----------+");
+        console.log(msg.nervous_system.matter_startup_logs_header);
         matterLogBuffer.forEach((line) => console.log(line));
       }
       console.log(sep);
@@ -239,14 +240,10 @@ function startWarmupThenOpen(matterLogBuffer?: string[]): void {
   }, stepMs);
 }
 
-const MATTER_LOBE_STATUS_LINES = [
-  "Initializing (single stack 0.12)...",
-  "Checking UDP port 5540...",
-  "Port free. Creating ServerNode (this may take a minute)...",
-  "Node created. Adding endpoints...",
-  "Endpoints ready. Starting node...",
-  "Online. Generating pairing code and QR below...",
-];
+const matterLobeStatus = msg.matter_lobe.status as Record<string, string>;
+const MATTER_LOBE_STATUS_LINES = msg.matter_lobe.status_order.map((key) =>
+  key === "checking_port" ? substitute(matterLobeStatus[key], { port: "5540" }) : matterLobeStatus[key]
+);
 
 // Prefer event-driven (gpiomon) for minimal latency; fall back to 20ms polling
 const stopEventWatch = touch.startEventWatch(onTouch);
@@ -262,12 +259,12 @@ function onShutdown(): void {
 process.on("SIGINT", () => onShutdown());
 
 if (stopEventWatch) {
-  console.log("  🫳  Touch: event-driven (gpiomon).");
-  if (matterEnabled) MATTER_LOBE_STATUS_LINES.forEach((msg) => console.log("  🧠 Matter Lobe: " + msg));
+  console.log(msg.nervous_system.touch_event_driven);
+  if (matterEnabled) MATTER_LOBE_STATUS_LINES.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
   startMatterIfEnabled().then((buffer) => startWarmupThenOpen(buffer));
 } else {
-  console.log("  ⏳ Touch: polling every 20ms (install gpiomon for event-driven)");
-  if (matterEnabled) MATTER_LOBE_STATUS_LINES.forEach((msg) => console.log("  🧠 Matter Lobe: " + msg));
+  console.log(msg.nervous_system.touch_polling);
+  if (matterEnabled) MATTER_LOBE_STATUS_LINES.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
   setInterval(() => touch.poll(onTouch), 20);
   startMatterIfEnabled().then((buffer) => startWarmupThenOpen(buffer));
 }

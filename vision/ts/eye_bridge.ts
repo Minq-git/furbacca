@@ -1,4 +1,5 @@
 import * as dgram from "dgram";
+import { msg, substitute } from "../../messages.js";
 
 const PORT = 5005;
 
@@ -29,7 +30,7 @@ export class EyeBridge {
   /** Send a raw payload (uses pre-allocated buffer when possible). */
   private send(payload: Buffer): void {
     this.client.send(payload, PORT, this.HOST, (err) => {
-      if (err) console.error("Eye Bridge Error:", err.message);
+      if (err) console.error(substitute(msg.eye_bridge.error, { message: err.message }));
     });
   }
 

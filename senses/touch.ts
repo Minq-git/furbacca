@@ -7,6 +7,7 @@
  * - Polling fallback: poll() with setInterval when gpiomon is not available.
  */
 import { execSync, spawn, ChildProcess } from "child_process";
+import { msg, substitute } from "../messages.js";
 
 const VIBE_BCM = 23;
 
@@ -61,7 +62,7 @@ export class TouchSenses {
       const err = e instanceof Error ? e.message : String(e);
       return {
         ok: false,
-        message: `Head touch GPIO (17): ${err.trim().split("\n")[0] ?? err}. Check wiring and gpiod.`,
+        message: substitute(msg.touch.head_touch_gpio_error, { error: err.trim().split("\n")[0] ?? err }),
       };
     }
   }
@@ -83,7 +84,7 @@ export class TouchSenses {
       const err = e instanceof Error ? e.message : String(e);
       return {
         ok: false,
-        message: `Belly touch GPIO (22): ${err.trim().split("\n")[0] ?? err}. Check wiring and gpiod.`,
+        message: substitute(msg.touch.belly_touch_gpio_error, { error: err.trim().split("\n")[0] ?? err }),
       };
     }
   }
@@ -105,7 +106,7 @@ export class TouchSenses {
       const err = e instanceof Error ? e.message : String(e);
       return {
         ok: false,
-        message: `Vibration GPIO (23): ${err.trim().split("\n")[0] ?? err}. Check wiring and gpiod.`,
+        message: substitute(msg.touch.vibration_gpio_error, { error: err.trim().split("\n")[0] ?? err }),
       };
     }
   }

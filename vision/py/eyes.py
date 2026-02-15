@@ -26,6 +26,7 @@ except ImportError:
     np = None
 
 import config
+import messages
 import assets
 import blit
 import render
@@ -44,7 +45,7 @@ left_eye, right_eye = None, None
 try:
     left_eye, right_eye = init_displays(swap_left_right=config.SWAP_LEFT_RIGHT_SPI)
 except Exception as e:
-    print(f"⚠ Display init failed: {e}")
+    print(messages.get("eyes", "display_init_failed", error=str(e)))
 
 # UDP bridge
 UDP_BIND = os.environ.get("UDP_BIND", "127.0.0.1").strip() or "127.0.0.1"
@@ -53,7 +54,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 sock.bind((UDP_BIND, UDP_PORT))
 sock.setblocking(False)
-print(f"ᯤ UDP {UDP_BIND}:{UDP_PORT}")
+print(messages.get("eyes", "udp_bind", bind=UDP_BIND, port=UDP_PORT))
 
 def _apply_eye_shape_left(frame):
     if frame is None: return frame
@@ -92,7 +93,7 @@ def run_eyes():
         frame_dt = 1.0 / config.ANIM_FPS
         EASE_INDEX_MAX = config.EASE_TABLE_SIZE - 1
 
-        print(f"ᯤ Furbacca Eyes Opening... Animated @ {config.ANIM_FPS} FPS.")
+        print(messages.get("eyes", "opening_animated", fps=config.ANIM_FPS))
         cached_eye_base_240 = None  # First frame fills cache for current type
 
         # Smoothstep easing: 3t² - 2t³ over [0,1]
@@ -169,7 +170,7 @@ def run_eyes():
             segment_start_x, segment_start_y = pupil_x, pupil_y
             seg0 = animation_segments[0]
             segment_end_x, segment_end_y = seg0.x, seg0.y
-            print(f"  🎬 Animation: {name}")
+            print(messages.get("eyes", "animation", name=name))
 
         while True:
             if _shutdown_requested:
@@ -207,13 +208,13 @@ def run_eyes():
                         cached_eye_base_240 = render.build_eye_base_sclera_iris()
                         relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
                         pupil_radius_current = float(relaxed)
-                        print(f"  👁  Eye type: {config.get_eye_type()}")
+                        print(messages.get("eyes", "eye_type", type=config.get_eye_type()))
                     elif action == "cycle_eye_type":
                         config.cycle_eye_type()
                         cached_eye_base_240 = render.build_eye_base_sclera_iris()
                         relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
                         pupil_radius_current = float(relaxed)
-                        print(f"  👁  Eye type: {config.get_eye_type()}")
+                        print(messages.get("eyes", "eye_type", type=config.get_eye_type()))
                     elif action == "animation":
                         anim_name = (msg.get("name") or "").strip().lower()
                         replace = msg.get("replace") is True

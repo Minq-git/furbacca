@@ -10,6 +10,7 @@
  * Lazy-loaded when start() runs. UDP 5540; pairing data in .matter/
  */
 import * as dgram from "dgram";
+import { msg, substitute } from "../../messages.js";
 import { EyeBridge } from "./eye_bridge.js";
 import { TouchSenses } from "../../senses/touch.js";
 
@@ -70,9 +71,9 @@ export class MatterLobe {
     /** If set, Matter SDK log lines are buffered here instead of printed; caller prints after start() to keep order. */
     matterLogBuffer?: string[];
   }): Promise<void> {
-    const status = (msg: string) => {
-      if (options?.onStatus) options.onStatus(msg);
-      else console.log("  🧠 Matter Lobe: " + msg);
+    const status = (s: string) => {
+      if (options?.onStatus) options.onStatus(s);
+      else console.log(msg.nervous_system.matter_lobe_prefix + s);
     };
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(
@@ -87,7 +88,7 @@ export class MatterLobe {
     });
 
     const doStart = async (): Promise<void> => {
-      status("Initializing (single stack 0.12)...");
+      status(msg.matter_lobe.status.initializing);
       const general = await import("@matter/general");
       const { Logger, LogLevel } = general;
       const pairingQrPattern = /Commissioning|passcode|discriminator|pairing|uncommissioned|qrcode|QR code|manual pairing|▄|▀|█|project-chip\.github\.io/i;
@@ -110,15 +111,15 @@ export class MatterLobe {
         GenericSwitchRequirements,
       } = await import("@matter/node/devices");
 
-      status(`Checking UDP port ${MATTER_UDP_PORT} ...`);
+      status(substitute(msg.matter_lobe.status.checking_port, { port: String(MATTER_UDP_PORT) }));
       if (!(await isUdpPortFree(MATTER_UDP_PORT))) {
-        console.warn(`  🧠 Matter Lobe: UDP port ${MATTER_UDP_PORT} is in use. Free it or stop the other process.`);
+        console.warn(substitute(msg.matter_lobe.udp_port_in_use, { port: String(MATTER_UDP_PORT) }));
         throw new Error(`Matter requires UDP port ${MATTER_UDP_PORT}; it is already bound.`);
       }
-      status("Port free. Creating ServerNode (this may take a minute)...");
+      status(msg.matter_lobe.status.port_free);
       this.matterNode = await ServerNode.create();
       const node = this.matterNode as Awaited<ReturnType<typeof ServerNode.create>>;
-      status("Node created. Adding endpoints...");
+      status(msg.matter_lobe.status.node_created);
 
       // Endpoint 1: Eyes (Extended Color Light)
       // Extended Color Light mandates CT; provide all required attributes. id: "eyes" silences fallback ID warning.
@@ -144,7 +145,7 @@ export class MatterLobe {
       if (ev.onOff?.onOff$Changed?.on) {
         ev.onOff.onOff$Changed.on((v) => {
           const isOn = v as boolean;
-          console.log("  🧠 Matter: OnOff changed to", isOn);
+          console.log(substitute(msg.matter_lobe.onoff_changed, { value: String(isOn) }));
           if (isOn) {
             this.eyes.impulse();
             this.eyes.setEyeShape("round");
@@ -157,7 +158,7 @@ export class MatterLobe {
         ev.levelControl.currentLevel$Changed.on((v) => {
           const level = v as number | null;
           if (level == null) return;
-          console.log("  🧠 Matter: Brightness/Level set to", level);
+          console.log(substitute(msg.matter_lobe.brightness_set, { level: String(level) }));
           if (level < 50) this.eyes.playAnimation("nervous_look");
         });
       }
@@ -178,7 +179,7 @@ export class MatterLobe {
           const x = v as number | null;
           if (x == null) return;
           lastX = x;
-          console.log("  🧠 Matter: XY x set to", x);
+          console.log(substitute(msg.matter_lobe.xy_x_set, { x: String(x) }));
           applyXyToSpecies();
         });
       if (ev.colorControl?.currentY$Changed?.on)
@@ -186,14 +187,14 @@ export class MatterLobe {
           const y = v as number | null;
           if (y == null) return;
           lastY = y;
-          console.log("  🧠 Matter: XY y set to", y);
+          console.log(substitute(msg.matter_lobe.xy_y_set, { y: String(y) }));
           applyXyToSpecies();
         });
       if (ev.colorControl?.currentHue$Changed?.on)
         ev.colorControl.currentHue$Changed.on((v) => {
           const hue = v as number | null;
           if (hue == null) return;
-          console.log("  🧠 Matter: Hue set to", hue);
+          console.log(substitute(msg.matter_lobe.hue_set, { hue: String(hue) }));
           applyHueToSpecies(hue, this.eyes);
         });
 
@@ -201,13 +202,13 @@ export class MatterLobe {
       const identify = (ev as Record<string, { startIdentifying?: { on: (cb: () => void) => void }; identifyTime$Changed?: { on: (cb: (v: unknown) => void) => void } }>).identify;
       if (identify?.startIdentifying?.on) {
         identify.startIdentifying.on(() => {
-          console.log("  🧠 Matter: Identify command received!");
+          console.log(msg.matter_lobe.identify_received);
           this.eyes.blink();
         });
       } else if (identify?.identifyTime$Changed?.on) {
         identify.identifyTime$Changed.on((v) => {
           if ((v as number) > 0) {
-            console.log("  🧠 Matter: Identify command received!");
+            console.log(msg.matter_lobe.identify_received);
             this.eyes.blink();
           }
         });
@@ -227,7 +228,7 @@ export class MatterLobe {
             },
           } as never);
         } catch (e) {
-          console.warn("  🧠 Matter: Could not set switch featureMap:", e);
+          console.warn(substitute(msg.matter_lobe.switch_featuremap_warn, { error: String(e) }));
         }
       };
 
@@ -240,7 +241,7 @@ export class MatterLobe {
       >;
       const emitMomentaryPress = (ev: SwitchEvents, label: string) => {
         if (!ev.switch?.initialPress?.emit) return;
-        console.log("  🧠 Matter: Broadcasting", label, "event");
+        console.log(substitute(msg.matter_lobe.broadcasting, { label }));
         ev.switch.initialPress.emit({ newPosition: 1 });
         setTimeout(() => {
           ev.switch?.shortRelease?.emit?.({ previousPosition: 1 });
@@ -254,8 +255,8 @@ export class MatterLobe {
       ) => {
         const events = endpoint.events as Record<string, { startIdentifying?: { on: (cb: () => void) => void }; identifyTime$Changed?: { on: (cb: (v: unknown) => void) => void } }>;
         const id = events?.identify;
-        if (id?.startIdentifying?.on) id.startIdentifying.on(() => console.log(`  🧠 Matter: Identify on ${label}`));
-        else if (id?.identifyTime$Changed?.on) id.identifyTime$Changed.on((v) => { if ((v as number) > 0) console.log(`  🧠 Matter: Identify on ${label}`); });
+        if (id?.startIdentifying?.on) id.startIdentifying.on(() => console.log(substitute(msg.matter_lobe.identify_on, { label })));
+        else if (id?.identifyTime$Changed?.on) id.identifyTime$Changed.on((v) => { if ((v as number) > 0) console.log(substitute(msg.matter_lobe.identify_on, { label })); });
       };
 
       const bellyEndpoint = await node.add(SwitchDevice as unknown as Parameters<typeof node.add>[0], {
@@ -294,9 +295,9 @@ export class MatterLobe {
         }
       };
 
-      status("Endpoints ready. Starting node...");
+      status(msg.matter_lobe.status.endpoints_ready);
       await node.start();
-      status("Online. Generating pairing code and QR below...");
+      status(msg.matter_lobe.status.online);
     };
 
     await Promise.race([doStart(), timeoutPromise]);

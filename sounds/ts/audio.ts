@@ -5,6 +5,7 @@
  */
 import { spawn } from "child_process";
 import path from "path";
+import { msg, substitute } from "../../messages.js";
 
 // WAV files live in sounds/assets/; path works via ts-node or node dist/...
 const SOUNDS_DIR = path.join(__dirname, "..", "assets");
@@ -20,7 +21,7 @@ export function playWav(filename: string): void {
     stdio: "ignore",
   });
   child.on("error", (err) => {
-    console.error("[audio] aplay failed:", err.message);
+    console.error(substitute(msg.audio.aplay_failed, { message: err.message }));
   });
   child.unref();
 }
