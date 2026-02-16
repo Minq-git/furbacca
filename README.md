@@ -114,7 +114,7 @@ Matter is **on by default** when you run `wake-furbacca` (requires **64-bit Node
 - **Endpoint 3 — Generic Switch (head):** Momentary; head touch broadcasts a press.
 - **Endpoint 4 — Generic Switch (shake):** Momentary; vibration sensor (shiver) broadcasts with cooldown.
 
-Add Furbacca to Google Home or Apple Home via the pairing QR in the logs; pairing data is stored in `.matter/`. To disable Matter for troubleshooting: **`FURBACCA_MATTER=0 wake-furbacca`**.
+Add Furbacca to Google Home or Apple Home via the pairing QR in the logs; pairing data is stored in `.matter/`. **If the service runs at boot**, get the pairing code and QR URL anytime on the Pi: **`./scripts/show-matter-pairing.sh`**. To disable Matter for troubleshooting: **`FURBACCA_MATTER=0 wake-furbacca`**.
 
 
 ---
@@ -141,6 +141,7 @@ Full pin mapping: **instruction.md** §1.
 - **`wake-furbacca`** — start all services (eyes + nervous system). Use this.
 - **`sudo systemctl status furbacca`** — if you run the full stack as a service (see below); **`furbacca-eyes`** for eyes-only.
 - **`journalctl -u furbacca -f`** — stream the service logs (animations, touch, Matter, etc.) after SSH; `-n 200` for last 200 lines instead of follow.
+- **`./scripts/show-matter-pairing.sh`** — (on the Pi) show Matter passcode, manual pairing code, and QR URL from service logs (handy when the service started at boot and the QR scrolled past).
 - **`push-furbacca`** — (Mac) rsync project to the Pi. Use **`--delete`** so the Pi loses old paths (e.g. `vision/eyes.py` after refactor) and matches your Mac layout. Exclude Pi-only dirs so rsync doesn't delete them: `vision/py/gc9a01py` (fetched on the Pi by `scripts/setup/fetch-gc9a01py.sh`; not on the Mac), and optionally `vision/waveshare-lcd-code`, `vision/gc9a01py` (old leftovers). Add to `~/.zshrc`:
   ```bash
   alias push-furbacca='rsync -avz --delete --exclude node_modules --exclude .git --exclude env --exclude dist --exclude vision/py/gc9a01py --exclude vision/waveshare-lcd-code --exclude vision/gc9a01py /Users/brent/Documents/Code/Furbacca/ minqz@furbacca.local:~/furbacca/'
