@@ -124,7 +124,10 @@ const PAIRING_DISPLAY_CACHE = path.join(MATTER_DIR, "pairing_display.txt");
 const PAIRING_QR_PATTERN =
   /Commissioning|passcode|discriminator|pairing|uncommissioned|qrcode|QR code|manual pairing|▄|▀|█|project-chip\.github\.io/i;
 
-async function startMatterIfEnabled(): Promise<string[] | undefined> {
+/** Result when Matter is enabled: buffer + whether we already printed pairing block and sep. */
+type MatterStartResult = { buffer: string[]; showedCachedPairing: boolean };
+
+async function startMatterIfEnabled(): Promise<MatterStartResult | undefined> {
   if (!matterEnabled) {
     console.log(msg.nervous_system.matter_disabled);
     return undefined;
@@ -136,6 +139,7 @@ async function startMatterIfEnabled(): Promise<string[] | undefined> {
       if (cached) {
         console.log(msg.nervous_system.matter_startup_logs_header);
         console.log(cached);
+        console.log(sep);
         showedCachedPairing = true;
       }
     } catch {
@@ -147,7 +151,11 @@ async function startMatterIfEnabled(): Promise<string[] | undefined> {
   const matter = new MatterLobe(eyes, touch);
   matterLobe = matter;
   try {
-    await matter.start({ onStatus: () => {}, matterLogBuffer });
+    await matter.start({
+      onStatus: () => {},
+      matterLogBuffer,
+      pairingAlreadyShown: showedCachedPairing,
+    });
   } catch (e) {
     console.error(e);
   }
@@ -166,7 +174,7 @@ async function startMatterIfEnabled(): Promise<string[] | undefined> {
       }
     }
   }
-  return matterLogBuffer;
+  return { buffer: matterLogBuffer, showedCachedPairing };
 }
 
 function chipToolOn(): void {
@@ -255,7 +263,7 @@ function warmupBar(filled: number, total: number, label: string): string {
 const CLEAR_LINE = "\x1b[K"; // clear from cursor to end of line
 
 /** Runs warmup and opens eyes; Matter logs are printed when the promise resolves (Matter runs in parallel). */
-function startWarmupThenOpen(matterLogPromise: Promise<string[] | undefined>): void {
+function startWarmupThenOpen(matterResultPromise: Promise<MatterStartResult | undefined>): void {
   const stepMs = WARMUP_MS / WARMUP_STEPS;
   let step = 0;
   process.stdout.write(warmupBar(step, WARMUP_STEPS, WARMUP_STEP_LABELS[step] ?? "Starting"));
@@ -269,21 +277,18 @@ function startWarmupThenOpen(matterLogPromise: Promise<string[] | undefined>): v
       clearInterval(tick);
       process.stdout.write("\r" + CLEAR_LINE + warmupBar(WARMUP_STEPS, WARMUP_STEPS, "Opening eyes.") + "\n");
       eyes.openEyes();
-      matterLogPromise.then((buffer) => {
-        if (buffer?.length) {
+      matterResultPromise.then((result) => {
+        if (result?.buffer?.length) {
           console.log(msg.nervous_system.matter_startup_logs_header);
-          buffer.forEach((line) => console.log(line));
+          result.buffer.forEach((line) => console.log(line));
         }
-        console.log(sep);
+        if (!result?.showedCachedPairing) console.log(sep);
       });
     }
   }, stepMs);
 }
 
 const matterLobeStatus = msg.matter_lobe.status as Record<string, string>;
-const MATTER_LOBE_STATUS_LINES = msg.matter_lobe.status_order.map((key) =>
-  key === "checking_port" ? substitute(matterLobeStatus[key], { port: "5540" }) : matterLobeStatus[key]
-);
 
 // Prefer event-driven (gpiomon) for minimal latency; fall back to 20ms polling
 const stopEventWatch = touch.startEventWatch(onTouch);
@@ -298,19 +303,31 @@ function onShutdown(): void {
 }
 process.on("SIGINT", () => onShutdown());
 
+// Group touch + Matter Lobe status lines, then start Matter (cached pairing prints right after if present)
+const hasCachedPairing = matterEnabled && fs.existsSync(PAIRING_DISPLAY_CACHE);
+const matterLobeStatusLines = msg.matter_lobe.status_order.map((key) => {
+  if (key === "checking_port") return substitute(matterLobeStatus[key], { port: "5540" });
+  if (key === "online" && hasCachedPairing) return matterLobeStatus.online_short ?? "Online.";
+  return matterLobeStatus[key];
+});
+
+if (stopEventWatch) {
+  console.log(msg.nervous_system.touch_event_driven);
+  if (matterEnabled) matterLobeStatusLines.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+} else {
+  console.log(msg.nervous_system.touch_polling);
+  if (matterEnabled) matterLobeStatusLines.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+}
+
 // Matter and warmup run in parallel; eyes open when warmup finishes, Matter logs when Matter finishes
 const matterPromise = matterEnabled
   ? startMatterIfEnabled()
   : (console.log(msg.nervous_system.matter_disabled), Promise.resolve(undefined));
 
 if (stopEventWatch) {
-  console.log(msg.nervous_system.touch_event_driven);
-  if (matterEnabled) MATTER_LOBE_STATUS_LINES.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
   void fanControl.softStart(); // ramp fan 0→100% over 2s to avoid brownout
   startWarmupThenOpen(matterPromise);
 } else {
-  console.log(msg.nervous_system.touch_polling);
-  if (matterEnabled) MATTER_LOBE_STATUS_LINES.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
   void fanControl.softStart();
   setInterval(() => touch.poll(onTouch), 20);
   startWarmupThenOpen(matterPromise);

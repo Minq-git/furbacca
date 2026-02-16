@@ -104,6 +104,8 @@ export class MatterLobe {
     onStatus?: (msg: string) => void;
     /** If set, Matter SDK log lines are buffered here instead of printed; caller prints after start() to keep order. */
     matterLogBuffer?: string[];
+    /** If true, use short "Online." instead of "Online. Generating pairing code and QR below...". */
+    pairingAlreadyShown?: boolean;
   }): Promise<void> {
     const status = (s: string) => {
       if (options?.onStatus) options.onStatus(s);
@@ -363,7 +365,11 @@ export class MatterLobe {
 
       status(msg.matter_lobe.status.endpoints_ready);
       await node.start();
-      status(msg.matter_lobe.status.online);
+      status(
+        options?.pairingAlreadyShown
+          ? (msg.matter_lobe.status as { online_short?: string }).online_short ?? "Online."
+          : msg.matter_lobe.status.online
+      );
 
       // Only show pairing/QR when uncommissioned; if already paired, remove those lines from the log buffer and delete cached pairing display
       const buffer = options?.matterLogBuffer;
