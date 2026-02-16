@@ -8,6 +8,7 @@ An AI-powered, Matter-enabled animatronic build based on the 2012 Hasbro Furby, 
 - **Brain** (`brain/ts/`): Matter lobe — Furbacca as a Matter device (Extended Color Light + Generic Switches); custom Identify server for eye effects.
 - **Vision** (`vision/py/`): Python (venv), dual GC9A01 circular LCDs via SPI; **vision/ts/eye_bridge.ts** sends UDP commands to the eyes.
 - **Senses** (`senses/touch.ts`): Head touch (BCM 17), belly touch (BCM 22), vibration (BCM 23); event-driven (gpiomon) or polling.
+- **Cooling** (`cooling/fan_control.ts`): Dual-fan harness on BCM 24 via 2N2222 NPN; DMA-driven PWM (25 kHz) for stable, jitter-free fan control during LCD eye rendering.
 - **Bridge:** UDP port 5005 between nervous system and eyes. Set `VISION_HOST` (e.g. `furbacca.local`) if they run on different hosts.
 
 ---
@@ -65,7 +66,7 @@ Types: `default`, `human`, `dragon`, `demon`.
    cd ~/furbacca
    bash scripts/setup-fresh.sh
    ```
-   The script installs Node.js v20 (64-bit via NodeSource if missing), **enables SPI**, **memory tuning** (512 MB swap via dphys-swapfile, gpu_mem=32 for more ARM RAM), Python venv, pip deps, gc9a01py, eye graphics, `npm install`/`npm run build`, **wake-furbacca** alias, and **furbacca systemd service** (enabled at boot; start with `sudo systemctl start furbacca` when ready). **Reboot** after the script if it changed SPI, swap, or gpu_mem so those take effect.
+   The script installs Node.js v20 (64-bit via NodeSource if missing), **enables SPI**, **memory tuning** (512 MB swap, gpu_mem=32), **pigpio + pigpiod** (enabled at startup so the cooling fan works without sudo), Python venv, pip deps, gc9a01py, eye graphics, `npm install`/`npm run build`, **wake-furbacca** alias, and **furbacca systemd service** (enabled at boot; start with `sudo systemctl start furbacca` when ready). **Reboot** after the script if it changed SPI, swap, or gpu_mem so those take effect.
 3. **Test:** `./scripts/wake-furbacca.sh` (or `wake-furbacca` in a new shell).
 4. **Boot (optional):** See **Systemd (full stack at startup)** below to run Furbacca on boot.
 
@@ -123,20 +124,33 @@ Add Furbacca to Google Home or Apple Home via the pairing QR in the logs; pairin
 
 Full pin mapping: **instruction.md** §1.
 
-| Component       | GPIO | Physical | Notes           |
-|-----------------|------|----------|-----------------|
-| Touch (Head)    | 17   | 11       | TTP223          |
-| Touch (Belly)   | 22   | 15       | TTP223          |
-| Vibration       | 23   | 16       | SW-420 (shaker) |
-| SPI SCLK        | 11   | 23       | Eyes            |
-| SPI MOSI        | 10   | 19       | Eyes            |
-| Eye DC          | 25   | 22       | GC9A01          |
-| Eye RST         | 27   | 13       | GC9A01          |
-| Eye CS (L)      | 8    | 24       | Left            |
-| Eye CS (R)      | 7    | 26       | Right           |
-| Cooling fans    | 24   | 18       | 2N2222 NPN, pigpio PWM (25 kHz, soft-start) |
+| Component       | GPIO | Physical | Notes                    |
+|-----------------|------|----------|--------------------------|
+| Touch (Head)    | 17   | 11       | TTP223                   |
+| Touch (Belly)   | 22   | 15       | TTP223                   |
+| Vibration       | 23   | 16       | SW-420 (shaker)          |
+| SPI SCLK        | 11   | 23       | Eyes                     |
+| SPI MOSI        | 10   | 19       | Eyes                     |
+| Eye DC          | 25   | 22       | GC9A01                   |
+| Eye RST         | 27   | 13       | GC9A01                   |
+| Eye CS (L)      | 8    | 24       | Left                     |
+| Eye CS (R)      | 7    | 26       | Right                    |
+| Cooling fans    | 24   | 18       | 2N2222 NPN, DMA PWM      |
+| MAX98357A I2S   | 18   | 12       | Reserved (I2S audio)     |
+| MAX98357A I2S   | 19   | 35       | Reserved (I2S audio)     |
+| MAX98357A I2S   | 21   | 40       | Reserved (I2S audio)     |
+| DRV8833 motor   | 12   | 32       | Furby motor (AIN1)       |
+| DRV8833 motor   | 13   | 33       | Furby motor (AIN2)       |
 
-Cooling: **cooling/fan_control.ts** sets BCM 24 LOW on startup, then ramps PWM 0→100% over 2 s to avoid brownout. Disable with **FURBACCA_FAN=0**. On Pi, run as root or start **pigpiod**: `sudo pigpiod`. See **instruction.md** §1 (Cooling fans).
+### Cooling (fan harness)
+
+**Fan control logic:** Dual-fan cooling harness driven by a **2N2222 NPN** transistor using **active-high** logic on **BCM 24 (Physical Pin 18)**. Setting BCM 24 HIGH (or PWM duty &gt; 0) turns the fans on.
+
+**Circuit protection:** A **1 kΩ resistor** between BCM 24 and the transistor base limits base current. A **1N4001 flyback diode** across the fan terminals (cathode to 5 V) prevents inductive kickback when the fans are switched off.
+
+**Power handling:** Fans are powered from the **5 V rail**; the transistor emitter is connected to **GND**. The transistor switches the low side (fan between 5 V and collector).
+
+**Implementation:** Fan control on BCM 24 uses **DMA-driven PWM** (pigpio, 25 kHz) so the fans run stably without jitter during concurrent GC9A01 LCD eye rendering. **cooling/fan_control.ts** sets BCM 24 LOW on startup, then ramps PWM 0→100% over 2 s to avoid brownout. Disable with **FURBACCA_FAN=0**. **setup-fresh.sh** installs **pigpio** and enables **pigpiod** at startup so the fan works without sudo. See **instruction.md** §1 (Cooling fans).
 
 ---
 
@@ -181,7 +195,7 @@ Check status: `sudo systemctl status furbacca`. **View event logs** (animations,
 - **Eyes / SPI:** Enable SPI (`dtparam=spi=on`), see **instruction.md** §3.1.
 - **fe / touch not working, ss shows 127.0.0.1:5005:** (1) Sync from Mac with **`--delete`**: `push-furbacca` (alias must include `--delete` so the Pi loses old `vision/eyes.py` and only has `vision/py/`). (2) On the Pi, stop any old eyes: `sudo systemctl stop furbacca-eyes`. (3) Run `wake-furbacca` from `~/furbacca`; you should see `UDP 0.0.0.0:5005` and then `--- Furbacca Nervous System: Modular Edition ---`. If you see "vision/py/eyes.py not found", run push-furbacca again. If you see "Port 5005 already in use", stop the other process first.
 - **Pi unresponsive / can't SSH (furbacca service looping):** If the service is restarting constantly, get to a local console (monitor + keyboard or serial), log in, then: `sudo systemctl stop furbacca` and `sudo systemctl disable furbacca`. After pushing the latest code, re-run setup-fresh or reinstall the service; the unit now has `RestartSec=10` and `StartLimitBurst=5` so a failing service won’t spin forever.
-- **Cooling fan not spinning:** Fan uses **pigpio** (DMA PWM on BCM 24). Run as root (`sudo npm start` / `sudo wake-furbacca`) or start the daemon: `sudo pigpiod`. Disable fan: **FURBACCA_FAN=0**.
+- **Cooling fan not spinning:** **setup-fresh.sh** installs pigpio and enables **pigpiod** at startup. If the fan still doesn’t run, start the daemon manually: `sudo pigpiod`, or run as root. Disable fan: **FURBACCA_FAN=0**.
 - **Touch dead / "gpioget: unable to request lines: Device or resource busy":** Another process is holding the touch GPIO pins (e.g. a previous `wake-furbacca`, `gpiomon`, or the eyes service). Stop all Furbacca processes (Ctrl+C in the terminal running wake-furbacca; `sudo systemctl stop furbacca-eyes` if eyes run as a service), then start again with a single `wake-furbacca`.
 - **Matter: "Failed to parse storage value" or startup hang:** Stale or incompatible data in `.matter/`. Stop wake-furbacca, then: `rm -rf .matter && wake-furbacca`. Re-pair Furbacca in Google Home / Apple Home using the new QR or code.
 - **Matter: device shows as "Matter.js Test Vendor" in Google Home:** Ensure you’re on a build that sets `basicInformation` (vendorName/productName, etc.) in `brain/ts/matter_lobe.ts`; re-pair after updating.

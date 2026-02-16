@@ -108,11 +108,27 @@ if [[ "$UNAME_S" == "Linux" ]]; then
   [[ "$NEED_REBOOT" == "true" ]] && echo "Reboot when convenient so swap/gpu_mem changes apply: sudo reboot"
 fi
 
-# 1. Build deps (Python.h + gcc for spidev/RPi.GPIO; git for gc9a01py)
+# 1. Build deps (Python.h + gcc for spidev/RPi.GPIO; git for gc9a01py; pigpio for fan PWM)
 if [[ "$UNAME_S" == "Linux" ]]; then
-  echo "Ensuring Python dev headers, build tools, and git..."
+  echo "Ensuring Python dev headers, build tools, git, and pigpio (fan PWM)..."
   sudo apt-get update -qq
-  sudo apt-get install -y python3-dev build-essential git
+  sudo apt-get install -y python3-dev build-essential git pigpio
+  # pigpiod: run at startup so cooling fan (BCM 24) works without sudo
+  if command -v pigpiod &>/dev/null; then
+    PIGPIOD_UNIT="/etc/systemd/system/pigpiod.service"
+    if [[ ! -f "$PIGPIOD_UNIT" ]] && [[ ! -f /lib/systemd/system/pigpiod.service ]]; then
+      echo "Installing pigpiod systemd unit..."
+      curl -fsSL https://raw.githubusercontent.com/joan2937/pigpio/master/util/pigpiod.service | sudo tee "$PIGPIOD_UNIT" >/dev/null
+    fi
+    if [[ -f /lib/systemd/system/pigpiod.service ]] || [[ -f "$PIGPIOD_UNIT" ]]; then
+      sudo systemctl daemon-reload
+      sudo systemctl enable pigpiod
+      sudo systemctl start pigpiod
+      echo "pigpiod enabled and started (fan PWM without sudo)."
+    else
+      echo "⚠ pigpiod installed but no systemd unit. Run manually: sudo pigpiod"
+    fi
+  fi
 fi
 
 # 2. Python venv
