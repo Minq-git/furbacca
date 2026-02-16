@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
 # Show Matter pairing code and QR URL from the furbacca service logs.
-# Run on the Pi after the service has started (or use: ssh furbacca.local 'bash -s' < scripts/show-matter-pairing.sh).
-# If the service isn't running, nothing will be found.
+# On the Pi: ./scripts/show-matter-pairing.sh
+# From Mac:  ./scripts/show-matter-pairing.sh furbacca.local   (SSH to Pi and run there)
+# SSH user:  FURBACCA_SSH_USER (default: minqz)
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Optional: first arg = host (e.g. furbacca.local) → run on Pi via SSH
+if [[ -n "$1" && ( "$1" == *.* || "$1" == "furbacca" ) ]]; then
+  REMOTE_HOST="$1"
+  SSH_USER="${FURBACCA_SSH_USER:-minqz}"
+  exec ssh "$SSH_USER@$REMOTE_HOST" 'cd ~/furbacca && ./scripts/show-matter-pairing.sh'
+fi
 
 cd "$REPO_DIR"
 
