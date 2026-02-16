@@ -57,6 +57,18 @@ Types: `default`, `human`, `dragon`, `demon`.
 
 ## 🔧 Setup
 
+### Reinstall after wiping the Pi
+1. **On your Mac:** From repo root run **`push-furbacca`** (see Commands & automation for the alias; use your Pi user and host, e.g. `minqz@furbacca.local:~/furbacca/`).
+2. **On the Pi (SSH):** Enable SPI (or let the setup script do it), **reboot** if SPI was off, then run the single setup script:
+   - **Enable SPI via SSH:** `sudo raspi-config nonint do_spi 0` then `sudo reboot`. (Or run `setup-fresh.sh` first—it enables SPI when possible and then you reboot.)
+   ```bash
+   cd ~/furbacca
+   bash scripts/setup-fresh.sh
+   ```
+   The script installs Node.js v20 (64-bit via NodeSource if missing), **enables SPI** (via raspi-config or `/boot/firmware/config.txt` when possible), Python venv, pip deps, gc9a01py, eye graphics, `npm install`/`npm run build`, adds a **wake-furbacca** alias, and **installs and starts the furbacca systemd service** (runs now and at boot). If SPI was off, **reboot** after the script so eyes can use the displays.
+3. **Test:** `./scripts/wake-furbacca.sh` (or `wake-furbacca` in a new shell).
+4. **Boot (optional):** See **Systemd (full stack at startup)** below to run Furbacca on boot.
+
 ### Vision (Python / eyes)
 Eyes: **vision/py/eyes.py** (UDP 5005), [gc9a01py](https://github.com/russhughes/gc9a01py). Pinout and SPI: **instruction.md** §3.1.
 
@@ -127,22 +139,32 @@ Full pin mapping: **instruction.md** §1.
 
 ## 🤖 Commands & automation
 - **`wake-furbacca`** — start all services (eyes + nervous system). Use this.
-- **`sudo systemctl status furbacca-eyes`** — if you run eyes as a service (see below).
+- **`sudo systemctl status furbacca`** — if you run the full stack as a service (see below); **`furbacca-eyes`** for eyes-only.
 - **`push-furbacca`** — (Mac) rsync project to the Pi. Use **`--delete`** so the Pi loses old paths (e.g. `vision/eyes.py` after refactor) and matches your Mac layout. Exclude Pi-only dirs so rsync doesn't delete them: `vision/py/gc9a01py` (fetched on the Pi by `scripts/setup/fetch-gc9a01py.sh`; not on the Mac), and optionally `vision/waveshare-lcd-code`, `vision/gc9a01py` (old leftovers). Add to `~/.zshrc`:
   ```bash
   alias push-furbacca='rsync -avz --delete --exclude node_modules --exclude .git --exclude env --exclude dist --exclude vision/py/gc9a01py --exclude vision/waveshare-lcd-code --exclude vision/gc9a01py /Users/brent/Documents/Code/Furbacca/ minqz@furbacca.local:~/furbacca/'
   ```
   Then run `push-furbacca` before testing on the Pi; Pi keeps its own `env`, `dist`, and `vision/py/gc9a01py`. After a refactor, `--delete` removes leftover files on the Pi (e.g. old `vision/eyes.py`) so `wake-furbacca` runs the new code.
 
-**Systemd (eyes only):** To run eyes as a service with UDP on 0.0.0.0, copy and edit the unit:
-`sudo cp scripts/furbacca-eyes.service /etc/systemd/system/`
-Edit `User`, `WorkingDirectory`, and `ExecStart` paths to match your Pi user and repo path, then:
-`sudo systemctl daemon-reload && sudo systemctl enable --now furbacca-eyes`
+**Systemd (full stack at startup):** To run `wake-furbacca` (eyes + nervous system) automatically on boot:
+```bash
+sudo cp scripts/furbacca.service /etc/systemd/system/
+```
+Edit `User`, `WorkingDirectory`, and `ExecStart` in the unit to match your Pi user and repo path (e.g. `/home/pi/furbacca`), then:
+```bash
+sudo systemctl daemon-reload && sudo systemctl enable --now furbacca
+```
+Use `sudo systemctl status furbacca` to check; logs: `journalctl -u furbacca -f`.
+
+**Systemd (eyes only):** To run only eyes as a service (e.g. you run the nervous system manually), use `scripts/furbacca-eyes.service` instead—copy to `/etc/systemd/system/`, edit paths, then `sudo systemctl daemon-reload && sudo systemctl enable --now furbacca-eyes`.
 
 ---
 
 ## 📝 Troubleshooting
 - **Permission denied:** `sudo chown -R $USER:$USER .`
+- **pip install fails (spidev/RPi.GPIO): "Python.h: No such file or directory"** — Install Python dev headers and build tools: `sudo apt-get install -y python3-dev build-essential`. Or run **`bash scripts/setup-fresh.sh`**; it installs them before pip.
+- **"git: command not found" (fetch-gc9a01py)** — Install git: `sudo apt-get install -y git`, then run **`bash scripts/setup-fresh.sh`** again (or `bash scripts/setup/fetch-gc9a01py.sh`).
+- **"JavaScript heap out of memory" (npm run build on Pi)** — Pi has limited RAM. Run: `NODE_OPTIONS=--max-old-space-size=384 npm run build`. **`setup-fresh.sh`** sets this automatically on the Pi.
 - **wake-furbacca says "can't open file ... vision/eyes.py"** — The Pi is still using an old alias or script that runs `vision/eyes.py` instead of the repo script. **Find it:** On the Pi run `type wake-furbacca` (or `which wake-furbacca` if it's a script). If it's an **alias**, edit `~/.bashrc` or `~/.zshrc` and set:
   ```bash
   alias wake-furbacca='~/furbacca/scripts/wake-furbacca.sh'

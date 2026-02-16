@@ -7,7 +7,7 @@
 | **wake-furbacca.sh** | Start everything: eyes + nervous system (touch, sounds, UDP). Run from repo root or alias on the Pi: `alias wake-furbacca='~/furbacca/scripts/wake-furbacca.sh'`. If you get "vision/eyes.py: No such file", your alias/script points to the old path—see README § Troubleshooting. |
 | **run-eyes.sh** | Eyes only (vision/py/eyes.py). Use when you want eyes in one terminal and nervous system in another. |
 | **eye-command.sh** | Send commands to eyes (blink, shape, type) while eyes are running. On Pi: `./scripts/eye-command.sh shape sharp`. From Mac: `./scripts/eye-command.sh furbacca.local type dragon`. |
-| **setup-fresh.sh** | One-time (or re-run) setup on the Pi: venv, pip deps, gc9a01py driver, eye graphics. Run from repo root. |
+| **setup-fresh.sh** | Full Furbacca setup on the Pi (after a wipe): Node.js v20 64-bit if missing, SPI enable, venv, pip deps, gc9a01py, eye graphics, npm install/build, wake-furbacca alias, and furbacca systemd service (start at boot). Run from repo root: `cd ~/furbacca && bash scripts/setup-fresh.sh`. Idempotent. |
 
 ## Used by setup (don’t run directly unless needed)
 
@@ -20,4 +20,5 @@
 
 | File | Purpose |
 |------|---------|
-| **furbacca-eyes.service** | Systemd unit template (eyes only). Copy to `/etc/systemd/system/` and edit paths if you want eyes as a service instead of wake-furbacca. |
+| **furbacca.service** | Systemd unit for full stack (wake-furbacca) at boot. Copy to `/etc/systemd/system/`, edit User/WorkingDirectory/ExecStart, then `sudo systemctl enable --now furbacca`. |
+| **furbacca-eyes.service** | Systemd unit (eyes only). Use if you want eyes as a service and run the nervous system manually. |
