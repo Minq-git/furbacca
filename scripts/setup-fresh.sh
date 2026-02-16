@@ -193,7 +193,9 @@ EOF
     sudo systemctl enable furbacca
     echo "Service enabled (starts on boot). Start now: sudo systemctl start furbacca   Status: sudo systemctl status furbacca"
   else
-    echo "furbacca service already installed. Start: sudo systemctl start furbacca   Status: sudo systemctl status furbacca"
+    echo "furbacca service already installed."
+    sudo systemctl enable furbacca
+    echo "Service enabled for boot. Start now: sudo systemctl start furbacca   Status: sudo systemctl status furbacca"
   fi
 fi
 

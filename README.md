@@ -140,6 +140,7 @@ Full pin mapping: **instruction.md** §1.
 ## 🤖 Commands & automation
 - **`wake-furbacca`** — start all services (eyes + nervous system). Use this.
 - **`sudo systemctl status furbacca`** — if you run the full stack as a service (see below); **`furbacca-eyes`** for eyes-only.
+- **`journalctl -u furbacca -f`** — stream the service logs (animations, touch, Matter, etc.) after SSH; `-n 200` for last 200 lines instead of follow.
 - **`push-furbacca`** — (Mac) rsync project to the Pi. Use **`--delete`** so the Pi loses old paths (e.g. `vision/eyes.py` after refactor) and matches your Mac layout. Exclude Pi-only dirs so rsync doesn't delete them: `vision/py/gc9a01py` (fetched on the Pi by `scripts/setup/fetch-gc9a01py.sh`; not on the Mac), and optionally `vision/waveshare-lcd-code`, `vision/gc9a01py` (old leftovers). Add to `~/.zshrc`:
   ```bash
   alias push-furbacca='rsync -avz --delete --exclude node_modules --exclude .git --exclude env --exclude dist --exclude vision/py/gc9a01py --exclude vision/waveshare-lcd-code --exclude vision/gc9a01py /Users/brent/Documents/Code/Furbacca/ minqz@furbacca.local:~/furbacca/'
@@ -154,7 +155,7 @@ Edit `User`, `WorkingDirectory`, and `ExecStart` in the unit to match your Pi us
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now furbacca
 ```
-Use `sudo systemctl status furbacca` to check; logs: `journalctl -u furbacca -f`.
+Check status: `sudo systemctl status furbacca`. **View event logs** (animations, touch, Matter) after SSH: `journalctl -u furbacca -f` (stream) or `journalctl -u furbacca -n 200` (last 200 lines).
 
 **Systemd (eyes only):** To run only eyes as a service (e.g. you run the nervous system manually), use `scripts/furbacca-eyes.service` instead—copy to `/etc/systemd/system/`, edit paths, then `sudo systemctl daemon-reload && sudo systemctl enable --now furbacca-eyes`.
 
