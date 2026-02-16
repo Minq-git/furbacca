@@ -65,7 +65,7 @@ Types: `default`, `human`, `dragon`, `demon`.
    cd ~/furbacca
    bash scripts/setup-fresh.sh
    ```
-   The script installs Node.js v20 (64-bit via NodeSource if missing), **enables SPI** (via raspi-config or `/boot/firmware/config.txt` when possible), Python venv, pip deps, gc9a01py, eye graphics, `npm install`/`npm run build`, adds a **wake-furbacca** alias, and **installs and starts the furbacca systemd service** (runs now and at boot). If SPI was off, **reboot** after the script so eyes can use the displays.
+   The script installs Node.js v20 (64-bit via NodeSource if missing), **enables SPI**, **memory tuning** (512 MB swap via dphys-swapfile, gpu_mem=32 for more ARM RAM), Python venv, pip deps, gc9a01py, eye graphics, `npm install`/`npm run build`, **wake-furbacca** alias, and **furbacca systemd service** (enabled at boot; start with `sudo systemctl start furbacca` when ready). **Reboot** after the script if it changed SPI, swap, or gpu_mem so those take effect.
 3. **Test:** `./scripts/wake-furbacca.sh` (or `wake-furbacca` in a new shell).
 4. **Boot (optional):** See **Systemd (full stack at startup)** below to run Furbacca on boot.
 
@@ -164,7 +164,7 @@ Use `sudo systemctl status furbacca` to check; logs: `journalctl -u furbacca -f`
 - **Permission denied:** `sudo chown -R $USER:$USER .`
 - **pip install fails (spidev/RPi.GPIO): "Python.h: No such file or directory"** — Install Python dev headers and build tools: `sudo apt-get install -y python3-dev build-essential`. Or run **`bash scripts/setup-fresh.sh`**; it installs them before pip.
 - **"git: command not found" (fetch-gc9a01py)** — Install git: `sudo apt-get install -y git`, then run **`bash scripts/setup-fresh.sh`** again (or `bash scripts/setup/fetch-gc9a01py.sh`).
-- **"JavaScript heap out of memory" (npm run build on Pi)** — Pi has limited RAM. Run: `NODE_OPTIONS=--max-old-space-size=384 npm run build`. **`setup-fresh.sh`** sets this automatically on the Pi.
+- **"JavaScript heap out of memory" (npm run build on Pi)** — **`setup-fresh.sh`** sets Node heap limit and memory tuning (512 MB swap, gpu_mem=32). Reboot after setup so swap/gpu_mem apply. If still OOM: `NODE_OPTIONS=--max-old-space-size=256 npm run build`, or increase swap: in `/etc/dphys-swapfile` set `CONF_SWAPSIZE=1024`, then `sudo dphys-swapfile swapoff && sudo dphys-swapfile setup && sudo dphys-swapfile swapon`.
 - **wake-furbacca says "can't open file ... vision/eyes.py"** — The Pi is still using an old alias or script that runs `vision/eyes.py` instead of the repo script. **Find it:** On the Pi run `type wake-furbacca` (or `which wake-furbacca` if it's a script). If it's an **alias**, edit `~/.bashrc` or `~/.zshrc` and set:
   ```bash
   alias wake-furbacca='~/furbacca/scripts/wake-furbacca.sh'
@@ -175,6 +175,7 @@ Use `sudo systemctl status furbacca` to check; logs: `journalctl -u furbacca -f`
 - **Module not found:** Run `source env/bin/activate` before Python/eyes.
 - **Eyes / SPI:** Enable SPI (`dtparam=spi=on`), see **instruction.md** §3.1.
 - **fe / touch not working, ss shows 127.0.0.1:5005:** (1) Sync from Mac with **`--delete`**: `push-furbacca` (alias must include `--delete` so the Pi loses old `vision/eyes.py` and only has `vision/py/`). (2) On the Pi, stop any old eyes: `sudo systemctl stop furbacca-eyes`. (3) Run `wake-furbacca` from `~/furbacca`; you should see `UDP 0.0.0.0:5005` and then `--- Furbacca Nervous System: Modular Edition ---`. If you see "vision/py/eyes.py not found", run push-furbacca again. If you see "Port 5005 already in use", stop the other process first.
+- **Pi unresponsive / can't SSH (furbacca service looping):** If the service is restarting constantly, get to a local console (monitor + keyboard or serial), log in, then: `sudo systemctl stop furbacca` and `sudo systemctl disable furbacca`. After pushing the latest code, re-run setup-fresh or reinstall the service; the unit now has `RestartSec=10` and `StartLimitBurst=5` so a failing service won’t spin forever.
 - **Touch dead / "gpioget: unable to request lines: Device or resource busy":** Another process is holding the touch GPIO pins (e.g. a previous `wake-furbacca`, `gpiomon`, or the eyes service). Stop all Furbacca processes (Ctrl+C in the terminal running wake-furbacca; `sudo systemctl stop furbacca-eyes` if eyes run as a service), then start again with a single `wake-furbacca`.
 - **Matter: "Failed to parse storage value" or startup hang:** Stale or incompatible data in `.matter/`. Stop wake-furbacca, then: `rm -rf .matter && wake-furbacca`. Re-pair Furbacca in Google Home / Apple Home using the new QR or code.
 - **Matter: device shows as "Matter.js Test Vendor" in Google Home:** Ensure you’re on a build that sets `basicInformation` (vendorName/productName, etc.) in `brain/ts/matter_lobe.ts`; re-pair after updating.

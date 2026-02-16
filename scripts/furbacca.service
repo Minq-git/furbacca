@@ -11,6 +11,9 @@ User=minqz
 WorkingDirectory=/home/minqz/furbacca
 ExecStart=/home/minqz/furbacca/scripts/wake-furbacca.sh
 Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
 StandardOutput=journal
 StandardError=journal
 

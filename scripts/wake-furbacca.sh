@@ -54,5 +54,7 @@ EYES_PID=$!
 sleep 1
 
 echo "Initializing nervous system..."
+# On Pi (low RAM), limit Node heap so tsc in "npm start" doesn't OOM
+[[ "$(uname -s)" == "Linux" ]] && export NODE_OPTIONS=--max-old-space-size=384
 # Nervous system in foreground (sensors, sends blink/cycle to eyes)
 npm start

@@ -70,6 +70,44 @@ if [[ "$UNAME_S" == "Linux" && ! -c /dev/spidev0.0 ]]; then
   fi
 fi
 
+# 0c. Memory tuning for Pi (swap + gpu_mem) so Node/tsc has headroom
+NEED_REBOOT=false
+if [[ "$UNAME_S" == "Linux" ]]; then
+  # Swap: 512 MB if dphys-swapfile is used (default 100 is tight for tsc)
+  if [[ -f /etc/dphys-swapfile ]] && ! grep -q '^CONF_SWAPSIZE=512' /etc/dphys-swapfile 2>/dev/null; then
+    CURRENT_SWAP=$(grep -E '^CONF_SWAPSIZE=' /etc/dphys-swapfile 2>/dev/null | sed 's/CONF_SWAPSIZE=//' || echo "0")
+    if [[ "${CURRENT_SWAP:-0}" -lt 512 ]]; then
+      echo "Increasing swap to 512 MB (was ${CURRENT_SWAP:-100})..."
+      if grep -q '^CONF_SWAPSIZE=' /etc/dphys-swapfile; then
+        sudo sed -i 's/^CONF_SWAPSIZE=.*/CONF_SWAPSIZE=512/' /etc/dphys-swapfile
+      else
+        echo "CONF_SWAPSIZE=512" | sudo tee -a /etc/dphys-swapfile >/dev/null
+      fi
+      NEED_REBOOT=true
+      echo "Swap will apply after reboot (or: sudo dphys-swapfile swapoff && sudo dphys-swapfile setup && sudo dphys-swapfile swapon)"
+    fi
+  fi
+  # GPU mem: leave more RAM for ARM (headless Furbacca doesn't need much GPU)
+  BOOT_CFG=""
+  [[ -f /boot/firmware/config.txt ]] && BOOT_CFG=/boot/firmware/config.txt
+  [[ -z "$BOOT_CFG" && -f /boot/config.txt ]] && BOOT_CFG=/boot/config.txt
+  if [[ -n "$BOOT_CFG" ]]; then
+    if grep -q '^gpu_mem=' "$BOOT_CFG" 2>/dev/null; then
+      CURRENT_GPU=$(grep '^gpu_mem=' "$BOOT_CFG" | sed 's/gpu_mem=//')
+      if [[ "${CURRENT_GPU:-128}" -gt 32 ]]; then
+        echo "Reducing gpu_mem to 32 MB (was $CURRENT_GPU) for more ARM RAM..."
+        sudo sed -i 's/^gpu_mem=.*/gpu_mem=32/' "$BOOT_CFG"
+        NEED_REBOOT=true
+      fi
+    else
+      echo "Setting gpu_mem=32 MB for more ARM RAM..."
+      echo "gpu_mem=32" | sudo tee -a "$BOOT_CFG" >/dev/null
+      NEED_REBOOT=true
+    fi
+  fi
+  [[ "$NEED_REBOOT" == "true" ]] && echo "Reboot when convenient so swap/gpu_mem changes apply: sudo reboot"
+fi
+
 # 1. Build deps (Python.h + gcc for spidev/RPi.GPIO; git for gc9a01py)
 if [[ "$UNAME_S" == "Linux" ]]; then
   echo "Ensuring Python dev headers, build tools, and git..."
@@ -142,6 +180,9 @@ User=$FURBACCA_USER
 WorkingDirectory=$REPO_DIR
 ExecStart=$REPO_DIR/scripts/wake-furbacca.sh
 Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
 StandardOutput=journal
 StandardError=journal
 
@@ -149,8 +190,8 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
     sudo systemctl daemon-reload
-    sudo systemctl enable --now furbacca
-    echo "Service enabled and started (runs now and at boot). Status: sudo systemctl status furbacca"
+    sudo systemctl enable furbacca
+    echo "Service enabled (starts on boot). Start now: sudo systemctl start furbacca   Status: sudo systemctl status furbacca"
   else
     echo "furbacca service already installed. Start: sudo systemctl start furbacca   Status: sudo systemctl status furbacca"
   fi
