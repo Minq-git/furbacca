@@ -158,6 +158,10 @@ if [[ "$UNAME_S" == "Linux" ]]; then
       echo "$LINE" >> "$RC"
       echo "Added to $RC: $LINE"
     fi
+    if ! grep -q "sleep-furbacca" "$RC" 2>/dev/null; then
+      echo "alias sleep-furbacca='sudo halt'" >> "$RC"
+      echo "Added to $RC: alias sleep-furbacca='sudo halt'"
+    fi
   fi
 
   # 8. Optional: install and enable furbacca systemd service (start at boot)
