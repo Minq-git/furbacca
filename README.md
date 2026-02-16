@@ -152,10 +152,15 @@ Full pin mapping: **instruction.md** §1.
 
 **Implementation:** Fan control on BCM 24 uses **DMA-driven PWM** (pigpio, 25 kHz) so the fans run stably without jitter during concurrent GC9A01 LCD eye rendering. **cooling/fan_control.ts** sets BCM 24 LOW on startup, then ramps PWM 0→100% over 2 s to avoid brownout. Disable with **FURBACCA_FAN=0**. **setup-fresh.sh** installs **pigpio** and enables **pigpiod** at startup so the fan works without sudo. See **instruction.md** §1 (Cooling fans).
 
+### Power / safe shutdown
+
+**Never pull the 5V pin while the Pi is running.** That’s a forced brownout: it can corrupt the SD card (mid-write) and, with fans on the same rail, add stress from inductive kickback. Always shut down first: run **`sleep-furbacca`** (or **`sudo halt`** / **`sudo shutdown -h now`**), then wait until the green ACT LED stops flickering and stays off (or a very faint solid glow) before disconnecting power. **setup-fresh.sh** adds the **sleep-furbacca** alias (`sudo halt`) to your shell rc.
+
 ---
 
 ## 🤖 Commands & automation
 - **`wake-furbacca`** — start all services (eyes + nervous system). Use this.
+- **`sleep-furbacca`** — (on the Pi) safe shutdown: runs **`sudo halt`**. **Never yank the power pin while the Pi is on** — that can corrupt the SD card (mid-write) and stress the fan circuit. Run **`sleep-furbacca`**, wait until the green ACT LED stops flickering and stays off (or faint solid), then disconnect power. **setup-fresh.sh** adds this alias to your shell rc.
 - **`sudo systemctl status furbacca`** — if you run the full stack as a service (see below); **`furbacca-eyes`** for eyes-only.
 - **`journalctl -u furbacca -f`** — stream the service logs (animations, touch, Matter, etc.) after SSH; `-n 200` for last 200 lines instead of follow.
 - **`./scripts/show-matter-pairing.sh`** — show Matter passcode, manual pairing code, and QR URL. On the Pi: run with no args. **From Mac:** `./scripts/show-matter-pairing.sh furbacca.local` (SSH to Pi and run there). Uses `FURBACCA_SSH_USER` (default `minqz`) for SSH.
