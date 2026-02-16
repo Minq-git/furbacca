@@ -179,4 +179,8 @@ export function setSpeed(percent: number): void {
   targetDutyPercent = Math.max(0, Math.min(100, Math.round(percent)));
 }
 
-export const fanControl = { init, softStart, setSpeed };
+export function isInitialized(): boolean {
+  return initialized;
+}
+
+export const fanControl = { init, softStart, setSpeed, isInitialized };
