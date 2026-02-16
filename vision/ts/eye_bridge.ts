@@ -43,14 +43,17 @@ export class EyeBridge {
   /** Play a named animation. Use replace: true to restart even if an animation is running (e.g. double head-tap). */
   public playAnimation(name: string, options?: { replace?: boolean }): void {
     const replace = options?.replace ?? false;
+    console.log(substitute(msg.eyes.animation, { name }));
     this.send(getAnimationPayload(name, replace));
   }
 
   public setEyeShape(shape: string): void {
+    console.log(substitute(msg.eyes.eye_shape, { shape }));
     this.sendCommand("set_eye_shape", { shape });
   }
 
   public cycleEyeShape(): void {
+    console.log(substitute(msg.eyes.eye_shape, { shape: "(cycle)" }));
     this.sendCommand("cycle_eye_shape");
   }
 

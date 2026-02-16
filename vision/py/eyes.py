@@ -193,6 +193,7 @@ def run_eyes():
                             warmup_step = max(0, min(config.EYE_WARMUP_STEPS - 1, int(s)))
                     elif action == "blink":
                         if not lids_held_closed and not animation_segments and animated_blink.can_trigger(now):
+                            print("  👁  UDP: blink")
                             animated_blink.trigger(now)
                     elif action == "look":
                         tx, ty = msg.get("x"), msg.get("y")

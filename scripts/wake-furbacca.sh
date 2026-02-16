@@ -43,9 +43,10 @@ trap cleanup EXIT INT TERM
 # Bind 0.0.0.0 so remote (fe) and local (nervous system) commands both work
 export UDP_BIND=0.0.0.0
 
-# Start eyes in background (UDP 5005)
+# Start eyes in background (UDP 5005). PYTHONUNBUFFERED=1 so animation/eye logs show in journalctl.
 (
   source env/bin/activate
+  export PYTHONUNBUFFERED=1
   python3 vision/py/eyes.py
 ) &
 EYES_PID=$!
