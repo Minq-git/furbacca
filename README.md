@@ -105,8 +105,9 @@ Eye assets: **vision/py/graphics**. Refresh with `./scripts/setup/fetch-eye-grap
 ```bash
 npm install
 npm run build
+npm run sync-sounds
 ```
-Run with `npm start` (or `sudo npm start` for GPIO). See **Starting the services** above.
+**`npm start`** runs only **`tsc`** (no sound copy) so wake-furbacca starts quickly. Sounds are copied once by **setup-fresh.sh** on the Pi; after a fresh clone elsewhere, run **`npm run sync-sounds`** once (or **`npm run build:full`** to build + copy). Run with `npm start` (or `sudo npm start` for GPIO). See **Starting the services** above.
 
 ### Matter: Furbacca as a device
 Matter is **on by default** when you run `wake-furbacca` (requires **64-bit Node** on the Pi, e.g. `node -p "process.arch"` → `arm64`). Furbacca appears as one Matter device with:

@@ -160,6 +160,7 @@ npm install
 # On Pi (low RAM), limit Node heap so tsc doesn't OOM
 [[ "$UNAME_S" == "Linux" ]] && export NODE_OPTIONS=--max-old-space-size=384
 npm run build
+npm run sync-sounds
 
 # 7. Optional: wake-furbacca alias (only on Pi, only if not already set)
 if [[ "$UNAME_S" == "Linux" ]]; then
