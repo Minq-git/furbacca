@@ -134,6 +134,9 @@ Full pin mapping: **instruction.md** §1.
 | Eye RST         | 27   | 13       | GC9A01          |
 | Eye CS (L)      | 8    | 24       | Left            |
 | Eye CS (R)      | 7    | 26       | Right           |
+| Cooling fans    | 24   | 18       | 2N2222 NPN, pigpio PWM (25 kHz, soft-start) |
+
+Cooling: **cooling/fan_control.ts** sets BCM 24 LOW on startup, then ramps PWM 0→100% over 2 s to avoid brownout. Disable with **FURBACCA_FAN=0**. On Pi, run as root or start **pigpiod**: `sudo pigpiod`. See **instruction.md** §1 (Cooling fans).
 
 ---
 
@@ -178,6 +181,7 @@ Check status: `sudo systemctl status furbacca`. **View event logs** (animations,
 - **Eyes / SPI:** Enable SPI (`dtparam=spi=on`), see **instruction.md** §3.1.
 - **fe / touch not working, ss shows 127.0.0.1:5005:** (1) Sync from Mac with **`--delete`**: `push-furbacca` (alias must include `--delete` so the Pi loses old `vision/eyes.py` and only has `vision/py/`). (2) On the Pi, stop any old eyes: `sudo systemctl stop furbacca-eyes`. (3) Run `wake-furbacca` from `~/furbacca`; you should see `UDP 0.0.0.0:5005` and then `--- Furbacca Nervous System: Modular Edition ---`. If you see "vision/py/eyes.py not found", run push-furbacca again. If you see "Port 5005 already in use", stop the other process first.
 - **Pi unresponsive / can't SSH (furbacca service looping):** If the service is restarting constantly, get to a local console (monitor + keyboard or serial), log in, then: `sudo systemctl stop furbacca` and `sudo systemctl disable furbacca`. After pushing the latest code, re-run setup-fresh or reinstall the service; the unit now has `RestartSec=10` and `StartLimitBurst=5` so a failing service won’t spin forever.
+- **Cooling fan not spinning:** Fan uses **pigpio** (DMA PWM on BCM 24). Run as root (`sudo npm start` / `sudo wake-furbacca`) or start the daemon: `sudo pigpiod`. Disable fan: **FURBACCA_FAN=0**.
 - **Touch dead / "gpioget: unable to request lines: Device or resource busy":** Another process is holding the touch GPIO pins (e.g. a previous `wake-furbacca`, `gpiomon`, or the eyes service). Stop all Furbacca processes (Ctrl+C in the terminal running wake-furbacca; `sudo systemctl stop furbacca-eyes` if eyes run as a service), then start again with a single `wake-furbacca`.
 - **Matter: "Failed to parse storage value" or startup hang:** Stale or incompatible data in `.matter/`. Stop wake-furbacca, then: `rm -rf .matter && wake-furbacca`. Re-pair Furbacca in Google Home / Apple Home using the new QR or code.
 - **Matter: device shows as "Matter.js Test Vendor" in Google Home:** Ensure you’re on a build that sets `basicInformation` (vendorName/productName, etc.) in `brain/ts/matter_lobe.ts`; re-pair after updating.

@@ -1,9 +1,13 @@
 import { execSync, spawn } from "child_process";
 import fs from "fs";
 import path from "path";
+import { fanControl } from "./cooling/fan_control.js";
 import { msg, substitute } from "./messages.js";
 import { TouchSenses, VIBE_BCM } from "./senses/touch";
 import { EyeBridge } from "./vision/ts/eye_bridge";
+
+// First: prevent fan from floating (BCM 24 LOW) before any other GPIO or heavy work
+fanControl.init();
 
 function loadWarmupConfig(): {
   EYE_WARMUP_STEPS: number;
@@ -261,10 +265,12 @@ process.on("SIGINT", () => onShutdown());
 if (stopEventWatch) {
   console.log(msg.nervous_system.touch_event_driven);
   if (matterEnabled) MATTER_LOBE_STATUS_LINES.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+  void fanControl.softStart(); // ramp fan 0→100% over 2s to avoid brownout
   startMatterIfEnabled().then((buffer) => startWarmupThenOpen(buffer));
 } else {
   console.log(msg.nervous_system.touch_polling);
   if (matterEnabled) MATTER_LOBE_STATUS_LINES.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+  void fanControl.softStart();
   setInterval(() => touch.poll(onTouch), 20);
   startMatterIfEnabled().then((buffer) => startWarmupThenOpen(buffer));
 }
