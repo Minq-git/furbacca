@@ -66,7 +66,7 @@ Types: `default`, `human`, `dragon`, `demon`.
    cd ~/furbacca
    bash scripts/setup-fresh.sh
    ```
-   The script installs Node.js v20 (64-bit via NodeSource if missing), **enables SPI**, **memory tuning** (512 MB swap, gpu_mem=32), **gpiod + libgpiod-dev** (for cooling fan on BCM 24), Python venv, pip deps, gc9a01py, eye graphics, `npm install`/`npm run build`, **wake-furbacca** alias, and **furbacca systemd service** (enabled at boot; start with `sudo systemctl start furbacca` when ready). **Reboot** after the script if it changed SPI, swap, or gpu_mem so those take effect.
+   The script installs Node.js v20 (64-bit via NodeSource if missing), **enables SPI**, **memory tuning** (systemd-zram-generator: 100% of RAM, zstd; zram-tools masked to avoid race; 512 MB disk swap as fallback; gpu_mem=32), **gpiod + libgpiod-dev** (for cooling fan on BCM 24), Python venv, pip deps, gc9a01py, eye graphics, `npm install`/`npm run build`, **wake-furbacca** alias, and **furbacca systemd service** (enabled at boot; start with `sudo systemctl start furbacca` when ready). **Reboot** after the script if it changed SPI, swap, or gpu_mem so those take effect.
 3. **Test:** `./scripts/wake-furbacca.sh` (or `wake-furbacca` in a new shell).
 4. **Boot (optional):** See **Systemd (full stack at startup)** below to run Furbacca on boot.
 
@@ -165,6 +165,7 @@ Full pin mapping: **instruction.md** §1.
 - **`sudo systemctl status furbacca`** — if you run the full stack as a service (see below); **`furbacca-eyes`** for eyes-only.
 - **`journalctl -u furbacca -f`** — stream the service logs (animations, touch, Matter, etc.) after SSH; `-n 200` for last 200 lines instead of follow.
 - **`./scripts/show-matter-pairing.sh`** — show Matter passcode, manual pairing code, and QR URL. On the Pi: run with no args. **From Mac:** `./scripts/show-matter-pairing.sh furbacca.local` (SSH to Pi and run there). Uses `FURBACCA_SSH_USER` (default `minqz`) for SSH.
+- **`./scripts/monitor-zram.sh`** — live zRAM compression ratio and SD swap usage (Ctrl+C to stop). On the Pi: `./scripts/monitor-zram.sh`. **From Mac:** `./scripts/monitor-zram.sh furbacca.local` (SSH to Pi and run there).
 - **`push-furbacca`** — (Mac) rsync project to the Pi. Use **`--delete`** so the Pi loses old paths (e.g. `vision/eyes.py` after refactor) and matches your Mac layout. Exclude Pi-only dirs so rsync doesn't delete them: `vision/py/gc9a01py` (fetched on the Pi by `scripts/setup/fetch-gc9a01py.sh`; not on the Mac), and optionally `vision/waveshare-lcd-code`, `vision/gc9a01py` (old leftovers). Add to `~/.zshrc`:
   ```bash
   alias push-furbacca='rsync -avz --delete --exclude node_modules --exclude .git --exclude env --exclude dist --exclude vision/py/gc9a01py --exclude vision/waveshare-lcd-code --exclude vision/gc9a01py /Users/brent/Documents/Code/Furbacca/ minqz@furbacca.local:~/furbacca/'
@@ -179,7 +180,7 @@ Edit `User`, `WorkingDirectory`, and `ExecStart` in the unit to match your Pi us
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now furbacca
 ```
-Check status: `sudo systemctl status furbacca`. **View event logs** (animations, touch, Matter) after SSH: `journalctl -u furbacca -f` (stream) or `journalctl -u furbacca -n 200` (last 200 lines).
+Check status: `sudo systemctl status furbacca`. **View event logs** (animations, touch, Matter) after SSH: `journalctl -u furbacca -f` (stream) or `journalctl -u furbacca -n 200` (last 200 lines). **Temporarily disable** auto-start: `sudo systemctl disable furbacca` (service stays installed; start manually with `wake-furbacca` or `sudo systemctl start furbacca`). **Re-enable** at boot: `sudo systemctl enable furbacca`.
 
 **Systemd (eyes only):** To run only eyes as a service (e.g. you run the nervous system manually), use `scripts/furbacca-eyes.service` instead—copy to `/etc/systemd/system/`, edit paths, then `sudo systemctl daemon-reload && sudo systemctl enable --now furbacca-eyes`.
 
@@ -189,7 +190,7 @@ Check status: `sudo systemctl status furbacca`. **View event logs** (animations,
 - **Permission denied:** `sudo chown -R $USER:$USER .`
 - **pip install fails (spidev/RPi.GPIO): "Python.h: No such file or directory"** — Install Python dev headers and build tools: `sudo apt-get install -y python3-dev build-essential`. Or run **`bash scripts/setup-fresh.sh`**; it installs them before pip.
 - **"git: command not found" (fetch-gc9a01py)** — Install git: `sudo apt-get install -y git`, then run **`bash scripts/setup-fresh.sh`** again (or `bash scripts/setup/fetch-gc9a01py.sh`).
-- **"JavaScript heap out of memory" (npm run build on Pi)** — **`setup-fresh.sh`** sets Node heap limit and memory tuning (512 MB swap, gpu_mem=32). Reboot after setup so swap/gpu_mem apply. If still OOM: `NODE_OPTIONS=--max-old-space-size=256 npm run build`, or increase swap: in `/etc/dphys-swapfile` set `CONF_SWAPSIZE=1024`, then `sudo dphys-swapfile swapoff && sudo dphys-swapfile setup && sudo dphys-swapfile swapon`.
+- **"JavaScript heap out of memory" (npm run build on Pi)** — **`setup-fresh.sh`** sets Node heap limit and memory tuning: **zram** (systemd-zram-generator: 100% of RAM, zstd; zram-tools masked on Trixie to avoid device race) so the Pi uses compressed RAM before disk swap, plus 512 MB disk swap and gpu_mem=32. Reboot after setup so zram/swap/gpu_mem apply. Verify zram: `zramctl`. If still OOM: `NODE_OPTIONS=--max-old-space-size=256 npm run build`, or increase disk swap: in `/etc/dphys-swapfile` set `CONF_SWAPSIZE=1024`, then `sudo dphys-swapfile swapoff && sudo dphys-swapfile setup && sudo dphys-swapfile swapon`.
 - **wake-furbacca says "can't open file ... vision/eyes.py"** — The Pi is still using an old alias or script that runs `vision/eyes.py` instead of the repo script. **Find it:** On the Pi run `type wake-furbacca` (or `which wake-furbacca` if it's a script). If it's an **alias**, edit `~/.bashrc` or `~/.zshrc` and set:
   ```bash
   alias wake-furbacca='~/furbacca/scripts/wake-furbacca.sh'

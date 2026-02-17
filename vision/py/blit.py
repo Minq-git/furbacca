@@ -40,14 +40,18 @@ def _blit_worker():
         
         l_handle, l_buf, r_handle, r_buf = task
         
+        # Shared SPI bus: blit left then right sequentially. Use separate try/except so one
+        # failing eye (e.g. SPI busy, wiring) doesn't skip the other — fixes "only one eye" updates.
         try:
-            # Shared SPI bus: these MUST happen sequentially
             if l_handle and l_buf:
                 l_handle.blit_buffer(l_buf, 0, 0, EYE_SIZE, EYE_SIZE)
+        except Exception as e:
+            print(f"SPI Worker Error (left eye): {e}")
+        try:
             if r_handle and r_buf:
                 r_handle.blit_buffer(r_buf, 0, 0, EYE_SIZE, EYE_SIZE)
         except Exception as e:
-            print(f"SPI Worker Error (check wiring/display): {e}")
+            print(f"SPI Worker Error (right eye): {e}")
         finally:
             _blit_queue.task_done()
 
