@@ -87,6 +87,11 @@ const bellyState = (): StatusState =>
   process.platform !== "linux" ? "unknown" : bellyHw.ok ? "ok" : "fail";
 const vibeState = (): StatusState =>
   process.platform !== "linux" ? "unknown" : vibeHw.ok ? "ok" : "fail";
+const fanState = (): StatusState => {
+  if (process.env.FURBACCA_FAN === "0" || process.env.FURBACCA_FAN === "false") return "unknown";
+  if (process.platform !== "linux") return "unknown";
+  return fanControl.isInitialized() ? "ok" : "fail";
+};
 
 const rows: string[] = [
   "| GC9A01PY    | Left Eye            | BCM 8    | " + statusCell(displayState()) + " |",
@@ -94,6 +99,7 @@ const rows: string[] = [
   "| TTP223B     | Head Touch          | BCM 17   | " + statusCell(headState()) + " |",
   "| TTP223B     | Belly Touch         | BCM 22   | " + statusCell(bellyState()) + " |",
   "| SW-420      | Vibration (Shiver)  | BCM 23   | " + statusCell(vibeState()) + " |",
+  "| Cooling     | Fan (BCM 24)        | BCM 24   | " + statusCell(fanState()) + " |",
 ];
 
 const tableTitle = msg.nervous_system.hardware_table_title;
@@ -325,10 +331,10 @@ const matterPromise = matterEnabled
   : (console.log(msg.nervous_system.matter_disabled), Promise.resolve(undefined));
 
 if (stopEventWatch) {
-  void fanControl.softStart(); // ramp fan 0→100% over 2s to avoid brownout
+  void fanControl.softStart().then(() => fanControl.startThermalWatchdog()); // ramp then thermal-based speed
   startWarmupThenOpen(matterPromise);
 } else {
-  void fanControl.softStart();
+  void fanControl.softStart().then(() => fanControl.startThermalWatchdog());
   setInterval(() => touch.poll(onTouch), 20);
   startWarmupThenOpen(matterPromise);
 }

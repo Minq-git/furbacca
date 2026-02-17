@@ -8,14 +8,28 @@
  * BCM 24 has no hardware PWM on Pi Zero 2; PWM is software (fixed period, duty in userspace).
  * Soft-start ramps 0%→100% over 2 s to avoid voltage brownout.
  *
+ * Thermal watchdog: polls vcgencmd measure_temp and sets fan 50% when idle (cool), 100% when hot
+ * to avoid Pi thermal throttling while reducing noise when idle.
+ *
  * Requires: gpiod + libgpiod-dev (apt), easy-gpiod (npm). Debian Trixie: libgpiod 2.x, GPIO character device.
  * Disable: FURBACCA_FAN=0
  */
+
+import { execSync } from "child_process";
 
 const FAN_BCM = 24;
 const SOFT_START_MS = 2000;
 /** Software PWM period (ms). ~100 Hz to keep timing stable under SPI/CPU load. */
 const PWM_PERIOD_MS = 10;
+
+/** Thermal watchdog: poll interval (ms). */
+const THERMAL_POLL_MS = 15_000;
+/** Below this temp (°C), fan runs at IDLE_SPEED. */
+const THERMAL_IDLE_TEMP_C = 48;
+/** Above this temp (°C), fan runs at 100%. Linear between IDLE and HIGH. */
+const THERMAL_HIGH_TEMP_C = 58;
+/** Fan % when CPU is cool (idle). */
+const THERMAL_IDLE_SPEED = 50;
 
 interface LineLike {
   setValue(value: number): void;
@@ -31,9 +45,30 @@ let initialized = false;
 let targetDutyPercent = 0;
 let pwmInterval: ReturnType<typeof setInterval> | null = null;
 let pwmTimeout: ReturnType<typeof setTimeout> | null = null;
+let thermalWatchdogInterval: ReturnType<typeof setInterval> | null = null;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Read CPU temp via vcgencmd (Raspberry Pi). Returns °C or null if unavailable. */
+function getCpuTemp(): number | null {
+  try {
+    const out = execSync("/usr/bin/vcgencmd measure_temp", { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] });
+    const m = out.match(/temp=([\d.]+)/);
+    if (m) return parseFloat(m[1]);
+  } catch {
+    /* not on Pi or vcgencmd missing */
+  }
+  return null;
+}
+
+/** Map CPU temp (°C) to fan speed 0–100. Idle (cool) = THERMAL_IDLE_SPEED, hot = 100%, linear between. */
+function tempToSpeed(tempC: number): number {
+  if (tempC <= THERMAL_IDLE_TEMP_C) return THERMAL_IDLE_SPEED;
+  if (tempC >= THERMAL_HIGH_TEMP_C) return 100;
+  const t = (tempC - THERMAL_IDLE_TEMP_C) / (THERMAL_HIGH_TEMP_C - THERMAL_IDLE_TEMP_C);
+  return Math.round(THERMAL_IDLE_SPEED + t * (100 - THERMAL_IDLE_SPEED));
 }
 
 /**
@@ -115,6 +150,10 @@ export function init(): void {
     initialized = true;
 
     const cleanup = (): void => {
+      if (thermalWatchdogInterval) {
+        clearInterval(thermalWatchdogInterval);
+        thermalWatchdogInterval = null;
+      }
       stopPwm();
       targetDutyPercent = 0;
       if (fanLine) {
@@ -183,4 +222,21 @@ export function isInitialized(): boolean {
   return initialized;
 }
 
-export const fanControl = { init, softStart, setSpeed, isInitialized };
+/**
+ * Start polling vcgencmd measure_temp and set fan speed by temperature (50% when cool, 100% when hot).
+ * No-op if not initialized or not on Linux. Call after softStart().
+ * First tick is deferred by one interval so vcgencmd never runs during the critical eyes-open startup window.
+ */
+export function startThermalWatchdog(): void {
+  if (!initialized || process.platform !== "linux") return;
+  if (thermalWatchdogInterval) return;
+  const tick = (): void => {
+    const temp = getCpuTemp();
+    if (temp !== null) setSpeed(tempToSpeed(temp));
+  };
+  thermalWatchdogInterval = setInterval(tick, THERMAL_POLL_MS);
+  // Defer first tick: avoid execSync(vcgencmd) during 0–3s when eyes warmup/open runs (reduces right-eye blackout)
+  setTimeout(tick, THERMAL_POLL_MS);
+}
+
+export const fanControl = { init, softStart, setSpeed, isInitialized, startThermalWatchdog };
