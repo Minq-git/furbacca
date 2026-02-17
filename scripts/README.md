@@ -8,7 +8,7 @@
 | **run-eyes.sh** | Eyes only (vision/py/eyes.py). Use when you want eyes in one terminal and nervous system in another. |
 | **eye-command.sh** | Send commands to eyes (blink, shape, type) while eyes are running. On Pi: `./scripts/eye-command.sh shape sharp`. From Mac: `./scripts/eye-command.sh furbacca.local type dragon`. |
 | **show-matter-pairing.sh** | Show Matter passcode, manual pairing code, and QR URL from service logs. On Pi: `./scripts/show-matter-pairing.sh`. From Mac: `./scripts/show-matter-pairing.sh furbacca.local` (SSH to Pi). |
-| **setup-fresh.sh** | Full Furbacca setup on the Pi (after a wipe): Node.js v20 64-bit if missing, SPI enable, venv, pip deps, gc9a01py, eye graphics, npm install/build, wake-furbacca alias, and furbacca systemd service (start at boot). Run from repo root: `cd ~/furbacca && bash scripts/setup-fresh.sh`. Idempotent. |
+| **setup-fresh.sh** | Full Furbacca setup on the Pi (after a wipe): Node.js v20 64-bit if missing, SPI enable, memory tuning, **pigpio + pigpiod** (fan PWM at startup), venv, pip deps, gc9a01py, eye graphics, npm install/build, wake-furbacca alias, and furbacca systemd service (start at boot). Run from repo root: `cd ~/furbacca && bash scripts/setup-fresh.sh`. Idempotent. |
 
 ## Used by setup (don’t run directly unless needed)
 

@@ -22,10 +22,12 @@ const MATTER_STARTUP_TIMEOUT_MS = 90_000;
 /** Keys in root.generalDiagnostics that can fail to parse after SDK/storage schema changes; remove before create so SDK re-initializes them. */
 const CORRUPT_GENERAL_DIAGNOSTICS_KEYS = ["__features__", "totalOperationalHoursCounter"];
 
+function getMatterDir(): string {
+  return process.env.HOME ? path.join(process.env.HOME, ".matter") : path.join(process.cwd(), ".matter");
+}
+
 async function tidyMatterStorage(): Promise<void> {
-  const matterDir = process.env.HOME
-    ? path.join(process.env.HOME, ".matter")
-    : path.join(process.cwd(), ".matter");
+  const matterDir = getMatterDir();
   try {
     const entries = await fs.readdir(matterDir, { withFileTypes: true });
     for (const ent of entries) {
@@ -102,6 +104,8 @@ export class MatterLobe {
     onStatus?: (msg: string) => void;
     /** If set, Matter SDK log lines are buffered here instead of printed; caller prints after start() to keep order. */
     matterLogBuffer?: string[];
+    /** If true, use short "Online." instead of "Online. Generating pairing code and QR below...". */
+    pairingAlreadyShown?: boolean;
   }): Promise<void> {
     const status = (s: string) => {
       if (options?.onStatus) options.onStatus(s);
@@ -361,14 +365,23 @@ export class MatterLobe {
 
       status(msg.matter_lobe.status.endpoints_ready);
       await node.start();
-      status(msg.matter_lobe.status.online);
+      status(
+        options?.pairingAlreadyShown
+          ? (msg.matter_lobe.status as { online_short?: string }).online_short ?? "Online."
+          : msg.matter_lobe.status.online
+      );
 
-      // Only show pairing/QR when uncommissioned; if already paired, remove those lines from the log buffer
+      // Only show pairing/QR when uncommissioned; if already paired, remove those lines from the log buffer and delete cached pairing display
       const buffer = options?.matterLogBuffer;
       if (buffer?.length && node.lifecycle.isCommissioned) {
         const pairingQrPattern = /Commissioning|passcode|discriminator|pairing|uncommissioned|qrcode|QR code|manual pairing|▄|▀|█|project-chip\.github\.io/i;
         for (let i = buffer.length - 1; i >= 0; i--) {
           if (pairingQrPattern.test(buffer[i]!)) buffer.splice(i, 1);
+        }
+        try {
+          await fs.unlink(path.join(getMatterDir(), "pairing_display.txt"));
+        } catch {
+          /* ignore */
         }
       }
     };

@@ -108,11 +108,13 @@ if [[ "$UNAME_S" == "Linux" ]]; then
   [[ "$NEED_REBOOT" == "true" ]] && echo "Reboot when convenient so swap/gpu_mem changes apply: sudo reboot"
 fi
 
-# 1. Build deps (Python.h + gcc for spidev/RPi.GPIO; git for gc9a01py)
+# 1. Build deps (Python.h + gcc for spidev/RPi.GPIO; git for gc9a01py; libgpiod for fan control)
 if [[ "$UNAME_S" == "Linux" ]]; then
-  echo "Ensuring Python dev headers, build tools, and git..."
+  echo "Ensuring Python dev headers, build tools, git, and libgpiod..."
   sudo apt-get update -qq
-  sudo apt-get install -y python3-dev build-essential git
+  sudo apt-get install -y python3-dev python3-setuptools build-essential git
+  # libgpiod: GPIO character device for cooling fan (BCM 24). Debian Trixie: gpiod + libgpiod-dev.
+  sudo apt-get install -y gpiod libgpiod-dev
 fi
 
 # 2. Python venv
@@ -140,10 +142,13 @@ bash scripts/setup/fetch-eye-graphics.sh
 
 # 6. Node deps (nervous system)
 echo "Installing npm deps and building..."
+# node-gyp (node-libgpiod) needs Python with distutils; use system Python, not venv (venv may be 3.12+ without distutils)
+[[ "$UNAME_S" == "Linux" ]] && export npm_config_python=/usr/bin/python3
 npm install
 # On Pi (low RAM), limit Node heap so tsc doesn't OOM
 [[ "$UNAME_S" == "Linux" ]] && export NODE_OPTIONS=--max-old-space-size=384
 npm run build
+npm run sync-sounds
 
 # 7. Optional: wake-furbacca alias (only on Pi, only if not already set)
 if [[ "$UNAME_S" == "Linux" ]]; then
@@ -161,6 +166,10 @@ if [[ "$UNAME_S" == "Linux" ]]; then
     if ! grep -q "sleep-furbacca" "$RC" 2>/dev/null; then
       echo "alias sleep-furbacca='sudo halt'" >> "$RC"
       echo "Added to $RC: alias sleep-furbacca='sudo halt'"
+    fi
+    if ! grep -q "setup-furbacca" "$RC" 2>/dev/null; then
+      echo "alias setup-furbacca='bash $REPO_DIR/scripts/setup-fresh.sh'" >> "$RC"
+      echo "Added to $RC: alias setup-furbacca='...'"
     fi
   fi
 
@@ -206,4 +215,5 @@ fi
 echo ""
 echo "=== Setup complete ==="
 echo "Run: ./scripts/wake-furbacca.sh   (or: wake-furbacca   after opening a new shell)"
+echo "Re-run full setup: setup-furbacca   (alias added to your shell rc)"
 echo "SPI / pinout: instruction.md §3.1."

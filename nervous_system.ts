@@ -1,9 +1,13 @@
 import { execSync, spawn } from "child_process";
 import fs from "fs";
 import path from "path";
+import { fanControl } from "./cooling/fan_control.js";
 import { msg, substitute } from "./messages.js";
 import { TouchSenses, VIBE_BCM } from "./senses/touch";
 import { EyeBridge } from "./vision/ts/eye_bridge";
+
+// First: prevent fan from floating (BCM 24 LOW) before any other GPIO or heavy work
+fanControl.init();
 
 function loadWarmupConfig(): {
   EYE_WARMUP_STEPS: number;
@@ -83,6 +87,11 @@ const bellyState = (): StatusState =>
   process.platform !== "linux" ? "unknown" : bellyHw.ok ? "ok" : "fail";
 const vibeState = (): StatusState =>
   process.platform !== "linux" ? "unknown" : vibeHw.ok ? "ok" : "fail";
+const fanState = (): StatusState => {
+  if (process.env.FURBACCA_FAN === "0" || process.env.FURBACCA_FAN === "false") return "unknown";
+  if (process.platform !== "linux") return "unknown";
+  return fanControl.isInitialized() ? "ok" : "fail";
+};
 
 const rows: string[] = [
   "| GC9A01PY    | Left Eye            | BCM 8    | " + statusCell(displayState()) + " |",
@@ -90,6 +99,7 @@ const rows: string[] = [
   "| TTP223B     | Head Touch          | BCM 17   | " + statusCell(headState()) + " |",
   "| TTP223B     | Belly Touch         | BCM 22   | " + statusCell(bellyState()) + " |",
   "| SW-420      | Vibration (Shiver)  | BCM 23   | " + statusCell(vibeState()) + " |",
+  "| Cooling     | Fan (BCM 24)        | BCM 24   | " + statusCell(fanState()) + " |",
 ];
 
 const tableTitle = msg.nervous_system.hardware_table_title;
@@ -115,21 +125,62 @@ let matterLobe: { notifyTouch(sensor: "head" | "belly" | "shiver", active: boole
 const chipToolNodeId = process.env.CHIP_TOOL_NODE_ID?.trim() || undefined;
 const chipToolEndpoint = process.env.CHIP_TOOL_ENDPOINT ?? "0x1";
 
-async function startMatterIfEnabled(): Promise<string[] | undefined> {
+const MATTER_DIR = process.env.HOME ? path.join(process.env.HOME, ".matter") : path.join(process.cwd(), ".matter");
+const PAIRING_DISPLAY_CACHE = path.join(MATTER_DIR, "pairing_display.txt");
+const PAIRING_QR_PATTERN =
+  /Commissioning|passcode|discriminator|pairing|uncommissioned|qrcode|QR code|manual pairing|▄|▀|█|project-chip\.github\.io/i;
+
+/** Result when Matter is enabled: buffer + whether we already printed pairing block and sep. */
+type MatterStartResult = { buffer: string[]; showedCachedPairing: boolean };
+
+async function startMatterIfEnabled(): Promise<MatterStartResult | undefined> {
   if (!matterEnabled) {
     console.log(msg.nervous_system.matter_disabled);
     return undefined;
+  }
+  let showedCachedPairing = false;
+  if (fs.existsSync(PAIRING_DISPLAY_CACHE)) {
+    try {
+      const cached = fs.readFileSync(PAIRING_DISPLAY_CACHE, "utf-8").trim();
+      if (cached) {
+        console.log(msg.nervous_system.matter_startup_logs_header);
+        console.log(cached);
+        console.log(sep);
+        showedCachedPairing = true;
+      }
+    } catch {
+      /* ignore read errors */
+    }
   }
   const matterLogBuffer: string[] = [];
   const { MatterLobe } = await import("./brain/ts/matter_lobe.js");
   const matter = new MatterLobe(eyes, touch);
   matterLobe = matter;
   try {
-    await matter.start({ onStatus: () => {}, matterLogBuffer });
+    await matter.start({
+      onStatus: () => {},
+      matterLogBuffer,
+      pairingAlreadyShown: showedCachedPairing,
+    });
   } catch (e) {
     console.error(e);
   }
-  return matterLogBuffer;
+  if (showedCachedPairing) {
+    for (let i = matterLogBuffer.length - 1; i >= 0; i--) {
+      if (PAIRING_QR_PATTERN.test(matterLogBuffer[i]!)) matterLogBuffer.splice(i, 1);
+    }
+  } else {
+    const pairingLines = matterLogBuffer.filter((line) => PAIRING_QR_PATTERN.test(line));
+    if (pairingLines.length > 0) {
+      try {
+        fs.mkdirSync(MATTER_DIR, { recursive: true });
+        fs.writeFileSync(PAIRING_DISPLAY_CACHE, pairingLines.join("\n"), "utf-8");
+      } catch {
+        /* ignore write errors */
+      }
+    }
+  }
+  return { buffer: matterLogBuffer, showedCachedPairing };
 }
 
 function chipToolOn(): void {
@@ -217,7 +268,8 @@ function warmupBar(filled: number, total: number, label: string): string {
 
 const CLEAR_LINE = "\x1b[K"; // clear from cursor to end of line
 
-function startWarmupThenOpen(matterLogBuffer?: string[]): void {
+/** Runs warmup and opens eyes; Matter logs are printed when the promise resolves (Matter runs in parallel). */
+function startWarmupThenOpen(matterResultPromise: Promise<MatterStartResult | undefined>): void {
   const stepMs = WARMUP_MS / WARMUP_STEPS;
   let step = 0;
   process.stdout.write(warmupBar(step, WARMUP_STEPS, WARMUP_STEP_LABELS[step] ?? "Starting"));
@@ -231,19 +283,18 @@ function startWarmupThenOpen(matterLogBuffer?: string[]): void {
       clearInterval(tick);
       process.stdout.write("\r" + CLEAR_LINE + warmupBar(WARMUP_STEPS, WARMUP_STEPS, "Opening eyes.") + "\n");
       eyes.openEyes();
-      if (matterLogBuffer?.length) {
-        console.log(msg.nervous_system.matter_startup_logs_header);
-        matterLogBuffer.forEach((line) => console.log(line));
-      }
-      console.log(sep);
+      matterResultPromise.then((result) => {
+        if (result?.buffer?.length) {
+          console.log(msg.nervous_system.matter_startup_logs_header);
+          result.buffer.forEach((line) => console.log(line));
+        }
+        if (!result?.showedCachedPairing) console.log(sep);
+      });
     }
   }, stepMs);
 }
 
 const matterLobeStatus = msg.matter_lobe.status as Record<string, string>;
-const MATTER_LOBE_STATUS_LINES = msg.matter_lobe.status_order.map((key) =>
-  key === "checking_port" ? substitute(matterLobeStatus[key], { port: "5540" }) : matterLobeStatus[key]
-);
 
 // Prefer event-driven (gpiomon) for minimal latency; fall back to 20ms polling
 const stopEventWatch = touch.startEventWatch(onTouch);
@@ -258,13 +309,32 @@ function onShutdown(): void {
 }
 process.on("SIGINT", () => onShutdown());
 
+// Group touch + Matter Lobe status lines, then start Matter (cached pairing prints right after if present)
+const hasCachedPairing = matterEnabled && fs.existsSync(PAIRING_DISPLAY_CACHE);
+const matterLobeStatusLines = msg.matter_lobe.status_order.map((key) => {
+  if (key === "checking_port") return substitute(matterLobeStatus[key], { port: "5540" });
+  if (key === "online" && hasCachedPairing) return matterLobeStatus.online_short ?? "Online.";
+  return matterLobeStatus[key];
+});
+
 if (stopEventWatch) {
   console.log(msg.nervous_system.touch_event_driven);
-  if (matterEnabled) MATTER_LOBE_STATUS_LINES.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
-  startMatterIfEnabled().then((buffer) => startWarmupThenOpen(buffer));
+  if (matterEnabled) matterLobeStatusLines.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
 } else {
   console.log(msg.nervous_system.touch_polling);
-  if (matterEnabled) MATTER_LOBE_STATUS_LINES.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+  if (matterEnabled) matterLobeStatusLines.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+}
+
+// Matter and warmup run in parallel; eyes open when warmup finishes, Matter logs when Matter finishes
+const matterPromise = matterEnabled
+  ? startMatterIfEnabled()
+  : (console.log(msg.nervous_system.matter_disabled), Promise.resolve(undefined));
+
+if (stopEventWatch) {
+  void fanControl.softStart().then(() => fanControl.startThermalWatchdog()); // ramp then thermal-based speed
+  startWarmupThenOpen(matterPromise);
+} else {
+  void fanControl.softStart().then(() => fanControl.startThermalWatchdog());
   setInterval(() => touch.poll(onTouch), 20);
-  startMatterIfEnabled().then((buffer) => startWarmupThenOpen(buffer));
+  startWarmupThenOpen(matterPromise);
 }
