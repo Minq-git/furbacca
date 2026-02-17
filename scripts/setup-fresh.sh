@@ -70,10 +70,42 @@ if [[ "$UNAME_S" == "Linux" && ! -c /dev/spidev0.0 ]]; then
   fi
 fi
 
-# 0c. Memory tuning for Pi (swap + gpu_mem) so Node/tsc has headroom
+# 0c. Memory tuning for Pi (zram + swap + gpu_mem) so Node/tsc/Matter/vision have headroom
 NEED_REBOOT=false
 if [[ "$UNAME_S" == "Linux" ]]; then
-  # Swap: 512 MB if dphys-swapfile is used (default 100 is tight for tsc)
+  # zram: use systemd-zram-generator (Debian Trixie). zram-tools races with kernel/generator — mask it so it never starts.
+  sudo swapoff /dev/zram0 2>/dev/null || true
+  sudo systemctl stop zramswap 2>/dev/null || true
+  sudo systemctl disable zramswap 2>/dev/null || true
+  sudo systemctl mask zramswap 2>/dev/null || true
+  # Reset zram module so a stuck /dev/zram0 is cleared; generator will create it fresh at next boot.
+  if [[ -e /dev/zram0 ]]; then
+    sudo modprobe -r zram 2>/dev/null || true
+    sudo modprobe zram 2>/dev/null || true
+  fi
+  if apt-cache show systemd-zram-generator &>/dev/null; then
+    if ! dpkg -l systemd-zram-generator &>/dev/null; then
+      echo "Installing systemd-zram-generator (compressed RAM swap for Pi Zero 2 W)..."
+      sudo apt-get update -qq
+      sudo apt-get install -y systemd-zram-generator
+    fi
+    ZRAM_GEN_CFG=/etc/systemd/zram-generator.conf
+    # 100% of RAM, zstd; generator creates swap at boot (no priority option; zram usually before file swap).
+    if [[ ! -f "$ZRAM_GEN_CFG" ]] || ! grep -q 'zram-size = ram' "$ZRAM_GEN_CFG" 2>/dev/null || ! grep -q 'compression-algorithm = zstd' "$ZRAM_GEN_CFG" 2>/dev/null; then
+      echo "Configuring zram: systemd-zram-generator (100% RAM, zstd)..."
+      sudo tee "$ZRAM_GEN_CFG" >/dev/null << 'ZRAMEOF'
+# Furbacca: high-compression zram (100% of RAM, zstd). Applied at next boot.
+[zram0]
+zram-size = ram
+compression-algorithm = zstd
+ZRAMEOF
+      NEED_REBOOT=true
+    fi
+    echo "zram configured (systemd-zram-generator). Reboot for zram to take effect; then verify with: zramctl"
+  else
+    echo "systemd-zram-generator not available; zram-tools disabled (known mkswap issues on Pi). Using disk swap only."
+  fi
+  # Swap: 512 MB if dphys-swapfile is used (fallback; zram is preferred when available)
   if [[ -f /etc/dphys-swapfile ]] && ! grep -q '^CONF_SWAPSIZE=512' /etc/dphys-swapfile 2>/dev/null; then
     CURRENT_SWAP=$(grep -E '^CONF_SWAPSIZE=' /etc/dphys-swapfile 2>/dev/null | sed 's/CONF_SWAPSIZE=//' || echo "0")
     if [[ "${CURRENT_SWAP:-0}" -lt 512 ]]; then
