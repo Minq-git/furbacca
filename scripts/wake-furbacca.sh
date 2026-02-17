@@ -43,7 +43,19 @@ trap cleanup EXIT INT TERM
 # Bind 0.0.0.0 so remote (fe) and local (nervous system) commands both work
 export UDP_BIND=0.0.0.0
 
+# Build first (before starting eyes). On Pi, eyes + tsc together can OOM; build with eyes not running.
+echo "Building nervous system..."
+if [[ "$(uname -s)" == "Linux" ]]; then
+  npm run build:pi
+else
+  npm run build
+fi
+
+# On Pi (low RAM), limit Node heap for the runtime process
+[[ "$(uname -s)" == "Linux" ]] && export NODE_OPTIONS=--max-old-space-size=384
+
 # Start eyes in background (UDP 5005). PYTHONUNBUFFERED=1 so animation/eye logs show in journalctl.
+echo "Starting eyes and nervous system..."
 (
   source env/bin/activate
   export PYTHONUNBUFFERED=1
@@ -54,8 +66,5 @@ EYES_PID=$!
 # Give eyes a moment to bind
 sleep 1
 
-echo "Initializing nervous system..."
-# On Pi (low RAM), limit Node heap so tsc in "npm start" doesn't OOM
-[[ "$(uname -s)" == "Linux" ]] && export NODE_OPTIONS=--max-old-space-size=384
 # Nervous system in foreground (sensors, sends blink/cycle to eyes)
-npm start
+node dist/nervous_system.js

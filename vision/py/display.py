@@ -138,8 +138,10 @@ def init_displays(swap_left_right=False):
         left_eye = GC9A01(spi_left, dc=dc, cs=None, reset=reset, backlight=backlight, rotation=4)
         time.sleep_ms(20)
         right_eye = GC9A01(spi_right, dc=dc, cs=None, reset=reset, backlight=None, rotation=4)
-        # Both panels share RST: right's hard_reset() just reset both, so left is in power-on state. Re-send init registers to left (no RST toggle).
+        # Both panels share RST: right's init may reset both. Give right time to finish init, then re-init left.
+        time.sleep_ms(80)
         _reinit_gc9a01_registers(left_eye)
+        time.sleep_ms(30)
         if left_eye.backlight:
             left_eye.backlight.value(1)
         _write_display_status(True)
