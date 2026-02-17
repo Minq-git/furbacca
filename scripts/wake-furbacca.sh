@@ -43,28 +43,24 @@ trap cleanup EXIT INT TERM
 # Bind 0.0.0.0 so remote (fe) and local (nervous system) commands both work
 export UDP_BIND=0.0.0.0
 
-# Build first (before starting eyes). On Pi, eyes + tsc together can OOM; build with eyes not running.
-echo "Building nervous system..."
-if [[ "$(uname -s)" == "Linux" ]]; then
-  npm run build:pi
-else
-  npm run build
-fi
-
-# On Pi (low RAM), limit Node heap for the runtime process
+# On Pi (low RAM), limit Node heap for tsc and runtime (avoids OOM; use env so npm only echoes "tsc")
 [[ "$(uname -s)" == "Linux" ]] && export NODE_OPTIONS=--max-old-space-size=384
 
-# Start eyes in background (UDP 5005). PYTHONUNBUFFERED=1 so animation/eye logs show in journalctl.
-echo "Starting eyes and nervous system..."
+# Start eyes first so spinners show on displays while build runs. Eyes log to file so terminal shows one progress bar.
+EYES_LOG="${FURBACCA_EYES_LOG:-/tmp/furbacca-eyes.log}"
+echo "Starting eyes (log: $EYES_LOG)..."
 (
   source env/bin/activate
   export PYTHONUNBUFFERED=1
   python3 vision/py/eyes.py
-) &
+) >> "$EYES_LOG" 2>&1 &
 EYES_PID=$!
 
 # Give eyes a moment to bind
 sleep 1
 
-# Nervous system in foreground (sensors, sends blink/cycle to eyes)
+echo "Building nervous system..."
+npm run build
+
+echo "Starting nervous system..."
 node dist/nervous_system.js

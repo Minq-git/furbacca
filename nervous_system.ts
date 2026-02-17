@@ -134,7 +134,8 @@ let matterLobe: { notifyTouch(sensor: "head" | "belly" | "shiver", active: boole
 const chipToolNodeId = process.env.CHIP_TOOL_NODE_ID?.trim() || undefined;
 const chipToolEndpoint = process.env.CHIP_TOOL_ENDPOINT ?? "0x1";
 
-const MATTER_DIR = process.env.HOME ? path.join(process.env.HOME, ".matter") : path.join(process.cwd(), ".matter");
+// Same as Matter Lobe: repo .matter so fabric/CASE and pairing cache persist in one place
+const MATTER_DIR = path.join(process.cwd(), ".matter");
 const PAIRING_DISPLAY_CACHE = path.join(MATTER_DIR, "pairing_display.txt");
 const PAIRING_QR_PATTERN =
   /Commissioning|passcode|discriminator|pairing|uncommissioned|qrcode|QR code|manual pairing|▄|▀|█|project-chip\.github\.io/i;
@@ -324,7 +325,7 @@ function onMotion(detected: boolean): void {
   if (detected) {
     if (!motionFirstDetectedLogged) {
       motionFirstDetectedLogged = true;
-      console.log("  👁  Motion: sensor triggered (Furbacca will say \"noticed someone!\" when waking from sleep).");
+      console.log(msg.nervous_system.motion_sensor_enabled);
     }
     if (motionClearDebounceTimer !== null) {
       clearTimeout(motionClearDebounceTimer);

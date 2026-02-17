@@ -7,7 +7,9 @@
  *   - 3: Generic Switch (head touch).
  *   - 4: Generic Switch (vibration/shake).
  *
- * Lazy-loaded when start() runs. UDP 5540; pairing data in .matter/
+ * Lazy-loaded when start() runs. UDP 5540.
+ * Storage (fabric, CASE, pairing) is in repo .matter/ so it persists across restarts.
+ * Do not set MATTER_STORAGE_CLEAR=1 in production or devices will go offline after reboot.
  */
 import * as dgram from "dgram";
 import * as fs from "fs/promises";
@@ -23,7 +25,7 @@ const MATTER_STARTUP_TIMEOUT_MS = 90_000;
 const CORRUPT_GENERAL_DIAGNOSTICS_KEYS = ["__features__", "totalOperationalHoursCounter"];
 
 function getMatterDir(): string {
-  return process.env.HOME ? path.join(process.env.HOME, ".matter") : path.join(process.cwd(), ".matter");
+  return path.join(process.cwd(), ".matter");
 }
 
 async function tidyMatterStorage(): Promise<void> {
@@ -125,6 +127,13 @@ export class MatterLobe {
 
     const doStart = async (): Promise<void> => {
       status(msg.matter_lobe.status.initializing);
+      // Pin Matter storage to repo .matter so fabric/CASE persist across restarts (same path every run).
+      // Must be set before any import that triggers Boot.init (e.g. @project-chip/matter-node.js).
+      const matterNodeJsConfig = await import("@matter/nodejs/config");
+      const cfg = matterNodeJsConfig.config as { isInitialized?: boolean; defaultStoragePath?: string };
+      if (!cfg.isInitialized) {
+        cfg.defaultStoragePath = path.join(process.cwd(), ".matter");
+      }
       const general = await import("@matter/general");
       const { Logger, LogLevel } = general;
       const pairingQrPattern = /Commissioning|passcode|discriminator|pairing|uncommissioned|qrcode|QR code|manual pairing|▄|▀|█|project-chip\.github\.io/i;

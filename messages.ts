@@ -33,6 +33,7 @@ export const msg = raw as {
     motion_clear: string;
     motion_sleep: string;
     motion_event_driven: string;
+    motion_sensor_enabled: string;
   };
   matter_lobe: {
     status: {

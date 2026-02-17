@@ -57,7 +57,8 @@
     "motion_detected": "  👀 Furbacca noticed someone!",
     "motion_clear": "  💤 Area clear. Furbacca is relaxing.",
     "motion_sleep": "  😴 No motion for 2 min — eyes closed (sleep).",
-    "motion_event_driven": "  👁  PIR motion: event-driven (gpiomon, BCM 4)."
+    "motion_event_driven": "  👁  PIR motion: event-driven (gpiomon, BCM 4).",
+    "motion_sensor_enabled": "  👁  Motion: Sensor enabled. Furbacca will sleep/wake based on motion."
   },
   "touch": {
     "belly_touch_gpio_error": "Belly touch GPIO (22): {error}. Check wiring and gpiod.",
