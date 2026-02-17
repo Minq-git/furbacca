@@ -53,7 +53,10 @@
     "shiver": "  🫨  Shiver: BCM {bcm}",
     "touch_event_driven": "  🫳  Touch: event-driven (gpiomon).",
     "touch_polling": "  ⏳ Touch: polling every 20ms (install gpiomon for event-driven)",
-    "vibration_error": "  Vibration: {message}"
+    "vibration_error": "  Vibration: {message}",
+    "motion_detected": "  🐾 Furbacca noticed someone!",
+    "motion_clear": "  💤 Area clear. Furbacca is relaxing.",
+    "motion_event_driven": "  👁  PIR motion: event-driven (gpiomon, BCM 4)."
   },
   "touch": {
     "belly_touch_gpio_error": "Belly touch GPIO (22): {error}. Check wiring and gpiod.",

@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { fanControl } from "./cooling/fan_control.js";
 import { msg, substitute } from "./messages.js";
+import { monitorMotion } from "./senses/motion.js";
 import { TouchSenses, VIBE_BCM } from "./senses/touch";
 import { EyeBridge } from "./vision/ts/eye_bridge";
 
@@ -298,14 +299,24 @@ const matterLobeStatus = msg.matter_lobe.status as Record<string, string>;
 
 // Prefer event-driven (gpiomon) for minimal latency; fall back to 20ms polling
 const stopEventWatch = touch.startEventWatch(onTouch);
+const stopMotionWatch = monitorMotion(onMotion);
+
+function onMotion(detected: boolean): void {
+  if (detected) {
+    console.log(msg.nervous_system.motion_detected);
+    // Optional: eyes.playAnimation("nervous_look", { replace: true }); or fanControl.setSpeed(100);
+  } else {
+    console.log(msg.nervous_system.motion_clear);
+    // Optional: fanControl.setSpeed(30);
+  }
+}
+
 function onShutdown(): void {
   eyes.closeEyes();
   matterLobe?.close();
-  if (stopEventWatch) {
-    stopEventWatch().then(() => process.exit(0));
-  } else {
-    process.exit(0);
-  }
+  const stopMotion = stopMotionWatch ? stopMotionWatch() : Promise.resolve();
+  const stopTouch = stopEventWatch ? stopEventWatch() : Promise.resolve();
+  Promise.all([stopMotion, stopTouch]).then(() => process.exit(0));
 }
 process.on("SIGINT", () => onShutdown());
 
@@ -323,6 +334,9 @@ if (stopEventWatch) {
 } else {
   console.log(msg.nervous_system.touch_polling);
   if (matterEnabled) matterLobeStatusLines.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+}
+if (stopMotionWatch) {
+  console.log(msg.nervous_system.motion_event_driven);
 }
 
 // Matter and warmup run in parallel; eyes open when warmup finishes, Matter logs when Matter finishes
