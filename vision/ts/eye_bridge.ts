@@ -43,7 +43,6 @@ export class EyeBridge {
   /** Play a named animation. Use replace: true to restart even if an animation is running (e.g. double head-tap). */
   public playAnimation(name: string, options?: { replace?: boolean }): void {
     const replace = options?.replace ?? false;
-    console.log(substitute(msg.eyes.animation, { name }));
     this.send(getAnimationPayload(name, replace));
   }
 
@@ -75,6 +74,11 @@ export class EyeBridge {
   /** Close lids (e.g. before shutdown). */
   public closeEyes(): void {
     this.send(PAYLOAD_EYES_CLOSE);
+  }
+
+  /** Animated close for sleep (slow close, then hold closed). */
+  public sleepClose(durationS?: number): void {
+    this.sendCommand("sleep_close", { duration_s: durationS ?? 1 });
   }
 
   /** Warmup: send startup step 0..(steps-1) for spinner color (beige → green); tie to nervous_system startup. */

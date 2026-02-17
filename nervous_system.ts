@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { fanControl } from "./cooling/fan_control.js";
 import { msg, substitute } from "./messages.js";
+import { monitorMotion } from "./senses/motion.js";
 import { TouchSenses, VIBE_BCM } from "./senses/touch";
 import { EyeBridge } from "./vision/ts/eye_bridge";
 
@@ -15,6 +16,10 @@ function loadWarmupConfig(): {
   WARMUP_BEIGE: [number, number, number];
   WARMUP_GREEN: [number, number, number];
   STATUS_FAIL_RED: [number, number, number];
+  OPEN_THEN_LOOK_MS: number;
+  MOTION_SLEEP_MS: number;
+  MOTION_CLEAR_DEBOUNCE_MS: number;
+  SLEEP_CLOSE_DURATION_S: number;
 } {
   const repoRoot = process.cwd();
   const scriptPath = path.join(repoRoot, "vision", "py", "export_warmup_config.py");
@@ -28,6 +33,10 @@ const {
   WARMUP_BEIGE,
   WARMUP_GREEN,
   STATUS_FAIL_RED,
+  OPEN_THEN_LOOK_MS,
+  MOTION_SLEEP_MS,
+  MOTION_CLEAR_DEBOUNCE_MS,
+  SLEEP_CLOSE_DURATION_S,
 } = loadWarmupConfig();
 
 const ANSI_RESET = "\x1b[0m";
@@ -282,6 +291,7 @@ function startWarmupThenOpen(matterResultPromise: Promise<MatterStartResult | un
     } else {
       clearInterval(tick);
       process.stdout.write("\r" + CLEAR_LINE + warmupBar(WARMUP_STEPS, WARMUP_STEPS, "Opening eyes.") + "\n");
+      warmupComplete = true;
       eyes.openEyes();
       matterResultPromise.then((result) => {
         if (result?.buffer?.length) {
@@ -298,14 +308,62 @@ const matterLobeStatus = msg.matter_lobe.status as Record<string, string>;
 
 // Prefer event-driven (gpiomon) for minimal latency; fall back to 20ms polling
 const stopEventWatch = touch.startEventWatch(onTouch);
+const stopMotionWatch = monitorMotion(onMotion);
+
+let motionSleepTimer: ReturnType<typeof setTimeout> | null = null;
+/** Debounce: only start sleep timer after no motion for MOTION_CLEAR_DEBOUNCE_MS. */
+let motionClearDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+/** True after warmup finishes and eyes.openEyes() has been called; don't trigger sleep during warmup. */
+let warmupComplete = false;
+/** True when we've gone to sleep (no motion for 2 min); we only play nervous_look when waking from this. */
+let motionWasAsleep = false;
+
+function onMotion(detected: boolean): void {
+  if (detected) {
+    if (motionClearDebounceTimer !== null) {
+      clearTimeout(motionClearDebounceTimer);
+      motionClearDebounceTimer = null;
+    }
+    if (motionSleepTimer !== null) {
+      clearTimeout(motionSleepTimer);
+      motionSleepTimer = null;
+    }
+    if (motionWasAsleep) {
+      motionWasAsleep = false;
+      console.log(msg.nervous_system.motion_detected);
+      eyes.openEyes();
+      setTimeout(() => eyes.playAnimation("nervous_look", { replace: true }), OPEN_THEN_LOOK_MS);
+    }
+  } else {
+    if (motionClearDebounceTimer !== null) clearTimeout(motionClearDebounceTimer);
+    motionClearDebounceTimer = setTimeout(() => {
+      motionClearDebounceTimer = null;
+      if (motionSleepTimer !== null) clearTimeout(motionSleepTimer);
+      if (!warmupComplete) return;
+      motionSleepTimer = setTimeout(() => {
+        motionSleepTimer = null;
+        motionWasAsleep = true;
+        eyes.sleepClose(SLEEP_CLOSE_DURATION_S);
+        console.log(msg.nervous_system.motion_sleep);
+      }, MOTION_SLEEP_MS);
+    }, MOTION_CLEAR_DEBOUNCE_MS);
+  }
+}
+
 function onShutdown(): void {
+  if (motionClearDebounceTimer !== null) {
+    clearTimeout(motionClearDebounceTimer);
+    motionClearDebounceTimer = null;
+  }
+  if (motionSleepTimer !== null) {
+    clearTimeout(motionSleepTimer);
+    motionSleepTimer = null;
+  }
   eyes.closeEyes();
   matterLobe?.close();
-  if (stopEventWatch) {
-    stopEventWatch().then(() => process.exit(0));
-  } else {
-    process.exit(0);
-  }
+  const stopMotion = stopMotionWatch ? stopMotionWatch() : Promise.resolve();
+  const stopTouch = stopEventWatch ? stopEventWatch() : Promise.resolve();
+  Promise.all([stopMotion, stopTouch]).then(() => process.exit(0));
 }
 process.on("SIGINT", () => onShutdown());
 
@@ -323,6 +381,9 @@ if (stopEventWatch) {
 } else {
   console.log(msg.nervous_system.touch_polling);
   if (matterEnabled) matterLobeStatusLines.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+}
+if (stopMotionWatch) {
+  console.log(msg.nervous_system.motion_event_driven);
 }
 
 // Matter and warmup run in parallel; eyes open when warmup finishes, Matter logs when Matter finishes

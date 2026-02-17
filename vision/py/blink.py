@@ -1,21 +1,28 @@
 """
 Blink state and timing for animated and static eye loops.
-Constants and small state machines so eyes.py stays focused on display/blit.
+Constants live in config; this module uses them for state machine logic.
 """
 import random
 
-BLINK_DEBOUNCE_S = 0.2
-CLOSING_S_MIN = 0.04
-CLOSING_S_MAX = 0.07
+try:
+    import config
+except ImportError:
+    config = None
 
+def _blink_debounce_s():
+    return config.BLINK_DEBOUNCE_S if config else 0.2
 
 def random_closing_duration():
     """Random closed duration for animated blink (seconds)."""
-    return random.uniform(CLOSING_S_MIN, CLOSING_S_MAX)
+    if config:
+        return random.uniform(config.BLINK_CLOSING_S_MIN, config.BLINK_CLOSING_S_MAX)
+    return random.uniform(0.04, 0.07)
 
 
 def next_auto_blink_delay():
     """Seconds until next auto-blink (animated loop)."""
+    if config:
+        return random.uniform(config.BLINK_AUTO_DELAY_MIN_S, config.BLINK_AUTO_DELAY_MAX_S)
     return random.uniform(2.0, 5.0)
 
 
@@ -30,13 +37,23 @@ class AnimatedBlink:
         self.last_blink_end = 0.0
 
     def can_trigger(self, now):
-        return (now - self.last_blink_end) >= BLINK_DEBOUNCE_S
+        return (now - self.last_blink_end) >= _blink_debounce_s()
 
     def trigger(self, now):
         self.phase = "closing"
         self.start_time = now
         self.last_blink_end = now
         self.closing_duration_s = random_closing_duration()
+
+    def trigger_sleep(self, now, duration_s=None):
+        """Trigger a slow close for sleep (same animation, longer duration); caller holds closed when advance returns just_opened."""
+        if duration_s is None:
+            duration_s = config.SLEEP_CLOSE_DURATION_S if config else 1.0
+        min_s = config.SLEEP_CLOSE_MIN_S if config else 0.2
+        self.phase = "closing"
+        self.start_time = now
+        self.last_blink_end = now
+        self.closing_duration_s = max(min_s, float(duration_s))
 
     def advance(self, now):
         """
@@ -50,7 +67,9 @@ class AnimatedBlink:
             return False, None
         total_s = now - self.start_time
         self.phase = None
-        delay = (total_s * 3.0) + random.uniform(0.0, 4.0)
+        base = config.BLINK_AFTER_CLOSE_BASE_S if config else 3.0
+        rnd = config.BLINK_AFTER_CLOSE_RANDOM_S if config else 4.0
+        delay = (total_s * base) + random.uniform(0.0, rnd)
         return True, delay
 
     @property
@@ -67,7 +86,7 @@ class StaticBlink:
         self.last_blink_end = 0.0
 
     def can_trigger(self, now):
-        return (now - self.last_blink_end) >= BLINK_DEBOUNCE_S
+        return (now - self.last_blink_end) >= _blink_debounce_s()
 
     def trigger(self, now):
         self.phase = "closing"

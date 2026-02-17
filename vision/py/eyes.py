@@ -117,6 +117,7 @@ def run_eyes():
         relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
         # Stay closed until nervous system sends eyes_open (graceful startup); show spinner during wait
         lids_held_closed = True
+        has_opened_once = False  # True after first eyes_open; then eyes_close shows closed lids (sleep) not spinner
         warmup_step = 0  # 0..EYE_WARMUP_STEPS-1 from nervous system; spinner color steps beige→green
         # One synchronous frame so both displays get a stable image before async (reduces right-eye crash at startup)
         first_frame = render.render_animated_frame(cached_eye_base_240, 0.0, 0.0, "open", pupil_radius=relaxed)
@@ -149,6 +150,7 @@ def run_eyes():
         segment_end_x, segment_end_y = 0.0, 0.0
         last_blink_triggered_segment_index = config.SEGMENT_INDEX_NONE
         last_impulse_at = 0.0
+        sleep_close_hold = False  # True when sleep_close triggered; on just_opened we hold closed instead of opening
 
         signal.signal(signal.SIGINT, _handle_shutdown)
         signal.signal(signal.SIGTERM, _handle_shutdown)
@@ -184,9 +186,18 @@ def run_eyes():
                     action = msg.get("action")
                     if action == "eyes_open":
                         lids_held_closed = False
+                        has_opened_once = True
                         _start_animation("double_blink", replace=True)  # wake-up double blink
                     elif action == "eyes_close":
                         lids_held_closed = True
+                    elif action == "sleep_close":
+                        # Slow close (drowsy) then hold closed; duration_s optional (default from config)
+                        if not lids_held_closed and not animated_blink.is_closed:
+                            default_duration = getattr(config, "SLEEP_CLOSE_DURATION_S", 1.0)
+                            min_duration = getattr(config, "SLEEP_CLOSE_MIN_S", 0.2)
+                            duration_s = max(min_duration, float(msg.get("duration_s", default_duration)))
+                            sleep_close_hold = True
+                            animated_blink.trigger_sleep(now, duration_s)
                     elif action == "warmup":
                         s = msg.get("step")
                         if s is not None:
@@ -241,13 +252,17 @@ def run_eyes():
             just_opened, next_delay = animated_blink.advance(now)
             
             if just_opened:
-                blit_open_bottom_to_top = True
-                # Use the custom delay from blink.py (total_s * 3 + random)
-                if next_delay is not None: 
-                    next_auto_blink = now + next_delay
+                if sleep_close_hold:
+                    # Sleep close: hold closed instead of opening
+                    sleep_close_hold = False
+                    lids_held_closed = True
                 else:
-                    # Fallback only if advance failed
-                    next_auto_blink = now + blink.next_auto_blink_delay()
+                    blit_open_bottom_to_top = True
+                    # Use the custom delay from blink.py (total_s * 3 + random)
+                    if next_delay is not None:
+                        next_auto_blink = now + next_delay
+                    else:
+                        next_auto_blink = now + blink.next_auto_blink_delay()
 
             # --- Animation Segment Processing (Readable) ---
             if animation_segments:
@@ -349,11 +364,33 @@ def run_eyes():
                 blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), inside_out=True)
                 blit_open_bottom_to_top = False
             elif lids_held_closed:
-                color_phase = warmup_step / max(1, config.EYE_WARMUP_STEPS - 1)
-                spin_l = render.render_spinner(-now * 3.2, mirror=False, color_phase=color_phase)
-                spin_r = render.render_spinner(-now * 3.2, mirror=True, color_phase=color_phase)
-                if spin_l and spin_r:
-                    blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(spin_l), _apply_eye_shape_right(spin_r))
+                if not has_opened_once:
+                    # Warmup: show spinner until first eyes_open
+                    color_phase = warmup_step / max(1, config.EYE_WARMUP_STEPS - 1)
+                    spin_l = render.render_spinner(-now * 3.2, mirror=False, color_phase=color_phase)
+                    spin_r = render.render_spinner(-now * 3.2, mirror=True, color_phase=color_phase)
+                    if spin_l and spin_r:
+                        blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(spin_l), _apply_eye_shape_right(spin_r))
+                else:
+                    # Sleep (eyes_close after having opened): show closed lids like blink overlay
+                    overlay_l = render.render_blink_overlay(mirror=False)
+                    overlay_r = render.render_blink_overlay(mirror=True)
+                    if overlay_l and overlay_r and np is not None:
+                        def _composite_overlay(frame, overlay_pil):
+                            ov = np.array(overlay_pil, dtype=np.uint8)
+                            from PIL import Image
+                            return Image.fromarray(ov.copy())
+                        comp_l = _composite_overlay(eye_frame, overlay_l)
+                        comp_r = _composite_overlay(eye_frame, overlay_r)
+                        blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(comp_l), _apply_eye_shape_right(comp_r))
+                    elif overlay_l and overlay_r:
+                        from PIL import Image
+                        pil_frame = Image.fromarray(eye_frame) if (np is not None and isinstance(eye_frame, np.ndarray)) else eye_frame
+                        comp_l = pil_frame.copy()
+                        comp_l.paste(overlay_l, (0, 0))
+                        comp_r = pil_frame.copy()
+                        comp_r.paste(overlay_r, (0, 0))
+                        blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(comp_l), _apply_eye_shape_right(comp_r))
             elif animated_blink.is_closed:
                 overlay_l = render.render_blink_overlay(mirror=False)
                 overlay_r = render.render_blink_overlay(mirror=True)
