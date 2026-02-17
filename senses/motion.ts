@@ -54,11 +54,18 @@ export function monitorMotion(callback: MotionCallback): (() => Promise<void>) |
     }
   });
   proc.stderr?.on("data", (d) => process.stderr.write(d));
-  proc.on("error", () => {
+  proc.on("error", (err) => {
     motionProcess = null;
+    console.error(`PIR motion: gpiomon error — ${(err as Error).message}`);
   });
-  proc.on("exit", () => {
+  proc.on("exit", (code, signal) => {
     motionProcess = null;
+    if (code != null && code !== 0) {
+      console.error(`PIR motion: gpiomon exited with code ${code} (check BCM ${MOTION_BCM} wiring and pin conflict)`);
+    }
+    if (signal != null && signal !== "SIGTERM") {
+      console.error(`PIR motion: gpiomon killed by signal ${signal}`);
+    }
   });
   let motionProcess: ChildProcess | null = proc;
   return () => {

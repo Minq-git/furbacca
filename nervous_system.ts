@@ -317,9 +317,15 @@ let motionClearDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let warmupComplete = false;
 /** True when we've gone to sleep (no motion for 2 min); we only play nervous_look when waking from this. */
 let motionWasAsleep = false;
+/** Log once when motion is first detected so user knows the sensor is firing (reaction only when waking from sleep). */
+let motionFirstDetectedLogged = false;
 
 function onMotion(detected: boolean): void {
   if (detected) {
+    if (!motionFirstDetectedLogged) {
+      motionFirstDetectedLogged = true;
+      console.log("  👁  Motion: sensor triggered (Furbacca will say \"noticed someone!\" when waking from sleep).");
+    }
     if (motionClearDebounceTimer !== null) {
       clearTimeout(motionClearDebounceTimer);
       motionClearDebounceTimer = null;
