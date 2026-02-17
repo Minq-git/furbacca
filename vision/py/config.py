@@ -65,7 +65,9 @@ BLINK_AFTER_CLOSE_RANDOM_S = 4.0
 SLEEP_CLOSE_DURATION_S = 1.0
 SLEEP_CLOSE_MIN_S = 0.2
 OPEN_THEN_LOOK_MS = 1500   # Delay nervous_look after eyes_open (double-blink finishes)
-MOTION_SLEEP_MS = 10000    # No motion for this long → sleep close
+MOTION_SLEEP_MS = 120000   # No motion for this long → sleep close (2 min)
+MOTION_RESPONSE_COOLDOWN_MS = 5000  # Ignore repeat motion events for this long (one response per movement)
+MOTION_CLEAR_DEBOUNCE_MS = 10000   # Only treat as "area clear" after no motion for this long (reduces PIR noise)
 
 # Eye shape mask — layer above sclera/iris/pupil
 _eye_shape_raw = os.environ.get("EYE_SHAPE", "round").strip().lower()

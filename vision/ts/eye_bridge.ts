@@ -43,7 +43,6 @@ export class EyeBridge {
   /** Play a named animation. Use replace: true to restart even if an animation is running (e.g. double head-tap). */
   public playAnimation(name: string, options?: { replace?: boolean }): void {
     const replace = options?.replace ?? false;
-    console.log(substitute(msg.eyes.animation, { name }));
     this.send(getAnimationPayload(name, replace));
   }
 

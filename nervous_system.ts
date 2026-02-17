@@ -18,6 +18,7 @@ function loadWarmupConfig(): {
   STATUS_FAIL_RED: [number, number, number];
   OPEN_THEN_LOOK_MS: number;
   MOTION_SLEEP_MS: number;
+  MOTION_CLEAR_DEBOUNCE_MS: number;
   SLEEP_CLOSE_DURATION_S: number;
 } {
   const repoRoot = process.cwd();
@@ -34,6 +35,7 @@ const {
   STATUS_FAIL_RED,
   OPEN_THEN_LOOK_MS,
   MOTION_SLEEP_MS,
+  MOTION_CLEAR_DEBOUNCE_MS,
   SLEEP_CLOSE_DURATION_S,
 } = loadWarmupConfig();
 
@@ -309,31 +311,50 @@ const stopEventWatch = touch.startEventWatch(onTouch);
 const stopMotionWatch = monitorMotion(onMotion);
 
 let motionSleepTimer: ReturnType<typeof setTimeout> | null = null;
+/** Debounce: only start sleep timer after no motion for MOTION_CLEAR_DEBOUNCE_MS. */
+let motionClearDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 /** True after warmup finishes and eyes.openEyes() has been called; don't trigger sleep during warmup. */
 let warmupComplete = false;
+/** True when we've gone to sleep (no motion for 2 min); we only play nervous_look when waking from this. */
+let motionWasAsleep = false;
 
 function onMotion(detected: boolean): void {
   if (detected) {
+    if (motionClearDebounceTimer !== null) {
+      clearTimeout(motionClearDebounceTimer);
+      motionClearDebounceTimer = null;
+    }
     if (motionSleepTimer !== null) {
       clearTimeout(motionSleepTimer);
       motionSleepTimer = null;
     }
-    console.log(msg.nervous_system.motion_detected);
-    eyes.openEyes();
-    setTimeout(() => eyes.playAnimation("nervous_look", { replace: true }), OPEN_THEN_LOOK_MS);
+    if (motionWasAsleep) {
+      motionWasAsleep = false;
+      console.log(msg.nervous_system.motion_detected);
+      eyes.openEyes();
+      setTimeout(() => eyes.playAnimation("nervous_look", { replace: true }), OPEN_THEN_LOOK_MS);
+    }
   } else {
-    console.log(msg.nervous_system.motion_clear);
-    if (motionSleepTimer !== null) clearTimeout(motionSleepTimer);
-    if (!warmupComplete) return; // Don't start sleep timer during warmup (spinner still on, Matter initializing)
-    motionSleepTimer = setTimeout(() => {
-      motionSleepTimer = null;
-      eyes.sleepClose(SLEEP_CLOSE_DURATION_S);
-      console.log(msg.nervous_system.motion_sleep);
-    }, MOTION_SLEEP_MS);
+    if (motionClearDebounceTimer !== null) clearTimeout(motionClearDebounceTimer);
+    motionClearDebounceTimer = setTimeout(() => {
+      motionClearDebounceTimer = null;
+      if (motionSleepTimer !== null) clearTimeout(motionSleepTimer);
+      if (!warmupComplete) return;
+      motionSleepTimer = setTimeout(() => {
+        motionSleepTimer = null;
+        motionWasAsleep = true;
+        eyes.sleepClose(SLEEP_CLOSE_DURATION_S);
+        console.log(msg.nervous_system.motion_sleep);
+      }, MOTION_SLEEP_MS);
+    }, MOTION_CLEAR_DEBOUNCE_MS);
   }
 }
 
 function onShutdown(): void {
+  if (motionClearDebounceTimer !== null) {
+    clearTimeout(motionClearDebounceTimer);
+    motionClearDebounceTimer = null;
+  }
   if (motionSleepTimer !== null) {
     clearTimeout(motionSleepTimer);
     motionSleepTimer = null;
