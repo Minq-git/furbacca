@@ -54,8 +54,9 @@
     "touch_event_driven": "  🫳  Touch: event-driven (gpiomon).",
     "touch_polling": "  ⏳ Touch: polling every 20ms (install gpiomon for event-driven)",
     "vibration_error": "  Vibration: {message}",
-    "motion_detected": "  🐾 Furbacca noticed someone!",
+    "motion_detected": "  👀 Furbacca noticed someone!",
     "motion_clear": "  💤 Area clear. Furbacca is relaxing.",
+    "motion_sleep": "  😴 No motion for 10s — eyes closed (sleep).",
     "motion_event_driven": "  👁  PIR motion: event-driven (gpiomon, BCM 4)."
   },
   "touch": {

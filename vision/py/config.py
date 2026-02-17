@@ -52,6 +52,21 @@ IDLE_WANDER_MAX = 0.8
 UDP_RECV_SIZE = 1024
 SEGMENT_INDEX_NONE = -1
 
+# --- Blink (blink.py / eyes.py) ---
+BLINK_DEBOUNCE_S = 0.2
+BLINK_CLOSING_S_MIN = 0.04
+BLINK_CLOSING_S_MAX = 0.07
+BLINK_AUTO_DELAY_MIN_S = 2.0
+BLINK_AUTO_DELAY_MAX_S = 5.0
+BLINK_AFTER_CLOSE_BASE_S = 3.0
+BLINK_AFTER_CLOSE_RANDOM_S = 4.0
+
+# Sleep close (drowsy close then hold); nervous_system reads via export_warmup_config
+SLEEP_CLOSE_DURATION_S = 1.0
+SLEEP_CLOSE_MIN_S = 0.2
+OPEN_THEN_LOOK_MS = 1500   # Delay nervous_look after eyes_open (double-blink finishes)
+MOTION_SLEEP_MS = 10000    # No motion for this long → sleep close
+
 # Eye shape mask — layer above sclera/iris/pupil
 _eye_shape_raw = os.environ.get("EYE_SHAPE", "round").strip().lower()
 _current_eye_shape = None

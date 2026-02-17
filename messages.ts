@@ -31,6 +31,7 @@ export const msg = raw as {
     matter_lobe_prefix: string;
     motion_detected: string;
     motion_clear: string;
+    motion_sleep: string;
     motion_event_driven: string;
   };
   matter_lobe: {

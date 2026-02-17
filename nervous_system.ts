@@ -16,6 +16,9 @@ function loadWarmupConfig(): {
   WARMUP_BEIGE: [number, number, number];
   WARMUP_GREEN: [number, number, number];
   STATUS_FAIL_RED: [number, number, number];
+  OPEN_THEN_LOOK_MS: number;
+  MOTION_SLEEP_MS: number;
+  SLEEP_CLOSE_DURATION_S: number;
 } {
   const repoRoot = process.cwd();
   const scriptPath = path.join(repoRoot, "vision", "py", "export_warmup_config.py");
@@ -29,6 +32,9 @@ const {
   WARMUP_BEIGE,
   WARMUP_GREEN,
   STATUS_FAIL_RED,
+  OPEN_THEN_LOOK_MS,
+  MOTION_SLEEP_MS,
+  SLEEP_CLOSE_DURATION_S,
 } = loadWarmupConfig();
 
 const ANSI_RESET = "\x1b[0m";
@@ -283,6 +289,7 @@ function startWarmupThenOpen(matterResultPromise: Promise<MatterStartResult | un
     } else {
       clearInterval(tick);
       process.stdout.write("\r" + CLEAR_LINE + warmupBar(WARMUP_STEPS, WARMUP_STEPS, "Opening eyes.") + "\n");
+      warmupComplete = true;
       eyes.openEyes();
       matterResultPromise.then((result) => {
         if (result?.buffer?.length) {
@@ -301,17 +308,36 @@ const matterLobeStatus = msg.matter_lobe.status as Record<string, string>;
 const stopEventWatch = touch.startEventWatch(onTouch);
 const stopMotionWatch = monitorMotion(onMotion);
 
+let motionSleepTimer: ReturnType<typeof setTimeout> | null = null;
+/** True after warmup finishes and eyes.openEyes() has been called; don't trigger sleep during warmup. */
+let warmupComplete = false;
+
 function onMotion(detected: boolean): void {
   if (detected) {
+    if (motionSleepTimer !== null) {
+      clearTimeout(motionSleepTimer);
+      motionSleepTimer = null;
+    }
     console.log(msg.nervous_system.motion_detected);
-    // Optional: eyes.playAnimation("nervous_look", { replace: true }); or fanControl.setSpeed(100);
+    eyes.openEyes();
+    setTimeout(() => eyes.playAnimation("nervous_look", { replace: true }), OPEN_THEN_LOOK_MS);
   } else {
     console.log(msg.nervous_system.motion_clear);
-    // Optional: fanControl.setSpeed(30);
+    if (motionSleepTimer !== null) clearTimeout(motionSleepTimer);
+    if (!warmupComplete) return; // Don't start sleep timer during warmup (spinner still on, Matter initializing)
+    motionSleepTimer = setTimeout(() => {
+      motionSleepTimer = null;
+      eyes.sleepClose(SLEEP_CLOSE_DURATION_S);
+      console.log(msg.nervous_system.motion_sleep);
+    }, MOTION_SLEEP_MS);
   }
 }
 
 function onShutdown(): void {
+  if (motionSleepTimer !== null) {
+    clearTimeout(motionSleepTimer);
+    motionSleepTimer = null;
+  }
   eyes.closeEyes();
   matterLobe?.close();
   const stopMotion = stopMotionWatch ? stopMotionWatch() : Promise.resolve();

@@ -77,6 +77,11 @@ export class EyeBridge {
     this.send(PAYLOAD_EYES_CLOSE);
   }
 
+  /** Animated close for sleep (slow close, then hold closed). */
+  public sleepClose(durationS?: number): void {
+    this.sendCommand("sleep_close", { duration_s: durationS ?? 1 });
+  }
+
   /** Warmup: send startup step 0..(steps-1) for spinner color (beige → green); tie to nervous_system startup. */
   public warmup(step: number): void {
     this.sendCommand("warmup", { step: Math.max(0, step) });
