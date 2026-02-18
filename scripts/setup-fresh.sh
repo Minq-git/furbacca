@@ -208,6 +208,15 @@ if [[ "$UNAME_S" == "Linux" ]]; then
     fi
   fi
 
+  # 7b. Wi‑Fi config backup for network heal (head+belly 30s after brownout)
+  if [[ -f /etc/wpa_supplicant/wpa_supplicant.conf ]]; then
+    sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /boot/wpa_supplicant.conf 2>/dev/null && \
+      echo "Backed up wpa_supplicant.conf to /boot (for scripts/heal-network.sh)." || \
+      echo "⚠ Could not write /boot/wpa_supplicant.conf (e.g. read-only). After first boot, run: sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /boot/wpa_supplicant.conf"
+  else
+    echo "Skipping wpa_supplicant backup (file not found). When Wi‑Fi is configured, run: sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /boot/wpa_supplicant.conf"
+  fi
+
   # 8. Optional: install and enable furbacca systemd service (start at boot)
   FURBACCA_USER="${SUDO_USER:-$USER}"
   if [[ -z "$FURBACCA_USER" ]]; then

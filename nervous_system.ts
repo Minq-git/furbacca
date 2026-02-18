@@ -273,9 +273,11 @@ if (!vibeHw.ok && vibeHw.message) console.log(substitute(msg.nervous_system.vibr
 let headActive = false;
 let bellyActive = false;
 
-/** Head + belly held 5s triggers full eyes re-init (restart_both). */
+/** Head + belly: 5s = eyes re-init, 30s = network heal script (long to avoid accidental trigger). */
 const HEAD_BELLY_HOLD_MS = 5000;
+const NETWORK_HEAL_HOLD_MS = 30000;
 let headBellyHoldTimer: ReturnType<typeof setTimeout> | null = null;
+let networkHealTimer: ReturnType<typeof setTimeout> | null = null;
 let headBellyHoldCooldown = false;
 
 function handleBellyTouch(): void {
@@ -291,21 +293,34 @@ function onTouch(sensor: "head" | "belly" | "shiver", active: boolean): void {
 
   matterLobe?.notifyTouch(sensor, active);
 
-  // Head + belly both held 5s → full eyes re-init (restart_both)
+  // Head + belly: 5s → eyes re-init; 30s → network heal script
   if (sensor === "head" || sensor === "belly") {
-    if (headBellyHoldTimer !== null) {
-      clearTimeout(headBellyHoldTimer);
-      headBellyHoldTimer = null;
-    }
     if (!headActive || !bellyActive) {
+      if (headBellyHoldTimer !== null) {
+        clearTimeout(headBellyHoldTimer);
+        headBellyHoldTimer = null;
+      }
+      if (networkHealTimer !== null) {
+        clearTimeout(networkHealTimer);
+        networkHealTimer = null;
+      }
       if (!headActive && !bellyActive) headBellyHoldCooldown = false;
     } else if (!headBellyHoldCooldown) {
+      headBellyHoldCooldown = true;
       headBellyHoldTimer = setTimeout(() => {
         headBellyHoldTimer = null;
-        headBellyHoldCooldown = true;
-        eyes.sendCommand("restart_both", {});
         console.log(msg.nervous_system.eyes_full_reinit_trigger);
+        eyes.sendCommand("restart_both", {});
+        eyes.playAnimation("nervous_look", { replace: true });
       }, HEAD_BELLY_HOLD_MS);
+      networkHealTimer = setTimeout(() => {
+        networkHealTimer = null;
+        console.log(msg.nervous_system.network_heal_trigger);
+        eyes.sendCommand("set_eye_type", { type: "demon" });
+        const scriptPath = path.join(process.cwd(), "scripts", "heal-network.sh");
+        const child = spawn("bash", [scriptPath], { detached: true, stdio: "ignore" });
+        child.unref();
+      }, NETWORK_HEAL_HOLD_MS);
     }
   }
 

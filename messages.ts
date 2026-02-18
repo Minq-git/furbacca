@@ -36,6 +36,7 @@ export const msg = raw as {
     motion_event_driven: string;
     motion_sensor_enabled: string;
     eyes_full_reinit_trigger: string;
+    network_heal_trigger: string;
   };
   matter_lobe: {
     status: {
