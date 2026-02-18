@@ -16,6 +16,7 @@ export const msg = raw as {
     hardware_table_header: string;
     header: string;
     eyes_listening: string;
+    eyes_restarted: string;
     matter_lobe_enabled: string;
     chip_tool_belly: string;
     head_touch_error: string;
@@ -33,6 +34,7 @@ export const msg = raw as {
     motion_clear: string;
     motion_sleep: string;
     motion_event_driven: string;
+    eyes_full_reinit_trigger: string;
   };
   matter_lobe: {
     status: {

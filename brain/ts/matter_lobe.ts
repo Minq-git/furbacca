@@ -22,8 +22,9 @@ const MATTER_STARTUP_TIMEOUT_MS = 90_000;
 /** Keys in root.generalDiagnostics that can fail to parse after SDK/storage schema changes; remove before create so SDK re-initializes them. */
 const CORRUPT_GENERAL_DIAGNOSTICS_KEYS = ["__features__", "totalOperationalHoursCounter"];
 
+/** Matter storage in repo so factory reset (rm -rf .matter) clears commissioning. */
 function getMatterDir(): string {
-  return process.env.HOME ? path.join(process.env.HOME, ".matter") : path.join(process.cwd(), ".matter");
+  return path.join(process.cwd(), ".matter");
 }
 
 async function tidyMatterStorage(): Promise<void> {
@@ -125,6 +126,9 @@ export class MatterLobe {
 
     const doStart = async (): Promise<void> => {
       status(msg.matter_lobe.status.initializing);
+      // Pin storage to repo .matter/ before any Matter env init (so factory reset clears commissioning)
+      const matterNodejsConfig = await import("@matter/nodejs/config");
+      matterNodejsConfig.config.defaultStoragePath = getMatterDir();
       const general = await import("@matter/general");
       const { Logger, LogLevel } = general;
       const pairingQrPattern = /Commissioning|passcode|discriminator|pairing|uncommissioned|qrcode|QR code|manual pairing|▄|▀|█|project-chip\.github\.io/i;

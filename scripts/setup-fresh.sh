@@ -177,9 +177,12 @@ echo "Installing npm deps and building..."
 # node-gyp (node-libgpiod) needs Python with distutils; use system Python, not venv (venv may be 3.12+ without distutils)
 [[ "$UNAME_S" == "Linux" ]] && export npm_config_python=/usr/bin/python3
 npm install
-# On Pi (low RAM), limit Node heap so tsc doesn't OOM
-[[ "$UNAME_S" == "Linux" ]] && export NODE_OPTIONS=--max-old-space-size=384
-npm run build
+# On Pi (low RAM), use build:pi so tsc runs with --max-old-space-size=384 (avoids hang/OOM)
+if [[ "$UNAME_S" == "Linux" ]]; then
+  npm run build:pi
+else
+  npm run build
+fi
 npm run sync-sounds
 
 # 7. Optional: wake-furbacca alias (only on Pi, only if not already set)

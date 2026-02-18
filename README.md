@@ -54,6 +54,8 @@ Types: `default`, `human`, `dragon`, `demon`.
 
 **If remote commands aren’t received:** On the Pi, allow UDP 5005 (e.g. `sudo ufw allow 5005/udp` and `sudo ufw reload`). Check with `ss -ulnp | grep 5005` that the eyes are bound to `0.0.0.0:5005`.
 
+**Eyes full re-init (one or both panels black):** One action only — full hardware re-init (RST + init both panels). **Remote:** run **`./scripts/fe-restart.sh`** on the Pi or **`./scripts/fe-restart.sh furbacca.local`** from your Mac. **Touch:** hold **head + belly** together for **5 seconds** (same effect). Use when one or both eyes black out (e.g. after Matter startup or shared-SPI glitches).
+
 ---
 
 ## 🔧 Setup
@@ -164,6 +166,7 @@ Full pin mapping: **instruction.md** §1.
 - **`sleep-furbacca`** — (on the Pi) safe shutdown: runs **`sudo halt`**. **Never yank the power pin while the Pi is on** — that can corrupt the SD card (mid-write) and stress the fan circuit. Run **`sleep-furbacca`**, wait until the green ACT LED stops flickering and stays off (or faint solid), then disconnect power. **setup-fresh.sh** adds this alias to your shell rc.
 - **`sudo systemctl status furbacca`** — if you run the full stack as a service (see below); **`furbacca-eyes`** for eyes-only.
 - **`journalctl -u furbacca -f`** — stream the service logs (animations, touch, Matter, etc.) after SSH; `-n 200` for last 200 lines instead of follow.
+- **`./scripts/fe-restart.sh`** — full eyes re-init (RST + init both panels). On the Pi: no args. From Mac: **`./scripts/fe-restart.sh furbacca.local`**. Same effect as holding head + belly for 5 seconds.
 - **`./scripts/show-matter-pairing.sh`** — show Matter passcode, manual pairing code, and QR URL. On the Pi: run with no args. **From Mac:** `./scripts/show-matter-pairing.sh furbacca.local` (SSH to Pi and run there). Uses `FURBACCA_SSH_USER` (default `minqz`) for SSH.
 - **`./scripts/monitor-zram.sh`** — live zRAM compression ratio and SD swap usage (Ctrl+C to stop). On the Pi: `./scripts/monitor-zram.sh`. **From Mac:** `./scripts/monitor-zram.sh furbacca.local` (SSH to Pi and run there).
 - **`push-furbacca`** — (Mac) rsync project to the Pi. Use **`--delete`** so the Pi loses old paths (e.g. `vision/eyes.py` after refactor) and matches your Mac layout. Exclude Pi-only dirs so rsync doesn't delete them: `vision/py/gc9a01py` (fetched on the Pi by `scripts/setup/fetch-gc9a01py.sh`; not on the Mac), and optionally `vision/waveshare-lcd-code`, `vision/gc9a01py` (old leftovers). Add to `~/.zshrc`:

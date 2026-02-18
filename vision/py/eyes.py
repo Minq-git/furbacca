@@ -73,6 +73,7 @@ def _apply_eye_shape_right(frame):
     return Image.fromarray(masked_arr.copy())
 
 def run_eyes():
+    global left_eye, right_eye
     if left_eye is None and right_eye is None:
         return
 
@@ -188,6 +189,20 @@ def run_eyes():
                         lids_held_closed = False
                         has_opened_once = True
                         _start_animation("double_blink", replace=True)  # wake-up double blink
+                    elif action in ("restart", "refresh", "restart_both"):
+                        # Full hardware re-init (RST + init both). One true fe-restart / head+belly trigger.
+                        try:
+                            new_left, new_right = init_displays(swap_left_right=config.SWAP_LEFT_RIGHT_SPI)
+                            if new_left is not None and new_right is not None:
+                                left_eye, right_eye = new_left, new_right
+                                lids_held_closed = False
+                                has_opened_once = True
+                                _start_animation("double_blink", replace=True)
+                                print(messages.get("eyes", "restarting_eyes"))
+                            else:
+                                print("  ⚠ restart_both: init_displays returned None")
+                        except Exception as e:
+                            print(f"  ⚠ restart_both failed: {e}")
                     elif action == "eyes_close":
                         lids_held_closed = True
                     elif action == "sleep_close":

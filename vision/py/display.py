@@ -80,6 +80,16 @@ def _reinit_gc9a01_registers(disp):
     disp.rotation(4)
 
 
+def reinit_panel(disp):
+    """Re-send GC9A01 register sequence (no RST). Use when a panel blacked out (e.g. shared SPI glitch)."""
+    if disp is None:
+        return
+    try:
+        _reinit_gc9a01_registers(disp)
+    except Exception as e:
+        print(f"  ⚠ Panel reinit failed: {e}")
+
+
 _HARDWARE_STATUS_FILE = ".furbacca-hardware.json"
 
 
