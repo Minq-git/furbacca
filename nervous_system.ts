@@ -124,6 +124,64 @@ console.log(sep);
 const touch = new TouchSenses(0);
 const eyes = new EyeBridge();
 
+/** Eyes subprocess: we spawn and restart on exit so they recover during heavy Matter init. */
+let eyesChild: ReturnType<typeof spawn> | null = null;
+let isShuttingDown = false;
+const EYES_RESTART_DELAY_MS = 2000;
+
+/** Buffer eyes output until warmup bar is done so logs don't interleave with the progress line. */
+const eyesOutputBuffer: string[] = [];
+let eyesOutputBuffered = true;
+
+function forwardWithPrefix(stream: NodeJS.ReadableStream, prefix: string): void {
+  stream.setEncoding("utf8");
+  stream.on("data", (chunk: string) => {
+    const lines = String(chunk).split(/\r?\n/).filter(Boolean);
+    for (const line of lines) {
+      const out = prefix + line + "\n";
+      if (eyesOutputBuffered) eyesOutputBuffer.push(out);
+      else process.stderr.write(out);
+    }
+  });
+}
+
+function flushEyesBuffer(): void {
+  eyesOutputBuffered = false;
+  for (const line of eyesOutputBuffer) process.stderr.write(line);
+  eyesOutputBuffer.length = 0;
+}
+
+function startEyesProcess(): void {
+  const repoRoot = process.cwd();
+  const scriptPath = path.join(repoRoot, "vision", "py", "eyes.py");
+  const venvPython = path.join(repoRoot, "env", "bin", "python3");
+  const pythonPath = fs.existsSync(venvPython) ? venvPython : "python3";
+  eyesChild = spawn(pythonPath, [scriptPath], {
+    cwd: repoRoot,
+    env: { ...process.env, PYTHONUNBUFFERED: "1", UDP_BIND: "0.0.0.0" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (eyesChild.stdout) forwardWithPrefix(eyesChild.stdout, "");
+  if (eyesChild.stderr) forwardWithPrefix(eyesChild.stderr, "");
+  eyesChild.on("exit", (code, signal) => {
+    eyesChild = null;
+    if (isShuttingDown) return;
+    console.log(msg.nervous_system.eyes_restarted);
+    setTimeout(() => startEyesProcess(), EYES_RESTART_DELAY_MS);
+  });
+}
+
+startEyesProcess();
+
+// Give eyes time to bind to UDP 5005 and enter main loop before we send warmup/openEyes
+if (process.platform === "linux") {
+  try {
+    execSync("sleep 1.5", { stdio: "ignore" });
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Matter Lobe is on by default. Set FURBACCA_MATTER=0 (or false) to disable for troubleshooting. Requires 64-bit Node on Pi. */
 const matterEnabled = process.env.FURBACCA_MATTER !== "0" && process.env.FURBACCA_MATTER !== "false";
 
@@ -215,6 +273,11 @@ if (!vibeHw.ok && vibeHw.message) console.log(substitute(msg.nervous_system.vibr
 let headActive = false;
 let bellyActive = false;
 
+/** Head + belly held 5s triggers full eyes re-init (restart_both). */
+const HEAD_BELLY_HOLD_MS = 5000;
+let headBellyHoldTimer: ReturnType<typeof setTimeout> | null = null;
+let headBellyHoldCooldown = false;
+
 function handleBellyTouch(): void {
   console.log(msg.nervous_system.belly_cycling);
   eyes.cycleEyeType();
@@ -227,6 +290,24 @@ function onTouch(sensor: "head" | "belly" | "shiver", active: boolean): void {
   else if (sensor === "belly") bellyActive = active;
 
   matterLobe?.notifyTouch(sensor, active);
+
+  // Head + belly both held 5s → full eyes re-init (restart_both)
+  if (sensor === "head" || sensor === "belly") {
+    if (headBellyHoldTimer !== null) {
+      clearTimeout(headBellyHoldTimer);
+      headBellyHoldTimer = null;
+    }
+    if (!headActive || !bellyActive) {
+      if (!headActive && !bellyActive) headBellyHoldCooldown = false;
+    } else if (!headBellyHoldCooldown) {
+      headBellyHoldTimer = setTimeout(() => {
+        headBellyHoldTimer = null;
+        headBellyHoldCooldown = true;
+        eyes.sendCommand("restart_both", {});
+        console.log(msg.nervous_system.eyes_full_reinit_trigger);
+      }, HEAD_BELLY_HOLD_MS);
+    }
+  }
 
   if (!active) return;
   if (sensor === "head") {
@@ -291,8 +372,14 @@ function startWarmupThenOpen(matterResultPromise: Promise<MatterStartResult | un
       eyes.warmup(step);
     } else {
       clearInterval(tick);
+      flushEyesBuffer();
       process.stdout.write("\r" + CLEAR_LINE + warmupBar(WARMUP_STEPS, WARMUP_STEPS, "Opening eyes.") + "\n");
       warmupComplete = true;
+      if (motionFirstDetectedPendingLog) {
+        motionFirstDetectedPendingLog = false;
+        motionFirstDetectedLogged = true;
+        console.log("  👁  Motion: sensor triggered (Furbacca will say \"noticed someone!\" when waking from sleep).");
+      }
       eyes.openEyes();
       matterResultPromise.then((result) => {
         if (result?.buffer?.length) {
@@ -300,6 +387,9 @@ function startWarmupThenOpen(matterResultPromise: Promise<MatterStartResult | un
           result.buffer.forEach((line) => console.log(line));
         }
         if (!result?.showedCachedPairing) console.log(sep);
+        // Re-trigger eyes after Matter finishes (shared RST/SPI can leave one panel black; openEyes redraws)
+        eyes.openEyes();
+        setTimeout(() => eyes.playAnimation("nervous_look", { replace: true }), 800);
       });
     }
   }, stepMs);
@@ -318,9 +408,21 @@ let motionClearDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let warmupComplete = false;
 /** True when we've gone to sleep (no motion for 2 min); we only play nervous_look when waking from this. */
 let motionWasAsleep = false;
+/** Log once when motion is first detected so user knows the sensor is firing (reaction only when waking from sleep). */
+let motionFirstDetectedLogged = false;
+/** Set when motion fires during warmup; log after warmup bar is done so it doesn't interleave. */
+let motionFirstDetectedPendingLog = false;
 
 function onMotion(detected: boolean): void {
   if (detected) {
+    if (!motionFirstDetectedLogged) {
+      if (warmupComplete) {
+        motionFirstDetectedLogged = true;
+        console.log("  👁  Motion: sensor triggered (Furbacca will say \"noticed someone!\" when waking from sleep).");
+      } else {
+        motionFirstDetectedPendingLog = true;
+      }
+    }
     if (motionClearDebounceTimer !== null) {
       clearTimeout(motionClearDebounceTimer);
       motionClearDebounceTimer = null;
@@ -359,6 +461,11 @@ function onShutdown(): void {
   if (motionSleepTimer !== null) {
     clearTimeout(motionSleepTimer);
     motionSleepTimer = null;
+  }
+  isShuttingDown = true;
+  if (eyesChild) {
+    eyesChild.kill("SIGTERM");
+    eyesChild = null;
   }
   eyes.closeEyes();
   matterLobe?.close();

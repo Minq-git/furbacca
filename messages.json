@@ -11,6 +11,7 @@
     "eye_shape": "  👁  Eye shape: {shape}",
     "eye_type": "  👁  Eye type: {type}",
     "opening_animated": "ᯤ Furbacca Eyes Opening... Animated @ {fps} FPS.",
+    "restarting_eyes": "  👁  Eyes: restarting (remote refresh).",
     "udp_bind": "ᯤ UDP {bind}:{port}"
   },
   "matter_lobe": {
@@ -42,6 +43,7 @@
     "belly_touch_error": "  Belly touch: {message}",
     "chip_tool_belly": "  💡 chip-tool: belly touch → onoff on {nodeId} {endpoint}",
     "eyes_listening": "  👀 Eyes: listening at {host}:5005.",
+    "eyes_restarted": "  👀 Eyes: process restarted (health check).",
     "hardware_table_header": "| Module Name | Position            | Pin      | Status  |",
     "hardware_table_sep": "+-------------+---------------------+----------+---------+",
     "hardware_table_title": "+--------------+ Furbacca Hardware Status +--------------+",
@@ -60,7 +62,8 @@
     "motion_clear": "  💤 Area clear. Furbacca is relaxing.",
     "motion_sleep": "  😴 No motion for 2 min — eyes closed (sleep).",
     "motion_event_driven": "  👁  PIR motion: event-driven (gpiomon, BCM 4).",
-    "motion_sensor_enabled": "  👁  Motion: Sensor enabled. Furbacca will sleep/wake based on motion."
+    "motion_sensor_enabled": "  👁  Motion: Sensor enabled. Furbacca will sleep/wake based on motion.",
+    "eyes_full_reinit_trigger": "  👁  Head + belly held 5s → eyes full re-init (restart_both)."
   },
   "touch": {
     "belly_touch_gpio_error": "Belly touch GPIO (22): {error}. Check wiring and gpiod.",
