@@ -13,7 +13,7 @@
     "start": "npm run build && node dist/nervous_system.js",
     "dev": "ts-node nervous_system.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build:pi": "node --max-old-space-size=384 node_modules/typescript/bin/tsc"
+    "build:pi": "node --max-old-space-size=450 node_modules/typescript/bin/tsc"
   },
   "keywords": [],
   "author": "",

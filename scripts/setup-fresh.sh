@@ -137,7 +137,11 @@ ZRAMEOF
       NEED_REBOOT=true
     fi
   fi
-  [[ "$NEED_REBOOT" == "true" ]] && echo "Reboot when convenient so swap/gpu_mem changes apply: sudo reboot"
+  if [[ "$NEED_REBOOT" == "true" ]]; then
+    echo "Reboot now so zram/swap/gpu_mem apply, then re-run this script to complete setup (npm install + build): sudo reboot"
+    echo "After reboot: cd $REPO_DIR && bash scripts/setup-fresh.sh"
+    exit 0
+  fi
 fi
 
 # 1. Build deps (Python.h + gcc for spidev/RPi.GPIO; git for gc9a01py; libgpiod for fan control)
@@ -177,9 +181,13 @@ echo "Installing npm deps and building..."
 # node-gyp (node-libgpiod) needs Python with distutils; use system Python, not venv (venv may be 3.12+ without distutils)
 [[ "$UNAME_S" == "Linux" ]] && export npm_config_python=/usr/bin/python3
 npm install
-# On Pi (low RAM), use build:pi so tsc runs with --max-old-space-size=384 (avoids hang/OOM)
+# On Pi (low RAM), use build:pi (450 MB heap); with zram active after reboot, tsc can complete.
 if [[ "$UNAME_S" == "Linux" ]]; then
-  npm run build:pi
+  echo "Building TypeScript (2–5 min on Pi Zero 2 W, no output until done — please wait)..."
+  if ! npm run build:pi; then
+    echo "⚠ Pi build failed (often OOM). Reboot so zram is active, then re-run setup-fresh; or build on Mac: npm run build && push-furbacca"
+    exit 1
+  fi
 else
   npm run build
 fi
