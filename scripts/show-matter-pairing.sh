@@ -33,8 +33,15 @@ MANUAL=$(echo "$LOG" | grep -E "manual pairing code: [0-9]+" | tail -1)
 QRURL=$(echo "$LOG" | grep -E "QR code URL: https://" | tail -1)
 
 if [[ -z "$PASSCODE" && -z "$MANUAL" && -z "$QRURL" ]]; then
-  echo "No pairing info in recent logs. Device may already be commissioned, or the service just started."
-  echo "Try: journalctl -u furbacca -f   and look for the QR block when Matter starts."
+  echo "No pairing info in recent logs (device may already be commissioned — we don't reprint QR then)."
+  echo "Using Furbacca's fixed credentials (same for initial or multi-admin add):"
+  echo ""
+  echo "  passcode: 20202021"
+  echo "  discriminator: 3840"
+  echo "  manual pairing code: 34970112332"
+  echo "  QR code URL: https://project-chip.github.io/connectedhomeip/qrcode.html?data=MT:Y.K90AFN00KA0648G00"
+  echo ""
+  echo "Add device via Matter and enter the manual code above, or open the URL to scan the QR."
   exit 0
 fi
 

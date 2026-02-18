@@ -35,6 +35,9 @@ s.sendto(os.environ.get("EYE_CMD", "{}").encode(), (os.environ["EYE_HOST"], int(
 }
 trap cleanup EXIT INT TERM
 
+# Bind 0.0.0.0 so remote (fe) and local (nervous system) commands both work
+export UDP_BIND=0.0.0.0
+
 # Build first. On Pi, use build:pi so tsc doesn't OOM.
 echo "Building nervous system..."
 if [[ "$(uname -s)" == "Linux" ]]; then

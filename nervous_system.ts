@@ -186,12 +186,13 @@ if (process.platform === "linux") {
 const matterEnabled = process.env.FURBACCA_MATTER !== "0" && process.env.FURBACCA_MATTER !== "false";
 
 /** Set when Matter starts; used to forward touch to Matter and to close on SIGINT. */
-let matterLobe: { notifyTouch(sensor: "head" | "belly" | "shiver", active: boolean): void; close(): void } | null = null;
+let matterLobe: { notifyTouch(sensor: "head" | "belly" | "shiver", active: boolean): void; close(): Promise<void> } | null = null;
 
 /** If set (e.g. 0x60), belly touch runs chip-tool onoff on <nodeId> <endpoint>. Requires chip-tool (e.g. sudo snap install chip-tool). */
 const chipToolNodeId = process.env.CHIP_TOOL_NODE_ID?.trim() || undefined;
 const chipToolEndpoint = process.env.CHIP_TOOL_ENDPOINT ?? "0x1";
 
+// Same as Matter Lobe: repo .matter so fabric/CASE and pairing cache persist in one place
 const MATTER_DIR = path.join(process.cwd(), ".matter");
 const PAIRING_DISPLAY_CACHE = path.join(MATTER_DIR, "pairing_display.txt");
 const PAIRING_QR_PATTERN =
@@ -452,7 +453,7 @@ function onMotion(detected: boolean): void {
   }
 }
 
-function onShutdown(): void {
+async function onShutdown(): Promise<void> {
   if (motionClearDebounceTimer !== null) {
     clearTimeout(motionClearDebounceTimer);
     motionClearDebounceTimer = null;
@@ -467,12 +468,13 @@ function onShutdown(): void {
     eyesChild = null;
   }
   eyes.closeEyes();
-  matterLobe?.close();
+  await matterLobe?.close(); // Flush Matter storage and announce shutdown via mDNS
   const stopMotion = stopMotionWatch ? stopMotionWatch() : Promise.resolve();
   const stopTouch = stopEventWatch ? stopEventWatch() : Promise.resolve();
-  Promise.all([stopMotion, stopTouch]).then(() => process.exit(0));
+  await Promise.all([stopMotion, stopTouch]);
+  process.exit(0);
 }
-process.on("SIGINT", () => onShutdown());
+process.on("SIGINT", () => void onShutdown());
 
 // Group touch + Matter Lobe status lines, then start Matter (cached pairing prints right after if present)
 const hasCachedPairing = matterEnabled && fs.existsSync(PAIRING_DISPLAY_CACHE);
@@ -484,13 +486,24 @@ const matterLobeStatusLines = msg.matter_lobe.status_order.map((key) => {
 
 if (stopEventWatch) {
   console.log(msg.nervous_system.touch_event_driven);
-  if (matterEnabled) matterLobeStatusLines.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+  if (matterEnabled) {
+    matterLobeStatusLines.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+    console.log(
+      msg.nervous_system.matter_lobe_prefix + `Storage: ${path.join(process.cwd(), ".matter")} (cwd: ${process.cwd()})`
+    );
+  }
 } else {
   console.log(msg.nervous_system.touch_polling);
-  if (matterEnabled) matterLobeStatusLines.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+  if (matterEnabled) {
+    matterLobeStatusLines.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+    console.log(
+      msg.nervous_system.matter_lobe_prefix + `Storage: ${path.join(process.cwd(), ".matter")} (cwd: ${process.cwd()})`
+    );
+  }
 }
 if (stopMotionWatch) {
   console.log(msg.nervous_system.motion_event_driven);
+  console.log(msg.nervous_system.motion_sensor_enabled);
 }
 
 // Matter and warmup run in parallel; eyes open when warmup finishes, Matter logs when Matter finishes

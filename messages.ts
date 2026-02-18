@@ -34,6 +34,7 @@ export const msg = raw as {
     motion_clear: string;
     motion_sleep: string;
     motion_event_driven: string;
+    motion_sensor_enabled: string;
     eyes_full_reinit_trigger: string;
   };
   matter_lobe: {
@@ -56,6 +57,8 @@ export const msg = raw as {
     broadcasting: string;
     identify_on: string;
     status_order: string[];
+    ready_for_initial_pairing: string;
+    multi_admin_opening: string;
   };
   eye_bridge: { error: string };
   touch: {

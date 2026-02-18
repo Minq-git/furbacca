@@ -31,6 +31,8 @@
       "port_free": "Port free. Creating ServerNode..."
     },
     "status_order": ["initializing", "checking_port", "port_free", "node_created", "endpoints_ready", "online"],
+    "ready_for_initial_pairing": "Ready for initial pairing.",
+    "multi_admin_opening": "Already commissioned. Opening window for multi-admin.",
     "switch_featuremap_warn": "  🧠 Matter: Could not set switch featureMap: {error}",
     "udp_port_in_use": "  🧠 Matter Lobe: UDP port {port} is in use. Free it or stop the other process.",
     "xy_x_set": "  🧠 Matter: XY x set to {x}",
@@ -60,6 +62,7 @@
     "motion_clear": "  💤 Area clear. Furbacca is relaxing.",
     "motion_sleep": "  😴 No motion for 2 min — eyes closed (sleep).",
     "motion_event_driven": "  👁  PIR motion: event-driven (gpiomon, BCM 4).",
+    "motion_sensor_enabled": "  👁  Motion: Sensor enabled. Furbacca will sleep/wake based on motion.",
     "eyes_full_reinit_trigger": "  👁  Head + belly held 5s → eyes full re-init (restart_both)."
   },
   "touch": {
