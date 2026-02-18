@@ -162,6 +162,12 @@ export class MatterLobe {
         ExtendedColorLightRequirements as { IdentifyServer: new (...args: unknown[]) => { endpoint: unknown } }
       );
 
+      // Lock storage path and disable clear on default environment (Matter 0.8+ style; reinforces config.defaultStoragePath).
+      const env = general.Environment.default;
+      const storagePath = path.join(process.cwd(), ".matter");
+      env.vars.set("storage.path", storagePath);
+      env.vars.set("storage.clear", false);
+
       status(substitute(msg.matter_lobe.status.checking_port, { port: String(MATTER_UDP_PORT) }));
       if (!(await isUdpPortFree(MATTER_UDP_PORT))) {
         console.warn(substitute(msg.matter_lobe.udp_port_in_use, { port: String(MATTER_UDP_PORT) }));
@@ -170,8 +176,11 @@ export class MatterLobe {
       status(msg.matter_lobe.status.port_free);
       await tidyMatterStorage();
       this.matterNode = await ServerNode.create(ServerNode.RootEndpoint, {
-        id: "node0",
+        id: "furbacca-brain-node",
         network: { port: MATTER_UDP_PORT },
+        // Fixed commissioning credentials. Storage path must be set before SDK init (see above) so the SDK
+        // uses this config and not random/stale values from another directory; a hub–device mismatch
+        // (e.g. hub using cached discriminator 2372 while we advertise 3840) causes a 30s commissioning timeout.
         commissioning: {
           passcode: 20202021,
           discriminator: 3840,

@@ -318,15 +318,9 @@ let motionClearDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let warmupComplete = false;
 /** True when we've gone to sleep (no motion for 2 min); we only play nervous_look when waking from this. */
 let motionWasAsleep = false;
-/** Log once when motion is first detected so user knows the sensor is firing (reaction only when waking from sleep). */
-let motionFirstDetectedLogged = false;
 
 function onMotion(detected: boolean): void {
   if (detected) {
-    if (!motionFirstDetectedLogged) {
-      motionFirstDetectedLogged = true;
-      console.log(msg.nervous_system.motion_sensor_enabled);
-    }
     if (motionClearDebounceTimer !== null) {
       clearTimeout(motionClearDebounceTimer);
       motionClearDebounceTimer = null;
@@ -384,13 +378,24 @@ const matterLobeStatusLines = msg.matter_lobe.status_order.map((key) => {
 
 if (stopEventWatch) {
   console.log(msg.nervous_system.touch_event_driven);
-  if (matterEnabled) matterLobeStatusLines.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+  if (matterEnabled) {
+    matterLobeStatusLines.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+    console.log(
+      msg.nervous_system.matter_lobe_prefix + `Storage: ${path.join(process.cwd(), ".matter")} (cwd: ${process.cwd()})`
+    );
+  }
 } else {
   console.log(msg.nervous_system.touch_polling);
-  if (matterEnabled) matterLobeStatusLines.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+  if (matterEnabled) {
+    matterLobeStatusLines.forEach((line) => console.log(msg.nervous_system.matter_lobe_prefix + line));
+    console.log(
+      msg.nervous_system.matter_lobe_prefix + `Storage: ${path.join(process.cwd(), ".matter")} (cwd: ${process.cwd()})`
+    );
+  }
 }
 if (stopMotionWatch) {
   console.log(msg.nervous_system.motion_event_driven);
+  console.log(msg.nervous_system.motion_sensor_enabled);
 }
 
 // Matter and warmup run in parallel; eyes open when warmup finishes, Matter logs when Matter finishes

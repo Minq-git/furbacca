@@ -55,6 +55,8 @@ export const msg = raw as {
     broadcasting: string;
     identify_on: string;
     status_order: string[];
+    ready_for_initial_pairing: string;
+    multi_admin_opening: string;
   };
   eye_bridge: { error: string };
   touch: {
