@@ -21,7 +21,8 @@ if [[ "${1:-}" != "-y" && "${1:-}" != "--yes" ]]; then
 fi
 if [[ -d "$MATTER_DIR" ]]; then
   rm -rf "$MATTER_DIR"
-  echo "Removed $MATTER_DIR. Restart Furbacca and add the device again (scan the new QR)."
+  echo "Removed $MATTER_DIR. Restart Furbacca and add the device again."
+  echo "Note: We use fixed commissioning credentials (passcode 20202021, discriminator 3840), so the QR/manual code do not change — only fabric/session data is cleared so the device appears uncommissioned to hubs."
 else
   echo "No $MATTER_DIR found (already uncommissioned or storage elsewhere)."
 fi

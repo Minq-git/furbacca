@@ -24,9 +24,10 @@ const MATTER_STARTUP_TIMEOUT_MS = 90_000;
 /** Keys in root.generalDiagnostics that can fail to parse after SDK/storage schema changes; remove before create so SDK re-initializes them. */
 const CORRUPT_GENERAL_DIAGNOSTICS_KEYS = ["__features__", "totalOperationalHoursCounter"];
 
-/** Matter storage in repo so factory reset (rm -rf .matter) clears commissioning. */
+/** Matter storage in repo so factory reset (rm -rf .matter) clears commissioning. Anchored to __dirname so path is stable under systemd (WorkingDirectory may differ). */
+const REPO_ROOT = path.resolve(__dirname, "../../.."); // dist/brain/ts → repo root
 function getMatterDir(): string {
-  return path.join(process.cwd(), ".matter");
+  return path.join(REPO_ROOT, ".matter");
 }
 
 async function tidyMatterStorage(): Promise<void> {
@@ -98,9 +99,11 @@ export class MatterLobe {
   }
 
   /** Release Matter node resources on shutdown. Call before process.exit for clean CTRL+C. */
-  close(): void {
+  async close(): Promise<void> {
     this.onTouchForMatter = null;
-    // Matter SDK may not expose node.close(); OS will reclaim port/process on exit.
+    if (this.matterNode && typeof (this.matterNode as { close?: () => Promise<void> }).close === "function") {
+      await (this.matterNode as { close: () => Promise<void> }).close(); // Flushes storage and announces shutdown via mDNS
+    }
   }
 
   async start(options?: {
@@ -161,7 +164,7 @@ export class MatterLobe {
 
       // Lock storage path and disable clear on default environment (Matter 0.8+ style; reinforces config.defaultStoragePath).
       const env = general.Environment.default;
-      const storagePath = path.join(process.cwd(), ".matter");
+      const storagePath = getMatterDir();
       env.vars.set("storage.path", storagePath);
       env.vars.set("storage.clear", false);
 
@@ -174,7 +177,10 @@ export class MatterLobe {
       await tidyMatterStorage();
       this.matterNode = await ServerNode.create(ServerNode.RootEndpoint, {
         id: "furbacca-brain-node",
-        network: { port: MATTER_UDP_PORT },
+        network: {
+          port: MATTER_UDP_PORT,
+          ipv4: true, // IPv4-only reduces CPU on Pi Zero 2 W; set MATTER_MDNS_NETWORKINTERFACE=wlan0 if needed
+        },
         // Fixed commissioning credentials. Storage path must be set before SDK init (see above) so the SDK
         // uses this config and not random/stale values from another directory; a hub–device mismatch
         // (e.g. hub using cached discriminator 2372 while we advertise 3840) causes a 30s commissioning timeout.
@@ -280,6 +286,16 @@ export class MatterLobe {
           console.log(substitute(msg.matter_lobe.hue_set, { hue: String(hue) }));
           applyHueToSpecies(hue, this.eyes);
         });
+      // Color temperature (e.g. "Warm White" / "Cool White"): high mireds = warm → human, low = cool → demon
+      const evColor = ev.colorControl as Record<string, { on?: (cb: (v: unknown) => void) => void } | undefined> | undefined;
+      if (evColor?.colorTemperatureMireds$Changed?.on) {
+        evColor.colorTemperatureMireds$Changed.on((v) => {
+          const mireds = v as number | null;
+          if (mireds == null) return;
+          if (mireds >= 350) this.eyes.sendCommand("set_eye_type", { type: "human" });
+          else if (mireds <= 200) this.eyes.sendCommand("set_eye_type", { type: "demon" });
+        });
+      }
 
       // Identify: when user taps "Identify" in a smart home app, blink so they can see which device it is
       const identify = (ev as Record<string, { startIdentifying?: { on: (cb: () => void) => void }; identifyTime$Changed?: { on: (cb: (v: unknown) => void) => void } }>).identify;
