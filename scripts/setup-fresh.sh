@@ -220,6 +220,10 @@ if [[ "$UNAME_S" == "Linux" ]]; then
       echo "alias setup-furbacca='bash $REPO_DIR/scripts/setup-fresh.sh'" >> "$RC"
       echo "Added to $RC: alias setup-furbacca='...'"
     fi
+    if ! grep -q "eye-track" "$RC" 2>/dev/null; then
+      echo "alias eye-track='$REPO_DIR/scripts/eye-track.sh'" >> "$RC"
+      echo "Added to $RC: alias eye-track='...'"
+    fi
   fi
 
   # 7b. Wi‑Fi config backup for network heal (head+belly 30s after brownout)

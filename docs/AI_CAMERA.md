@@ -131,9 +131,10 @@ So: **build/convert on a powerful machine; package RPK on the Pi.** Pre-built mo
 ### 4.3 Practical steps (after headless verification)
 
 1. **Verify camera headless:** See **§5** below. Once a still (and optionally a detection still) works, the camera and IMX500 pipeline are OK.  
-2. **Add a small Python camera process** (e.g. under `vision/py/` or a new `camera/` dir) using Picamera2 + IMX500, and in the request callback: parse outputs → pick target → convert to x, y → send UDP (e.g. `look <x> <y>` to port 5005).  
-3. **Start the camera process** with wake-furbacca (or as a separate service) so it runs alongside the eyes and nervous system.  
-4. **Tune:** Use temporal filtering (e.g. in the JSON config or in our code) to reduce jitter; optionally only send `look` when confidence is above a threshold.
+2. **Eye tracking:** **scripts/eye-track.sh** (alias **eye-track**) — starts **vision/py/camera_track.py** (Picamera2 + IMX500). From Mac: **`eye-track furbacca.local on`** (or `off`, `status`). On the Pi:
+   **`eye-track on`** or **`eye-track run --print-every 30`**. Options: **`--host`**, **`--port`** (5005), **`--threshold`** (0.5), **`--smooth`** (EMA 0..1), **`--print-every N`**.  
+3. **Start order:** Run **wake-furbacca** (eyes + nervous system), then **eye-track on** (or `eye-track run` in another terminal). The eyes will follow the chosen target (person if present, else highest-confidence detection).  
+4. **Tune:** Use **`--smooth`** (e.g. 0.2–0.3) to reduce jitter; **`--threshold`** to ignore low-confidence detections.
 
 ### 4.4 References
 
@@ -203,15 +204,14 @@ rpicam-vid -t 5000 -o /tmp/camera-test.264 -n \
 - **-t 5000** = 5 seconds.  
 - Playback on Mac: e.g. `ffplay` or VLC; or convert with `ffmpeg` if needed.
 
-### 5.6 Step 5 — Optional: headless Python (Picamera2 + IMX500)
+### 5.6 Step 5 — See what the camera saw (print detections)
 
-If you have Picamera2 and the IMX500 examples, you can run a **headless** script that opens the camera, runs object detection, and **prints** detection results to stdout (no window, no saved image required). Example idea:
+The picamera2 object detection demo with `--no-preview` doesn't show output. To see what it's detecting:
 
-- Use Picamera2 with `IMX500(model_file)` and a small capture loop.  
-- In the request callback, call `imx500.get_outputs(metadata)`, parse boxes/scores/classes.  
-- Print one line per frame (e.g. “detections: 2, person 0.95 at …”) and exit after a few seconds.
+- **Save a still with boxes** (Step 3): copy the image to your Mac and open it.  
+- **Eye tracking:** Run **`eye-track run --print-every 30`** (or `./scripts/eye-track.sh run --print-every 30`) to print detections every N frames (e.g. person 0.92 at 320,240). (e.g. “detections: 2, person 0.95 at …”) and exit after a few seconds.
 
-That confirms the stack end-to-end before you add UDP and eye tracking. Picamera2 IMX500 examples: [picamera2/examples/imx500](https://github.com/raspberrypi/picamera2/blob/main/examples/imx500/). Install deps first: `sudo apt install python3-opencv python3-munkres` (and Picamera2 if not already present).
+See **§4.3** and the script's `--help` for options.
 
 ### 5.7 Troubleshooting (headless)
 
