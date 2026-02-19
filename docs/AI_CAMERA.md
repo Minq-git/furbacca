@@ -1,6 +1,6 @@
 # Raspberry Pi AI Camera (IMX500) — Furbacca integration
 
-This doc summarizes the [Raspberry Pi AI Camera documentation](https://www.raspberrypi.com/documentation/accessories/ai-camera.html): what we use to run and deploy models, existing models/apps, and **how to make Furbacca’s eyes track you**.
+This doc summarizes the [Raspberry Pi AI Camera documentation](https://www.raspberrypi.com/documentation/accessories/ai-camera.html): what we use to run and deploy models, existing models/apps, **how to make Furbacca’s eyes track you**, and **headless verification** (no display — GC9A01 eyes only). See **README.md** for TODOs: AI camera process, IR transmitter, **Matter camera endpoint** (live feed via Google Home), and **build & train custom model** (AITRIOS tutorial).
 
 ---
 
@@ -30,10 +30,21 @@ This doc summarizes the [Raspberry Pi AI Camera documentation](https://www.raspb
 **Picamera2 deps (for Python demos / our process):**
 
 ```bash
-sudo apt install python3-opencv python3-munkres
+sudo apt install -y python3-picamera2 python3-opencv python3-munkres
 ```
 
+On the Pi, **python3-picamera2** is required so `import picamera2` works. Run demos with system Python (not inside Furbacca’s venv) unless you install picamera2 into the venv.
+
 Examples live in the [picamera2 repo](https://github.com/raspberrypi/picamera2), under `examples/imx500/`.
+
+**Local reference (recommended for implementation and troubleshooting):** Clone picamera2 into the project so we can read the demo code when building the Furbacca camera process or debugging. The clone is gitignored; only the convention is tracked.
+
+```bash
+# From Furbacca repo root (on Mac or Pi)
+git clone https://github.com/raspberrypi/picamera2.git reference/picamera2
+```
+
+See **reference/README.md** for paths (e.g. `reference/picamera2/examples/imx500/imx500_object_detection_demo.py`, `reference/picamera2/src/picamera2/devices/imx500.py`).
 
 ---
 
@@ -41,7 +52,7 @@ Examples live in the [picamera2 repo](https://github.com/raspberrypi/picamera2),
 
 To run **your own** network on the IMX500:
 
-1. **Model:** Create or reuse a floating-point model (PyTorch or TensorFlow). See [AITRIOS](https://developer.aitrios.sony-semicon.com/en/raspberrypi-ai-camera).
+1. **Model:** Create or reuse a floating-point model (PyTorch or TensorFlow). Follow the [AITRIOS Raspberry Pi AI Camera tutorial](https://developer.aitrios.sony-semicon.com/en/docs/raspberry-pi-ai-camera/raspberry-pi-ai-camera-tutorial?version=2025-09-30) for build & train steps.
 2. **Quantize/compress:** Use **Edge-MDT** (Model Development Toolkit), e.g. `pip install edge-mdt[pt]`. Sony’s Model Compression Toolkit (MCT) produces quantized Keras or ONNX.
 3. **Convert to IMX500 binary:** Run the converter (installed with Edge-MDT), e.g.  
    `imxconv-pt -i <compressed ONNX> -o <output folder>`  
@@ -63,10 +74,18 @@ So: **build/convert on a powerful machine; package RPK on the Pi.** Pre-built mo
   ```bash
   rpicam-hello -t 0s --post-process-file /usr/share/rpi-camera-assets/imx500_mobilenet_ssd.json --viewfinder-width 1920 --viewfinder-height 1080 --framerate 30
   ```
-- **Picamera2:** Use `examples/imx500/imx500_object_detection_demo.py` with a model from `/usr/share/imx500-models/`, e.g.:
+- **Picamera2:** The demo script lives in the picamera2 repo. Clone it, install deps, then run from the repo root:
   ```bash
-  python imx500_object_detection_demo.py --model /usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk
+  git clone https://github.com/raspberrypi/picamera2.git ~/picamera2
+  cd ~/picamera2
+  sudo apt install -y python3-opencv python3-munkres   # if not already
+  python examples/imx500/imx500_object_detection_demo.py --model /usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk
   ```
+  **Headless (no display / GC9A01 eyes only):** Add **`--no-preview`** so the demo doesn’t try to use DRM and crash with “Failed to reserve DRM plane”:
+  ```bash
+  python examples/imx500/imx500_object_detection_demo.py --model /usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk --no-preview
+  ```
+  (Picamera2 is usually installed system-wide on Pi; if the script fails with import errors, install with `sudo apt install -y python3-picamera2` or use the repo’s Python path.)
 - **Output:** Bounding boxes + confidence. Filter by class (e.g. “person”) and take the largest or highest-confidence box as “target” for tracking.
 
 ### 3.2 Pose estimation (body / face region)
@@ -109,9 +128,9 @@ So: **build/convert on a powerful machine; package RPK on the Pi.** Pre-built mo
      - `y = (center_y / height - 0.5) * 2` (or negate if you want “person up” = positive y).  
    - Furbacca’s eyes already accept `look x y` in -1..1; no change needed on the eye side if we send that.
 
-### 4.3 Practical steps
+### 4.3 Practical steps (after headless verification)
 
-1. **Verify camera:** After `imx500-all` and reboot, run `rpicam-hello` or a Picamera2 IMX500 demo to confirm detection/pose.  
+1. **Verify camera headless:** See **§5** below. Once a still (and optionally a detection still) works, the camera and IMX500 pipeline are OK.  
 2. **Add a small Python camera process** (e.g. under `vision/py/` or a new `camera/` dir) using Picamera2 + IMX500, and in the request callback: parse outputs → pick target → convert to x, y → send UDP (e.g. `look <x> <y>` to port 5005).  
 3. **Start the camera process** with wake-furbacca (or as a separate service) so it runs alongside the eyes and nervous system.  
 4. **Tune:** Use temporal filtering (e.g. in the JSON config or in our code) to reduce jitter; optionally only send `look` when confidence is above a threshold.
@@ -121,4 +140,82 @@ So: **build/convert on a powerful machine; package RPK on the Pi.** Pre-built mo
 - [Raspberry Pi AI Camera](https://www.raspberrypi.com/documentation/accessories/ai-camera.html) — getting started, examples, under the hood.  
 - [Picamera2 IMX500 examples](https://github.com/raspberrypi/picamera2/blob/main/examples/imx500/) — object detection and pose demos.  
 - Furbacca eyes UDP: **vision/ts/eye_bridge.ts**, **vision/py/eyes.py** (e.g. `look` with `x`, `y` in -1..1).  
-- **instruction.md** §1 — AI Camera (CSI), pinout; **README.md** — TODO (AI camera process, eye tracking).
+- **instruction.md** §1 — AI Camera (CSI), pinout; **README.md** — TODO (AI camera process, eye tracking, Matter camera endpoint, AITRIOS build & train).
+
+---
+
+## 5. Headless verification (no display — GC9A01 eyes only)
+
+These steps confirm the AI camera and IMX500 pipeline work **without an HDMI monitor**. All output goes to files or stdout; you can inspect files later (e.g. `scp` to your Mac).
+
+### 5.1 Prerequisites
+
+- **imx500-all** installed (`sudo apt install imx500-all`) and **reboot** done at least once so the kernel can load firmware.
+- AI camera connected via CSI (ribbon). No display required.
+
+### 5.2 Step 1 — Check the camera is detected
+
+From SSH (or serial):
+
+```bash
+rpicam-hello --list-cameras
+```
+
+You should see the IMX500 (e.g. “imx500” or “Raspberry Pi AI Camera”). On some systems `libcamera-hello` is not installed; the rpicam-apps tools (`rpicam-still`, `rpicam-hello`) are sufficient. If listing fails or tries to open a window headless, skip to Step 2 — if the still captures, the camera is detected.
+
+### 5.3 Step 2 — Capture a plain still (no AI)
+
+Writes a JPEG to a file; no display, no post-processing.
+
+```bash
+rpicam-still -o /tmp/camera-test.jpg -n
+```
+
+- **-n** = no preview window (required when headless).  
+- If it runs and exits without error, the camera and basic pipeline work.  
+- View the image from your Mac (include the destination, e.g. current directory):  
+  `scp minqz@furbacca.local:/tmp/camera-test.jpg .`
+
+### 5.4 Step 3 — Capture a still with object detection (IMX500)
+
+This loads the IMX500 firmware and MobileNet SSD and writes a JPEG with bounding boxes drawn. **First run can take several minutes** while firmware loads (progress may appear on the console).
+
+```bash
+rpicam-still -o /tmp/camera-detection.jpg -n \
+  --post-process-file /usr/share/rpi-camera-assets/imx500_mobilenet_ssd.json
+```
+
+- If the JSON path differs on your system, look under `/usr/share/rpi-camera-assets/` or `/usr/share/imx500-models/`.  
+- When it finishes, copy the file from your Mac:  
+  `scp minqz@furbacca.local:/tmp/camera-detection.jpg .`  
+  Then open the image; you should see boxes around detected objects (person, etc.).  
+- Later runs will be much faster (firmware cached).
+
+### 5.5 Step 4 — Optional: short video to file
+
+Confirms the video + detection pipeline (still no display):
+
+```bash
+rpicam-vid -t 5000 -o /tmp/camera-test.264 -n \
+  --post-process-file /usr/share/rpi-camera-assets/imx500_mobilenet_ssd.json
+```
+
+- **-t 5000** = 5 seconds.  
+- Playback on Mac: e.g. `ffplay` or VLC; or convert with `ffmpeg` if needed.
+
+### 5.6 Step 5 — Optional: headless Python (Picamera2 + IMX500)
+
+If you have Picamera2 and the IMX500 examples, you can run a **headless** script that opens the camera, runs object detection, and **prints** detection results to stdout (no window, no saved image required). Example idea:
+
+- Use Picamera2 with `IMX500(model_file)` and a small capture loop.  
+- In the request callback, call `imx500.get_outputs(metadata)`, parse boxes/scores/classes.  
+- Print one line per frame (e.g. “detections: 2, person 0.95 at …”) and exit after a few seconds.
+
+That confirms the stack end-to-end before you add UDP and eye tracking. Picamera2 IMX500 examples: [picamera2/examples/imx500](https://github.com/raspberrypi/picamera2/blob/main/examples/imx500/). Install deps first: `sudo apt install python3-opencv python3-munkres` (and Picamera2 if not already present).
+
+### 5.7 Troubleshooting (headless)
+
+- **“No camera detected”:** Check CSI ribbon (contacts toward the right pins), reboot, run `rpicam-hello --list-cameras` again.  
+- **First detection run very slow:** Normal; IMX500 firmware load. Wait for completion; next runs are faster.  
+- **rpicam-still fails with “preview” or “display” errors:** Add **-n** (no preview).  
+- **Permission or “resource busy”:** Ensure no other process is using the camera (e.g. another rpicam-* or Python script).

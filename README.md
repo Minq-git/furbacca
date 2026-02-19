@@ -155,7 +155,11 @@ Full pin mapping: **instruction.md** §1.
 
 **TODO — IR transmitter:** Drive BCM 16 (e.g. LIRC or raw timing) to send IR codes; expose "send IR" from the nervous system or a small script for TV/Furby codes. Also communicate with a TV.
 
-See **docs/AI_CAMERA.md** for how we leverage the Raspberry Pi AI Camera (IMX500) for models, apps, and eye tracking.
+**TODO — Camera as Matter endpoint:** Expose the AI camera as a Matter endpoint so the live feed can be viewed remotely via Google Home.
+
+**TODO — Build & train custom model:** Build and train a model using the [AITRIOS Raspberry Pi AI Camera tutorial](https://developer.aitrios.sony-semicon.com/en/docs/raspberry-pi-ai-camera/raspberry-pi-ai-camera-tutorial?version=2025-09-30).
+
+See **docs/AI_CAMERA.md** for how we leverage the Raspberry Pi AI Camera (IMX500), headless verification steps, and eye tracking.
 
 ### Cooling (fan harness)
 
