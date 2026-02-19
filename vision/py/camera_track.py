@@ -31,6 +31,7 @@ except ImportError as e:
     sys.exit(1)
 
 UDP_PORT = 5005
+NS_EVENTS_PORT = 5006  # nervous system: looking_started / looking_stopped
 # COCO: 0 = person (prefer for tracking)
 PERSON_CLASS_ID = 0
 
@@ -129,6 +130,7 @@ def main():
 
     smooth_x, smooth_y = 0.0, 0.0
     frame = 0
+    was_looking = False  # true when we had a target last frame and sent look
     print(f"Camera tracking → UDP {args.host}:{args.port} (smooth={args.smooth}, threshold={args.threshold})", file=sys.stderr)
     print("Ctrl+C to stop.", file=sys.stderr)
 
@@ -145,9 +147,22 @@ def main():
 
             target = pick_target(detections)
             if target is None:
+                if was_looking:
+                    try:
+                        sock.sendto(b'{"event":"looking_stopped"}', ("127.0.0.1", NS_EVENTS_PORT))
+                    except OSError:
+                        pass
+                    was_looking = False
                 continue
             cx, cy, conf = target
             nx, ny = center_to_normalized(cx, cy, width, height)
+
+            if not was_looking:
+                try:
+                    sock.sendto(b'{"event":"looking_started"}', ("127.0.0.1", NS_EVENTS_PORT))
+                except OSError:
+                    pass
+                was_looking = True
 
             # EMA smoothing
             alpha = 1.0 - args.smooth

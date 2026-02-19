@@ -1,4 +1,5 @@
 import { execSync, spawn } from "child_process";
+import * as dgram from "dgram";
 import fs from "fs";
 import path from "path";
 import { fanControl } from "./cooling/fan_control.js";
@@ -261,6 +262,23 @@ function chipToolOn(): void {
 }
 
 const visionHost = process.env.VISION_HOST ?? "127.0.0.1";
+
+/** UDP port for local events (e.g. eye-track.sh notifies when tracking starts/stops). */
+const NS_EVENTS_PORT = 5006;
+const nsEventsSocket = dgram.createSocket("udp4");
+nsEventsSocket.bind(NS_EVENTS_PORT, "127.0.0.1", () => {
+  nsEventsSocket.on("message", (buf: Buffer) => {
+    try {
+      const payload = JSON.parse(buf.toString()) as { event?: string };
+      if (payload.event === "eye_tracking_started") console.log(msg.nervous_system.eye_tracking_started);
+      else if (payload.event === "eye_tracking_stopped") console.log(msg.nervous_system.eye_tracking_stopped);
+      else if (payload.event === "looking_started") console.log(msg.nervous_system.looking_started);
+      else if (payload.event === "looking_stopped") console.log(msg.nervous_system.looking_stopped);
+    } catch {
+      /* ignore malformed */
+    }
+  });
+});
 
 console.log(msg.nervous_system.header);
 console.log(substitute(msg.nervous_system.eyes_listening, { host: visionHost }));

@@ -31,11 +31,13 @@ case "$ACTION" in
     else
       nohup python3 "$REPO_DIR/vision/py/camera_track.py" >> /tmp/eye-track.log 2>&1 &
       echo "Eye tracking started (PID $!). Log: /tmp/eye-track.log"
+      python3 -c "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.sendto(b'{\"event\":\"eye_tracking_started\"}', ('127.0.0.1', 5006)); s.close()" 2>/dev/null || true
     fi
     ;;
   off)
     if pkill -f "vision/py/camera_track.py" 2>/dev/null; then
       echo "Eye tracking stopped."
+      python3 -c "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.sendto(b'{\"event\":\"eye_tracking_stopped\"}', ('127.0.0.1', 5006)); s.close()" 2>/dev/null || true
     else
       echo "Eye tracking was not running."
     fi

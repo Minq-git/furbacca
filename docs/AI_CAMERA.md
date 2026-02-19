@@ -131,8 +131,7 @@ So: **build/convert on a powerful machine; package RPK on the Pi.** Pre-built mo
 ### 4.3 Practical steps (after headless verification)
 
 1. **Verify camera headless:** See **§5** below. Once a still (and optionally a detection still) works, the camera and IMX500 pipeline are OK.  
-2. **Eye tracking:** **scripts/eye-track.sh** (alias **eye-track**) — starts **vision/py/camera_track.py** (Picamera2 + IMX500). From Mac: **`eye-track furbacca.local on`** (or `off`, `status`). On the Pi:
-   **`eye-track on`** or **`eye-track run --print-every 30`**. Options: **`--host`**, **`--port`** (5005), **`--threshold`** (0.5), **`--smooth`** (EMA 0..1), **`--print-every N`**.  
+2. **Eye tracking:** **scripts/eye-track.sh** (alias **eye-track** or **fe-track**) — starts **vision/py/camera_track.py** (Picamera2 + IMX500). When you run **on** or **off**, the script notifies the nervous system (UDP 127.0.0.1:5006) so it can log tracking state. From Mac: **`eye-track furbacca.local on`** (or `off`, `status`). On the Pi: **`eye-track on`** or **`eye-track run --print-every 30`**. Options: **`--host`**, **`--port`** (5005), **`--threshold`** (0.5), **`--smooth`** (EMA 0..1), **`--print-every N`**.  
 3. **Start order:** Run **wake-furbacca** (eyes + nervous system), then **eye-track on** (or `eye-track run` in another terminal). The eyes will follow the chosen target (person if present, else highest-confidence detection).  
 4. **Tune:** Use **`--smooth`** (e.g. 0.2–0.3) to reduce jitter; **`--threshold`** to ignore low-confidence detections.
 

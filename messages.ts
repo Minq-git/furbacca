@@ -37,6 +37,10 @@ export const msg = raw as {
     motion_sensor_enabled: string;
     eyes_full_reinit_trigger: string;
     network_heal_trigger: string;
+    eye_tracking_started: string;
+    eye_tracking_stopped: string;
+    looking_started: string;
+    looking_stopped: string;
   };
   matter_lobe: {
     status: {
