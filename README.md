@@ -127,23 +127,35 @@ Add Furbacca to Google Home or Apple Home via the pairing QR in the logs; pairin
 
 Full pin mapping: **instruction.md** §1.
 
-| Component       | GPIO | Physical | Notes                    |
-|-----------------|------|----------|--------------------------|
-| Touch (Head)    | 17   | 11       | TTP223                   |
-| Touch (Belly)   | 22   | 15       | TTP223                   |
-| Vibration       | 23   | 16       | SW-420 (shaker)          |
-| SPI SCLK        | 11   | 23       | Eyes                     |
-| SPI MOSI        | 10   | 19       | Eyes                     |
-| Eye DC          | 25   | 22       | GC9A01                   |
-| Eye RST         | 27   | 13       | GC9A01                   |
-| Eye CS (L)      | 8    | 24       | Left                     |
-| Eye CS (R)      | 7    | 26       | Right                    |
-| Cooling fans    | 24   | 18       | 2N2222 NPN, libgpiod PWM |
-| MAX98357A I2S   | 18   | 12       | Reserved (I2S audio)     |
-| MAX98357A I2S   | 19   | 35       | Reserved (I2S audio)     |
-| MAX98357A I2S   | 21   | 40       | Reserved (I2S audio)     |
-| DRV8833 motor   | 12   | 32       | Furby motor (AIN1)       |
-| DRV8833 motor   | 13   | 33       | Furby motor (AIN2)       |
+| Component       | GPIO | Physical | Notes                              |
+|-----------------|------|----------|------------------------------------|
+| AI Camera       | CSI  | ribbon   | Face/object tracking (planned)     |
+| Touch (Head)    | 17   | 11       | TTP223                             |
+| Touch (Belly)   | 22   | 15       | TTP223                             |
+| Vibration       | 23   | 16       | SW-420 (shaker)                    |
+| PIR Motion      | 4    | 7        | AM312 (motion)                     |
+| IR Transmitter  | 16   | 36       | TV/Furby blaster (2× IR LEDs)      |
+| SPI SCLK        | 11   | 23       | Eyes                               |
+| SPI MOSI        | 10   | 19       | Eyes                               |
+| Eye DC          | 25   | 22       | GC9A01                             |
+| Eye RST         | 27   | 13       | GC9A01                             |
+| Eye CS (L)      | 8    | 24       | Left                               |
+| Eye CS (R)      | 7    | 26       | Right                              |
+| Cooling fans    | 24   | 18       | 2N2222 NPN, libgpiod PWM           |
+| MAX98357A I2S   | 18   | 12       | BCLK (not yet plugged in)           |
+| MAX98357A I2S   | 19   | 35       | LRC (not yet plugged in)           |
+| MAX98357A I2S   | 21   | 40       | DIN (not yet plugged in)           |
+| DRV8833 motor   | 12   | 32       | AIN1 (not yet plugged in)          |
+| DRV8833 motor   | 13   | 33       | AIN2 (not yet plugged in)          |
+| DRV8833 nFAULT  | 5    | 29       | Motor stall detection              |
+
+**AI camera & IR (planned):** Raspberry Pi AI camera (CSI) for face/object tracking and two IR LEDs (BCM 16, pin 36) for TV/Furby blaster are installed; integration with the nervous system (e.g. tracking → eyes, IR send) is planned. See **instruction.md** §1 (AI Camera, IR Transmitter).
+
+**TODO — AI camera:** New process (e.g. Python with picamera2 / OpenCV or libcamera) for face/object detection; stream results to the nervous system (e.g. UDP or pipe) and optionally drive eye look/blink from tracking.
+
+**TODO — IR transmitter:** Drive BCM 16 (e.g. LIRC or raw timing) to send IR codes; expose "send IR" from the nervous system or a small script for TV/Furby codes. Also communicate with a TV.
+
+See **docs/AI_CAMERA.md** for how we leverage the Raspberry Pi AI Camera (IMX500) for models, apps, and eye tracking.
 
 ### Cooling (fan harness)
 

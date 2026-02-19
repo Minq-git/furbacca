@@ -144,13 +144,19 @@ ZRAMEOF
   fi
 fi
 
-# 1. Build deps (Python.h + gcc for spidev/RPi.GPIO; git for gc9a01py; libgpiod for fan control)
+# 1. Build deps (Python.h + gcc for spidev/RPi.GPIO; git for gc9a01py; libgpiod for fan; AI camera IMX500)
 if [[ "$UNAME_S" == "Linux" ]]; then
   echo "Ensuring Python dev headers, build tools, git, and libgpiod..."
   sudo apt-get update -qq
   sudo apt-get install -y python3-dev python3-setuptools build-essential git
   # libgpiod: GPIO character device for cooling fan (BCM 24). Debian Trixie: gpiod + libgpiod-dev.
   sudo apt-get install -y gpiod libgpiod-dev
+  # Raspberry Pi AI Camera (IMX500): latest system + firmware so CSI camera works (face/object tracking).
+  echo "Ensuring Raspberry Pi AI Camera deps (apt full-upgrade + imx500-all)..."
+  sudo apt-get update -qq
+  sudo apt-get full-upgrade -y
+  sudo apt-get install -y imx500-all
+  echo "AI camera (imx500-all) installed. Reboot once so IMX500 firmware loads (see https://www.raspberrypi.com/documentation/accessories/ai-camera.html)."
 fi
 
 # 2. Python venv
