@@ -349,6 +349,9 @@ nsEventsSocket.bind(NS_EVENTS_PORT, "127.0.0.1", () => {
 console.log(msg.nervous_system.header);
 console.log(substitute(msg.nervous_system.eyes_listening, { host: visionHost }));
 console.log(substitute(msg.nervous_system.voice_ready, { card: process.env.FURBACCA_AUDIO_CARD ?? "0" }));
+if (process.platform === "linux" && (process.env.FURBACCA_EYE_TRACK ?? "1") !== "0") {
+  console.log(msg.nervous_system.eye_tracker_starting);
+}
 initAudio(); // volume/no-control message once at startup so first head touch only logs "Playing giggle"
 if (matterEnabled) console.log(msg.nervous_system.matter_lobe_enabled);
 if (chipToolNodeId) console.log(substitute(msg.nervous_system.chip_tool_belly, { nodeId: chipToolNodeId, endpoint: chipToolEndpoint }));
