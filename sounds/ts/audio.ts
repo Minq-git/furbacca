@@ -1,20 +1,53 @@
 /**
- * Non-blocking WAV playback via aplay (ALSA).
- * Does not block the event loop; suitable for use from touch handlers
- * without blocking eyes physics or fan monitoring.
+ * Non-blocking WAV playback via aplay (ALSA) to I2S DAC.
+ *
+ * Hardware: MAX98357A I2S amp on Raspberry Pi — BCM 18 (BCLK), 19 (LRC), 21 (DIN).
+ * Speaker: 18.9 Ω (expect lower volume than 4/8 Ω). Volume is set to 50% at first
+ * use to protect the TP4056 power rail during bench test.
+ *
+ * Does not block the event loop; suitable for use from touch handlers without
+ * blocking eyes physics or fan monitoring.
  */
-import { spawn } from "child_process";
+import { execSync, spawn } from "child_process";
 import path from "path";
 import { msg, substitute } from "../../messages.js";
 
-// WAV files live in sounds/assets/; path works via ts-node or node dist/...
-const SOUNDS_DIR = path.join(__dirname, "..", "assets");
+// WAV files in repo sounds/assets/ (process.cwd() when run from repo root)
+const SOUNDS_DIR = path.join(process.cwd(), "sounds", "assets");
+
+/** ALSA card index for I2S DAC (default 0). Override with FURBACCA_AUDIO_CARD. */
+const AUDIO_CARD = process.env.FURBACCA_AUDIO_CARD ?? "0";
+
+let volumeInitialized = false;
+
+/**
+ * Set playback volume to 50% for bench safety (TP4056 / 18.9 Ω speaker).
+ * Runs once on first play. Uses amixer -c N set PCM 50% (or Master if PCM missing).
+ */
+function setVolume50(): void {
+  if (volumeInitialized) return;
+  volumeInitialized = true;
+  try {
+    // Prefer PCM (common on I2S); fallback to Master
+    try {
+      execSync(`amixer -c ${AUDIO_CARD} set PCM 50%`, { stdio: "ignore" });
+    } catch {
+      execSync(`amixer -c ${AUDIO_CARD} set Master 50%`, { stdio: "ignore" });
+    }
+    console.log(msg.audio.volume_set_50);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(substitute(msg.audio.volume_set_failed, { message }));
+  }
+}
 
 /**
  * Play a WAV file immediately in the background. Returns without waiting for playback to finish.
  * Uses aplay (ALSA) for low-latency output to I2S DAC (e.g. MAX98357A).
+ * Volume is set to 50% on first use.
  */
 export function playWav(filename: string): void {
+  setVolume50();
   const filepath = path.join(SOUNDS_DIR, filename);
   const child = spawn("aplay", [filepath], {
     detached: true,
@@ -31,4 +64,12 @@ export function playWav(filename: string): void {
  */
 export function playGiggle(): void {
   playWav("giggle.wav");
+}
+
+/**
+ * Call once at startup if you want volume set before any play (e.g. from nervous_system).
+ * Otherwise volume is set lazily on first playWav/playGiggle.
+ */
+export function initAudio(): void {
+  setVolume50();
 }
