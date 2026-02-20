@@ -7,6 +7,11 @@ CONFIG="/boot/firmware/config.txt"
 
 echo "=== Config: $CONFIG ==="
 if [[ -f "$CONFIG" ]]; then
+  if grep -qE "dtparam=audio=off" "$CONFIG" 2>/dev/null; then
+    echo "On-board audio disabled (dtparam=audio=off) — good for I2S default card."
+  else
+    echo "Tip: dtparam=audio=off avoids on-board 3.5mm taking default; add if using I2S DAC only."
+  fi
   if grep -qE "dtoverlay=(max98357a|hifiberry-dac)" "$CONFIG" 2>/dev/null; then
     echo "I2S overlay found:"
     grep -E "dtoverlay=(max98357a|hifiberry-dac)" "$CONFIG"

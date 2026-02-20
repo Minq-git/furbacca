@@ -136,9 +136,29 @@ ZRAMEOF
       echo "gpu_mem=32" | sudo tee -a "$BOOT_CFG" >/dev/null
       NEED_REBOOT=true
     fi
+    # Audio: dtparam=audio=off so I2S DAC is default; max98357a with no-sdmode so BCM 4 free for PIR
+    if ! grep -qE '^dtparam=audio=off' "$BOOT_CFG" 2>/dev/null; then
+      if grep -qE '^dtparam=audio=' "$BOOT_CFG" 2>/dev/null; then
+        echo "Setting dtparam=audio=off in $BOOT_CFG (I2S default)..."
+        sudo sed -i 's/^dtparam=audio=.*/dtparam=audio=off/' "$BOOT_CFG"
+      else
+        echo "Adding dtparam=audio=off to $BOOT_CFG (I2S default)..."
+        echo "dtparam=audio=off" | sudo tee -a "$BOOT_CFG" >/dev/null
+      fi
+      NEED_REBOOT=true
+    fi
+    if ! grep -qE 'dtoverlay=(max98357a|hifiberry-dac)' "$BOOT_CFG" 2>/dev/null; then
+      echo "Adding dtoverlay=max98357a,no-sdmode to $BOOT_CFG (BCLK 18, LRC 19, DIN 21; BCM 4 free for PIR)..."
+      echo "dtoverlay=max98357a,no-sdmode" | sudo tee -a "$BOOT_CFG" >/dev/null
+      NEED_REBOOT=true
+    elif grep 'dtoverlay=max98357a' "$BOOT_CFG" 2>/dev/null | grep -qv 'no-sdmode'; then
+      echo "Replacing max98357a overlay with no-sdmode in $BOOT_CFG (free BCM 4 for PIR)..."
+      sudo sed -i 's/^dtoverlay=max98357a.*/dtoverlay=max98357a,no-sdmode/' "$BOOT_CFG"
+      NEED_REBOOT=true
+    fi
   fi
   if [[ "$NEED_REBOOT" == "true" ]]; then
-    echo "Reboot now so zram/swap/gpu_mem apply, then re-run this script to complete setup (npm install + build): sudo reboot"
+    echo "Reboot now so zram/swap/gpu_mem/audio config apply, then re-run this script to complete setup (npm install + build): sudo reboot"
     echo "After reboot: cd $REPO_DIR && bash scripts/setup-fresh.sh"
     exit 0
   fi
