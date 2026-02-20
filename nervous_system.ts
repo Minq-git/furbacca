@@ -123,8 +123,61 @@ const rows: string[] = [
   "| Cooling     | Fan (BCM 24)        | 24       | " + statusCell(fanState()) + " |",
 ];
 
+/**
+ * Warmup spinner = progress indicator for the ENTIRE startup when the user only has the device (no terminal/SSH).
+ * Each step advances the spinner on the eyes (beige → green); labels below are for the terminal bar.
+ * Someone in front of Furbacca sees the eyes fill from brown to green as each phase completes.
+ */
+const WARMUP_STEP_LABELS: string[] = [
+  "Hardware ready",
+  "NS / Voice",
+  "Touch arming",
+  "Motion arming",
+  "Status",
+  "Matter starting",
+  "Preparing eyes…",
+  "Ready",
+];
+
+function warmupSegmentColor(blend: number): [number, number, number] {
+  return [
+    Math.round(WARMUP_BEIGE[0] * (1 - blend) + WARMUP_GREEN[0] * blend),
+    Math.round(WARMUP_BEIGE[1] * (1 - blend) + WARMUP_GREEN[1] * blend),
+    Math.round(WARMUP_BEIGE[2] * (1 - blend) + WARMUP_GREEN[2] * blend),
+  ];
+}
+
+function warmupBar(filled: number, total: number, label: string): string {
+  const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
+  let bar = "[";
+  for (let i = 0; i < total; i++) {
+    if (i < filled) {
+      const blend = total > 1 ? i / (total - 1) : 0;
+      const [r, g, b] = warmupSegmentColor(blend);
+      bar += ansiRgb(r, g, b) + "█" + ANSI_RESET;
+    } else {
+      bar += "░";
+    }
+  }
+  bar += "]";
+  return `  ${bar} (${pct}%): ${label}`;
+}
+
+const CLEAR_LINE = "\x1b[K";
+
 const touch = new TouchSenses(0);
 const eyes = new EyeBridge();
+
+/** Advance spinner to step (terminal bar + eyes). Call at each setup phase so the eyes show progress to someone watching the device. */
+function advanceWarmup(step: number): void {
+  const label = WARMUP_STEP_LABELS[step] ?? "Starting";
+  if (step === 0) {
+    process.stdout.write(warmupBar(0, WARMUP_STEPS, label) + "\n");
+  } else {
+    process.stdout.write("\r" + CLEAR_LINE + warmupBar(step, WARMUP_STEPS, label));
+  }
+  eyes.warmup(step);
+}
 
 /** Eyes subprocess: we spawn and restart on exit so they recover during heavy Matter init. */
 let eyesChild: ReturnType<typeof spawn> | null = null;
@@ -186,14 +239,15 @@ for (const row of rows) {
 }
 console.log(sep);
 
-// Give eyes time to bind to UDP 5005 and enter main loop before we send warmup/openEyes
+// Give eyes time to bind, init displays, and enter main loop so spinner shows from step 0 (device-only progress)
 if (process.platform === "linux") {
   try {
-    execSync("sleep 0.5", { stdio: "ignore" });
+    execSync("sleep 1.2", { stdio: "ignore" });
   } catch {
     /* ignore */
   }
 }
+advanceWarmup(0); // Hardware ready; spinner visible during rest of startup
 
 /** Matter Lobe is on by default. Set FURBACCA_MATTER=0 (or false) to disable for troubleshooting. Requires 64-bit Node on Pi. */
 const matterEnabled = process.env.FURBACCA_MATTER !== "0" && process.env.FURBACCA_MATTER !== "false";
@@ -302,6 +356,8 @@ if (!headHw.ok && headHw.message) console.log(substitute(msg.nervous_system.head
 if (!bellyHw.ok && bellyHw.message) console.log(substitute(msg.nervous_system.belly_touch_error, { message: bellyHw.message }));
 if (!vibeHw.ok && vibeHw.message) console.log(substitute(msg.nervous_system.vibration_error, { message: vibeHw.message }));
 
+advanceWarmup(1); // NS / Voice
+
 let headActive = false;
 let bellyActive = false;
 
@@ -371,84 +427,38 @@ function onTouch(sensor: "head" | "belly" | "shiver", active: boolean): void {
   }
 }
 
-const WARMUP_STEP_LABELS: string[] = [
-  "Eyes waiting for nervous system",
-  "Touch sensors initializing",
-  "Eye bridge connecting",
-  "Sensors arming",
-  "Waking up…",
-  "Almost there…",
-  "Preparing eyes…",
-  "Ready",
-];
-
-function warmupSegmentColor(blend: number): [number, number, number] {
-  return [
-    Math.round(WARMUP_BEIGE[0] * (1 - blend) + WARMUP_GREEN[0] * blend),
-    Math.round(WARMUP_BEIGE[1] * (1 - blend) + WARMUP_GREEN[1] * blend),
-    Math.round(WARMUP_BEIGE[2] * (1 - blend) + WARMUP_GREEN[2] * blend),
-  ];
-}
-
-function warmupBar(filled: number, total: number, label: string): string {
-  const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
-  let bar = "[";
-  for (let i = 0; i < total; i++) {
-    if (i < filled) {
-      const blend = total > 1 ? i / (total - 1) : 0;
-      const [r, g, b] = warmupSegmentColor(blend);
-      bar += ansiRgb(r, g, b) + "█" + ANSI_RESET;
-    } else {
-      bar += "░";
-    }
-  }
-  bar += "]";
-  return `  ${bar} (${pct}%): ${label}`;
-}
-
-const CLEAR_LINE = "\x1b[K"; // clear from cursor to end of line
-
-/** Runs warmup and opens eyes; Matter logs are printed when the promise resolves (Matter runs in parallel). */
+/** Runs final warmup steps (6, 7) then opens eyes; Matter logs printed when promise resolves. */
 function startWarmupThenOpen(matterResultPromise: Promise<MatterStartResult | undefined>): void {
-  const stepMs = WARMUP_MS / WARMUP_STEPS;
-  let step = 0;
-  process.stdout.write(warmupBar(step, WARMUP_STEPS, WARMUP_STEP_LABELS[step] ?? "Starting"));
-  eyes.warmup(step);
-  const tick = setInterval(() => {
-    step += 1;
-    if (step < WARMUP_STEPS) {
-      process.stdout.write("\r" + CLEAR_LINE + warmupBar(step, WARMUP_STEPS, WARMUP_STEP_LABELS[step] ?? "Starting"));
-      eyes.warmup(step);
-    } else {
-      clearInterval(tick);
-      flushEyesBuffer();
-      process.stdout.write("\r" + CLEAR_LINE + warmupBar(WARMUP_STEPS, WARMUP_STEPS, "Opening eyes.") + "\n");
-      warmupComplete = true;
-      if (motionFirstDetectedPendingLog) {
-        motionFirstDetectedPendingLog = false;
-        motionFirstDetectedLogged = true;
-        console.log("  👁  Motion: sensor triggered (Furbacca will say \"noticed someone!\" when waking from sleep).");
-      }
-      eyes.openEyes();
-      matterResultPromise.then((result) => {
-        if (result?.buffer?.length) {
-          console.log(msg.nervous_system.matter_startup_logs_header);
-          result.buffer.forEach((line) => console.log(line));
-        }
-        if (!result?.showedCachedPairing) console.log(sep);
-        // Re-trigger eyes after Matter finishes (shared RST/SPI can leave one panel black; openEyes redraws)
-        eyes.openEyes();
-        setTimeout(() => eyes.playAnimation("nervous_look", { replace: true }), 800);
-      });
+  advanceWarmup(6); // Preparing eyes…
+  advanceWarmup(7); // Ready (full green)
+  flushEyesBuffer();
+  process.stdout.write("\r" + CLEAR_LINE + warmupBar(WARMUP_STEPS, WARMUP_STEPS, "Opening eyes.") + "\n");
+  warmupComplete = true;
+  if (motionFirstDetectedPendingLog) {
+    motionFirstDetectedPendingLog = false;
+    motionFirstDetectedLogged = true;
+    console.log("  👁  Motion: sensor triggered (Furbacca will say \"noticed someone!\" when waking from sleep).");
+  }
+  eyes.openEyes();
+  matterResultPromise.then((result) => {
+    if (result?.buffer?.length) {
+      console.log(msg.nervous_system.matter_startup_logs_header);
+      result.buffer.forEach((line) => console.log(line));
     }
-  }, stepMs);
+    if (!result?.showedCachedPairing) console.log(sep);
+    // Re-trigger eyes after Matter finishes (shared RST/SPI can leave one panel black; openEyes redraws)
+    eyes.openEyes();
+    setTimeout(() => eyes.playAnimation("nervous_look", { replace: true }), 800);
+  });
 }
 
 const matterLobeStatus = msg.matter_lobe.status as Record<string, string>;
 
 // Prefer event-driven (gpiomon) for minimal latency; fall back to 20ms polling
 const stopEventWatch = touch.startEventWatch(onTouch);
+advanceWarmup(2); // Touch arming
 const stopMotionWatch = monitorMotion(onMotion);
+advanceWarmup(3); // Motion arming
 
 let motionSleepTimer: ReturnType<typeof setTimeout> | null = null;
 /** Debounce: only start sleep timer after no motion for MOTION_CLEAR_DEBOUNCE_MS. */
@@ -554,6 +564,9 @@ if (stopMotionWatch) {
   console.log(msg.nervous_system.motion_event_driven);
   console.log(msg.nervous_system.motion_sensor_enabled);
 }
+
+advanceWarmup(4); // Status
+advanceWarmup(5); // Matter starting
 
 // Matter and warmup run in parallel; eyes open when warmup finishes, Matter logs when Matter finishes
 const matterPromise = matterEnabled

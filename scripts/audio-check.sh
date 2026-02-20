@@ -12,9 +12,13 @@ if [[ -f "$CONFIG" ]]; then
     grep -E "dtoverlay=(max98357a|hifiberry-dac)" "$CONFIG"
   else
     echo "No dtoverlay=max98357a or dtoverlay=hifiberry-dac found."
-    echo "Add overlay (BCLK=18, LRC=19, DIN=21):"
-    echo "  echo 'dtoverlay=max98357a' | sudo tee -a $CONFIG"
+    echo "Add overlay (BCLK=18, LRC=19, DIN=21). Use no-sdmode so BCM 4 stays free for PIR motion:"
+    echo "  echo 'dtoverlay=max98357a,no-sdmode' | sudo tee -a $CONFIG"
     echo "Then reboot: sudo reboot"
+  fi
+  if grep -q "dtoverlay=max98357a[^,]*$" "$CONFIG" 2>/dev/null; then
+    echo ""
+    echo "Note: max98357a overlay without no-sdmode uses BCM 4 (conflicts with PIR motion). Add ,no-sdmode or ,sdmode-pin=20."
   fi
 else
   echo "Config file not found. Add dtoverlay=max98357a to your boot config and reboot."

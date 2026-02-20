@@ -49,7 +49,7 @@
     "chip_tool_belly": "  💡 chip-tool: belly touch → onoff on {nodeId} {endpoint}",
     "eyes_listening": "  👀 Eyes: listening at {host}:5005.",
     "eyes_restarted": "  👀 Eyes: process restarted (health check).",
-    "hardware_table_header": "| Module Name | Position            | Pin (BCM) | Status  |",
+    "hardware_table_header": "| Module Name | Position            | Pin(BCM) | Status  |",
     "hardware_table_sep": "+-------------+---------------------+----------+---------+",
     "hardware_table_title": "+--------------+ Furbacca Hardware Status +--------------+",
     "header": "+------+ Furbacca Nervous System: Modular Edition +------+",
