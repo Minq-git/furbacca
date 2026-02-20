@@ -159,6 +159,10 @@ Full pin mapping: **instruction.md** §1.
 
 **TODO — Build & train custom model:** Build and train a model using the [AITRIOS Raspberry Pi AI Camera tutorial](https://developer.aitrios.sony-semicon.com/en/docs/raspberry-pi-ai-camera/raspberry-pi-ai-camera-tutorial?version=2025-09-30).
 
+**Tomorrow (feature):** Start the eye-tracking service automatically as part of **wake-furbacca**.
+
+**Tomorrow (planning / discuss):** (1) **Triggered “look”:** A way to trigger Furbacca to “look” at something; at that point he focuses on that person/object to analyze it, otherwise he continues looking around as normal. (2) **Alarm vs casual mode:** “Alarm” mode = current behavior (when a human is detected, track them focused). Alternative mode = more casual (look around normally until triggered to focus).
+
 See **docs/AI_CAMERA.md** for how we leverage the Raspberry Pi AI Camera (IMX500), headless verification steps, and eye tracking.
 
 ### Cooling (fan harness)

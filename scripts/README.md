@@ -22,5 +22,6 @@
 
 | File | Purpose |
 |------|---------|
+| **audio-check.sh** | On the Pi: check I2S DAC config (dtoverlay=max98357a or hifiberry-dac in /boot/firmware/config.txt or /boot/config.txt) and list ALSA devices (**aplay -l**). Run: `./scripts/audio-check.sh`. |
 | **furbacca.service** | Systemd unit for full stack (wake-furbacca) at boot. Copy to `/etc/systemd/system/`, edit User/WorkingDirectory/ExecStart, then `sudo systemctl enable --now furbacca`. |
 | **furbacca-eyes.service** | Systemd unit (eyes only). Use if you want eyes as a service and run the nervous system manually. |

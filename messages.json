@@ -1,6 +1,8 @@
 {
   "audio": {
-    "aplay_failed": "[audio] aplay failed: {message}"
+    "aplay_failed": "[audio] aplay failed: {message}",
+    "volume_set_50": "[audio] Volume set to 50% for bench test (TP4056 / 18.9 Ω speaker).",
+    "volume_set_failed": "[audio] Could not set volume to 50%: {message}"
   },
   "eye_bridge": {
     "error": "Eye Bridge Error: {message}"
