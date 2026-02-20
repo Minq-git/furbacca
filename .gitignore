@@ -3,6 +3,8 @@
 .vscode
 .DS_Store
 .furbacca-hardware.json
+stills
+reference/picamera2
 
 node_modules
 dist

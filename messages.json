@@ -10,7 +10,7 @@
     "display_init_failed": "⚠ Display init failed: {error}",
     "eye_shape": "  👁  Eye shape: {shape}",
     "eye_type": "  👁  Eye type: {type}",
-    "opening_animated": "ᯤ Furbacca Eyes Opening... Animated @ {fps} FPS.",
+    "opening_animated": "🥱 Furbacca waking up... Animated @ {fps} FPS.",
     "restarting_eyes": "  👁  Eyes: restarting (remote refresh).",
     "udp_bind": "ᯤ UDP {bind}:{port}"
   },
@@ -64,7 +64,11 @@
     "motion_event_driven": "  👁  PIR motion: event-driven (gpiomon, BCM 4).",
     "motion_sensor_enabled": "  👁  Motion: Sensor enabled. Furbacca will sleep/wake based on motion.",
     "eyes_full_reinit_trigger": "  👁  Head + belly held 5s → eyes full re-init (restart_both).",
-    "network_heal_trigger": "  ⚠️  Head + belly held 30s → network heal script."
+    "network_heal_trigger": "  ⚠️  Head + belly held 30s → network heal script.",
+    "eye_tracking_started": "  🧐  Eye tracking: started.",
+    "eye_tracking_stopped": "  🫣  Eye tracking: stopped.",
+    "looking_started": "  🧐  Looking at target (in view).",
+    "looking_stopped": "  🫣  Target left field of view."
   },
   "touch": {
     "belly_touch_gpio_error": "Belly touch GPIO (22): {error}. Check wiring and gpiod.",

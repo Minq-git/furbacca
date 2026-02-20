@@ -127,23 +127,39 @@ Add Furbacca to Google Home or Apple Home via the pairing QR in the logs; pairin
 
 Full pin mapping: **instruction.md** §1.
 
-| Component       | GPIO | Physical | Notes                    |
-|-----------------|------|----------|--------------------------|
-| Touch (Head)    | 17   | 11       | TTP223                   |
-| Touch (Belly)   | 22   | 15       | TTP223                   |
-| Vibration       | 23   | 16       | SW-420 (shaker)          |
-| SPI SCLK        | 11   | 23       | Eyes                     |
-| SPI MOSI        | 10   | 19       | Eyes                     |
-| Eye DC          | 25   | 22       | GC9A01                   |
-| Eye RST         | 27   | 13       | GC9A01                   |
-| Eye CS (L)      | 8    | 24       | Left                     |
-| Eye CS (R)      | 7    | 26       | Right                    |
-| Cooling fans    | 24   | 18       | 2N2222 NPN, libgpiod PWM |
-| MAX98357A I2S   | 18   | 12       | Reserved (I2S audio)     |
-| MAX98357A I2S   | 19   | 35       | Reserved (I2S audio)     |
-| MAX98357A I2S   | 21   | 40       | Reserved (I2S audio)     |
-| DRV8833 motor   | 12   | 32       | Furby motor (AIN1)       |
-| DRV8833 motor   | 13   | 33       | Furby motor (AIN2)       |
+| Component       | GPIO | Physical | Notes                              |
+|-----------------|------|----------|------------------------------------|
+| AI Camera       | CSI  | ribbon   | Face/object tracking (planned)     |
+| Touch (Head)    | 17   | 11       | TTP223                             |
+| Touch (Belly)   | 22   | 15       | TTP223                             |
+| Vibration       | 23   | 16       | SW-420 (shaker)                    |
+| PIR Motion      | 4    | 7        | AM312 (motion)                     |
+| IR Transmitter  | 16   | 36       | TV/Furby blaster (2× IR LEDs)      |
+| SPI SCLK        | 11   | 23       | Eyes                               |
+| SPI MOSI        | 10   | 19       | Eyes                               |
+| Eye DC          | 25   | 22       | GC9A01                             |
+| Eye RST         | 27   | 13       | GC9A01                             |
+| Eye CS (L)      | 8    | 24       | Left                               |
+| Eye CS (R)      | 7    | 26       | Right                              |
+| Cooling fans    | 24   | 18       | 2N2222 NPN, libgpiod PWM           |
+| MAX98357A I2S   | 18   | 12       | BCLK (not yet plugged in)           |
+| MAX98357A I2S   | 19   | 35       | LRC (not yet plugged in)           |
+| MAX98357A I2S   | 21   | 40       | DIN (not yet plugged in)           |
+| DRV8833 motor   | 12   | 32       | AIN1 (not yet plugged in)          |
+| DRV8833 motor   | 13   | 33       | AIN2 (not yet plugged in)          |
+| DRV8833 nFAULT  | 5    | 29       | Motor stall detection              |
+
+**AI camera & IR (planned):** Raspberry Pi AI camera (CSI) for face/object tracking and two IR LEDs (BCM 16, pin 36) for TV/Furby blaster are installed; integration with the nervous system (e.g. tracking → eyes, IR send) is planned. See **instruction.md** §1 (AI Camera, IR Transmitter).
+
+**TODO — AI camera:** New process (e.g. Python with picamera2 / OpenCV or libcamera) for face/object detection; stream results to the nervous system (e.g. UDP or pipe) and optionally drive eye look/blink from tracking.
+
+**TODO — IR transmitter:** Drive BCM 16 (e.g. LIRC or raw timing) to send IR codes; expose "send IR" from the nervous system or a small script for TV/Furby codes. Also communicate with a TV.
+
+**TODO — Camera as Matter endpoint:** Expose the AI camera as a Matter endpoint so the live feed can be viewed remotely via Google Home.
+
+**TODO — Build & train custom model:** Build and train a model using the [AITRIOS Raspberry Pi AI Camera tutorial](https://developer.aitrios.sony-semicon.com/en/docs/raspberry-pi-ai-camera/raspberry-pi-ai-camera-tutorial?version=2025-09-30).
+
+See **docs/AI_CAMERA.md** for how we leverage the Raspberry Pi AI Camera (IMX500), headless verification steps, and eye tracking.
 
 ### Cooling (fan harness)
 
@@ -164,6 +180,7 @@ Full pin mapping: **instruction.md** §1.
 ## 🤖 Commands & automation
 - **`wake-furbacca`** — start all services (eyes + nervous system). Use this.
 - **`sleep-furbacca`** — (on the Pi) safe shutdown: runs **`sudo halt`**. **Never yank the power pin while the Pi is on** — that can corrupt the SD card (mid-write) and stress the fan circuit. Run **`sleep-furbacca`**, wait until the green ACT LED stops flickering and stays off (or faint solid), then disconnect power. **setup-fresh.sh** adds this alias to your shell rc.
+- **`eye-track`** — (alias from **setup-fresh.sh** on the Pi) runs **scripts/eye-track.sh**. Start/stop AI camera tracking (eyes follow you): **`eye-track on`** | **`eye-track off`** | **`eye-track status`**. Run in foreground with args: **`eye-track run --print-every 30`**. You can alias the script as **`fe-track`** (e.g. `alias fe-track='~/furbacca/scripts/eye-track.sh'` or with a default host); same script. When tracking is turned **on** or **off**, the script sends a UDP message to the nervous system (127.0.0.1:5006) so the NS can log it. **From Mac:** run **`eye-track furbacca.local on`** (or `off`, `status`). Use **furbacca.local** (mDNS) or add **furbacca.lan** to `/etc/hosts`. Uses **FURBACCA_SSH_USER** (default `minqz`) for SSH.
 - **`sudo systemctl status furbacca`** — if you run the full stack as a service (see below); **`furbacca-eyes`** for eyes-only.
 - **`journalctl -u furbacca -f`** — stream the service logs (animations, touch, Matter, etc.) after SSH; `-n 200` for last 200 lines instead of follow.
 - **`./scripts/fe-restart.sh`** — full eyes re-init (RST + init both panels). On the Pi: no args. From Mac: **`./scripts/fe-restart.sh furbacca.local`**. Same effect as holding head + belly for 5 seconds. **Head + belly 30s** (no SSH needed): runs **`./scripts/heal-network.sh`** to restart the network stack and optionally restore Wi‑Fi from `/boot/wpa_supplicant.conf` (see **Network dead after brownout** below).
