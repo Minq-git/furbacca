@@ -15,11 +15,13 @@ An AI-powered, Matter-enabled animatronic build based on the 2012 Hasbro Furby, 
 
 ## 🚀 Starting the services
 
-**Use `wake-furbacca` to start every service** (eyes + nervous system) from the repo root on the Pi:
+**Use `wake-furbacca` to start every service** (eyes + nervous system, and on the Pi **eye-tracking** by default) from the repo root on the Pi:
 
 ```bash
 ./scripts/wake-furbacca.sh
 ```
+To skip starting eye-tracking: **`./scripts/wake-furbacca.sh --no-eye-track`** or **`FURBACCA_EYE_TRACK=0 ./scripts/wake-furbacca.sh`** (short: **`-n`**).
+
 Or on the Pi, alias once and run from anywhere (alias must run the **script**, not an old `python vision/eyes.py` command):
 ```bash
 alias wake-furbacca='~/furbacca/scripts/wake-furbacca.sh'
@@ -159,7 +161,6 @@ Full pin mapping: **instruction.md** §1.
 
 **TODO — Build & train custom model:** Build and train a model using the [AITRIOS Raspberry Pi AI Camera tutorial](https://developer.aitrios.sony-semicon.com/en/docs/raspberry-pi-ai-camera/raspberry-pi-ai-camera-tutorial?version=2025-09-30).
 
-**Tomorrow (feature):** Start the eye-tracking service automatically as part of **wake-furbacca**.
 
 **Tomorrow (planning / discuss):** (1) **Triggered “look”:** A way to trigger Furbacca to “look” at something; at that point he focuses on that person/object to analyze it, otherwise he continues looking around as normal. (2) **Alarm vs casual mode:** “Alarm” mode = current behavior (when a human is detected, track them focused). Alternative mode = more casual (look around normally until triggered to focus).
 
@@ -184,7 +185,7 @@ See **docs/AI_CAMERA.md** for how we leverage the Raspberry Pi AI Camera (IMX500
 ## 🤖 Commands & automation
 - **`wake-furbacca`** — start all services (eyes + nervous system). Use this.
 - **`sleep-furbacca`** — (on the Pi) safe shutdown: runs **`sudo halt`**. **Never yank the power pin while the Pi is on** — that can corrupt the SD card (mid-write) and stress the fan circuit. Run **`sleep-furbacca`**, wait until the green ACT LED stops flickering and stays off (or faint solid), then disconnect power. **setup-fresh.sh** adds this alias to your shell rc.
-- **`eye-track`** — (alias from **setup-fresh.sh** on the Pi) runs **scripts/eye-track.sh**. Start/stop AI camera tracking (eyes follow you): **`eye-track on`** | **`eye-track off`** | **`eye-track status`**. Run in foreground with args: **`eye-track run --print-every 30`**. You can alias the script as **`fe-track`** (e.g. `alias fe-track='~/furbacca/scripts/eye-track.sh'` or with a default host); same script. When tracking is turned **on** or **off**, the script sends a UDP message to the nervous system (127.0.0.1:5006) so the NS can log it. **From Mac:** run **`eye-track furbacca.local on`** (or `off`, `status`). Use **furbacca.local** (mDNS) or add **furbacca.lan** to `/etc/hosts`. Uses **FURBACCA_SSH_USER** (default `minqz`) for SSH.
+- **`eye-track`** — (alias from **setup-fresh.sh** on the Pi) runs **scripts/eye-track.sh**. **wake-furbacca** starts eye-tracking by default on the Pi; disable with **`wake-furbacca --no-eye-track`** or **`FURBACCA_EYE_TRACK=0`**. Manual: **`eye-track on`** | **`eye-track off`** | **`eye-track status`**; foreground: **`eye-track run --print-every 30`**. Alias as **`fe-track`** if you prefer. Sends UDP to nervous system (127.0.0.1:5006) when tracking on/off. **From Mac:** **`eye-track furbacca.local on`** (or `off`, `status`). **FURBACCA_SSH_USER** (default `minqz`) for SSH.
 - **`sudo systemctl status furbacca`** — if you run the full stack as a service (see below); **`furbacca-eyes`** for eyes-only.
 - **`journalctl -u furbacca -f`** — stream the service logs (animations, touch, Matter, etc.) after SSH; `-n 200` for last 200 lines instead of follow.
 - **`./scripts/fe-restart.sh`** — full eyes re-init (RST + init both panels). On the Pi: no args. From Mac: **`./scripts/fe-restart.sh furbacca.local`**. Same effect as holding head + belly for 5 seconds. **Head + belly 30s** (no SSH needed): runs **`./scripts/heal-network.sh`** to restart the network stack and optionally restore Wi‑Fi from `/boot/wpa_supplicant.conf` (see **Network dead after brownout** below).

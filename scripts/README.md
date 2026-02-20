@@ -4,7 +4,7 @@
 
 | Script | When to use |
 |--------|-------------|
-| **wake-furbacca.sh** | Start everything: eyes + nervous system (touch, sounds, UDP). Run from repo root or alias on the Pi: `alias wake-furbacca='~/furbacca/scripts/wake-furbacca.sh'`. If you get "vision/eyes.py: No such file", your alias/script points to the old path—see README § Troubleshooting. |
+| **wake-furbacca.sh** | Start everything: eyes + nervous system (touch, sounds, UDP). On the Pi, **eye-tracking** starts by default; use **`--no-eye-track`** or **`FURBACCA_EYE_TRACK=0`** to disable. Run from repo root or alias: `alias wake-furbacca='~/furbacca/scripts/wake-furbacca.sh'`. See README § Troubleshooting if "vision/eyes.py: No such file". |
 | **run-eyes.sh** | Eyes only (vision/py/eyes.py). Use when you want eyes in one terminal and nervous system in another. |
 | **eye-command.sh** | Send commands to eyes (blink, shape, type) while eyes are running. On Pi: `./scripts/eye-command.sh shape sharp`. From Mac: `./scripts/eye-command.sh furbacca.local type dragon`. |
 | **eye-track.sh** | Start/stop/run eye tracking (AI camera → eyes follow you). On Pi: `./scripts/eye-track.sh on` \| `off` \| `status`; `./scripts/eye-track.sh run --print-every 30` for foreground. From Mac: `./scripts/eye-track.sh furbacca.local on`. **eye-track** alias (setup-fresh.sh) runs this script; you can also alias as **fe-track**. Sends UDP to nervous system (127.0.0.1:5006) when tracking is turned on/off. |
