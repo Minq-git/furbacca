@@ -12,13 +12,15 @@ import { execSync, spawn } from "child_process";
 import path from "path";
 import { msg, substitute } from "../../messages.js";
 
-// WAV files in repo sounds/assets/ (process.cwd() when run from repo root)
-const SOUNDS_DIR = path.join(process.cwd(), "sounds", "assets");
+// WAV files next to compiled code: dist/sounds/assets/ (so copy sounds/assets/ into dist or build step)
+const SOUNDS_DIR = path.join(__dirname, "..", "assets");
 
 /** ALSA card index for I2S DAC (default 0). Override with FURBACCA_AUDIO_CARD. */
 const AUDIO_CARD = process.env.FURBACCA_AUDIO_CARD ?? "0";
 
 let volumeInitialized = false;
+/** Skip starting another aplay while one is running (avoids device busy / exit 1 on rapid head touches). */
+let currentPlayback: ReturnType<typeof spawn> | null = null;
 
 /**
  * Set playback volume to 50% for bench safety (TP4056 / 18.9 Ω speaker).
@@ -47,14 +49,21 @@ function setVolume50(): void {
  * Volume is set to 50% on first use.
  */
 export function playWav(filename: string): void {
+  if (currentPlayback !== null) return; // one at a time to avoid device busy (exit 1) on rapid touches
   setVolume50();
   const filepath = path.join(SOUNDS_DIR, filename);
   const child = spawn("aplay", [filepath], {
     detached: true,
     stdio: "ignore",
   });
+  currentPlayback = child;
   child.on("error", (err) => {
+    currentPlayback = null;
     console.error(substitute(msg.audio.aplay_failed, { message: err.message }));
+  });
+  child.on("exit", (code) => {
+    currentPlayback = null;
+    if (code !== 0 && code !== null) console.error(substitute(msg.audio.aplay_exit, { code: String(code) }));
   });
   child.unref();
 }

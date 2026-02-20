@@ -5,7 +5,7 @@ import path from "path";
 import { fanControl } from "./cooling/fan_control.js";
 import { msg, substitute } from "./messages.js";
 import { monitorMotion } from "./senses/motion.js";
-import { playGiggle } from "./sounds/ts/audio.js";
+import { initAudio, playGiggle } from "./sounds/ts/audio.js";
 import { TouchSenses, VIBE_BCM } from "./senses/touch";
 import { EyeBridge } from "./vision/ts/eye_bridge";
 
@@ -114,24 +114,14 @@ const voiceState = (): StatusState => {
 };
 
 const rows: string[] = [
-  "| GC9A01PY    | Left Eye            | BCM 8    | " + statusCell(displayState()) + " |",
-  "| GC9A01PY    | Right Eye           | BCM 7    | " + statusCell(displayState()) + " |",
-  "| TTP223B     | Head Touch          | BCM 17   | " + statusCell(headState()) + " |",
-  "| TTP223B     | Belly Touch         | BCM 22   | " + statusCell(bellyState()) + " |",
-  "| SW-420      | Vibration (Shiver)  | BCM 23   | " + statusCell(vibeState()) + " |",
-  "| MAX98357A   | Voice (I2S)         | BCM 18,19,21 | " + statusCell(voiceState()) + " |",
-  "| Cooling     | Fan (BCM 24)        | BCM 24   | " + statusCell(fanState()) + " |",
+  "| GC9A01PY    | Left Eye            | 8        | " + statusCell(displayState()) + " |",
+  "| GC9A01PY    | Right Eye           | 7        | " + statusCell(displayState()) + " |",
+  "| TTP223B     | Head Touch          | 17       | " + statusCell(headState()) + " |",
+  "| TTP223B     | Belly Touch         | 22       | " + statusCell(bellyState()) + " |",
+  "| SW-420      | Vibration (Shiver)  | 23       | " + statusCell(vibeState()) + " |",
+  "| MAX98357A   | Voice (I2S)         | 18,19,21 | " + statusCell(voiceState()) + " |",
+  "| Cooling     | Fan (BCM 24)        | 24       | " + statusCell(fanState()) + " |",
 ];
-
-const tableTitle = msg.nervous_system.hardware_table_title;
-console.log(tableTitle);
-console.log(sep);
-console.log(header);
-console.log(sep);
-for (const row of rows) {
-  console.log(row);
-}
-console.log(sep);
 
 const touch = new TouchSenses(0);
 const eyes = new EyeBridge();
@@ -183,12 +173,23 @@ function startEyesProcess(): void {
   });
 }
 
+// Start eyes first so they bind while we print the table; spinner shows on displays as early as possible
 startEyesProcess();
+
+const tableTitle = msg.nervous_system.hardware_table_title;
+console.log(tableTitle);
+console.log(sep);
+console.log(header);
+console.log(sep);
+for (const row of rows) {
+  console.log(row);
+}
+console.log(sep);
 
 // Give eyes time to bind to UDP 5005 and enter main loop before we send warmup/openEyes
 if (process.platform === "linux") {
   try {
-    execSync("sleep 1.5", { stdio: "ignore" });
+    execSync("sleep 0.5", { stdio: "ignore" });
   } catch {
     /* ignore */
   }
@@ -294,6 +295,7 @@ nsEventsSocket.bind(NS_EVENTS_PORT, "127.0.0.1", () => {
 console.log(msg.nervous_system.header);
 console.log(substitute(msg.nervous_system.eyes_listening, { host: visionHost }));
 console.log(substitute(msg.nervous_system.voice_ready, { card: process.env.FURBACCA_AUDIO_CARD ?? "0" }));
+initAudio(); // volume/no-control message once at startup so first head touch only logs "Playing giggle"
 if (matterEnabled) console.log(msg.nervous_system.matter_lobe_enabled);
 if (chipToolNodeId) console.log(substitute(msg.nervous_system.chip_tool_belly, { nodeId: chipToolNodeId, endpoint: chipToolEndpoint }));
 if (!headHw.ok && headHw.message) console.log(substitute(msg.nervous_system.head_touch_error, { message: headHw.message }));
