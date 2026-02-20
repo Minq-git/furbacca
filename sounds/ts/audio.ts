@@ -27,18 +27,18 @@ let volumeInitialized = false;
 function setVolume50(): void {
   if (volumeInitialized) return;
   volumeInitialized = true;
-  try {
-    // Prefer PCM (common on I2S); fallback to Master
+  const controls = ["PCM", "Master", "Playback", "Digital"];
+  for (const name of controls) {
     try {
-      execSync(`amixer -c ${AUDIO_CARD} set PCM 50%`, { stdio: "ignore" });
+      execSync(`amixer -c ${AUDIO_CARD} set ${name} 50%`, { stdio: "ignore" });
+      console.log(msg.audio.volume_set_50);
+      return;
     } catch {
-      execSync(`amixer -c ${AUDIO_CARD} set Master 50%`, { stdio: "ignore" });
+      /* try next */
     }
-    console.log(msg.audio.volume_set_50);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(substitute(msg.audio.volume_set_failed, { message }));
   }
+  // MAX98357A and many I2S DACs have no hardware volume; playback still works at fixed level
+  console.log(msg.audio.volume_no_control);
 }
 
 /**

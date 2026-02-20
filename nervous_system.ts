@@ -5,6 +5,7 @@ import path from "path";
 import { fanControl } from "./cooling/fan_control.js";
 import { msg, substitute } from "./messages.js";
 import { monitorMotion } from "./senses/motion.js";
+import { playGiggle } from "./sounds/ts/audio.js";
 import { TouchSenses, VIBE_BCM } from "./senses/touch";
 import { EyeBridge } from "./vision/ts/eye_bridge";
 
@@ -102,6 +103,15 @@ const fanState = (): StatusState => {
   if (process.platform !== "linux") return "unknown";
   return fanControl.isInitialized() ? "ok" : "fail";
 };
+const voiceState = (): StatusState => {
+  if (process.platform !== "linux") return "unknown";
+  try {
+    execSync("which aplay", { stdio: "ignore" });
+    return "ok";
+  } catch {
+    return "fail";
+  }
+};
 
 const rows: string[] = [
   "| GC9A01PY    | Left Eye            | BCM 8    | " + statusCell(displayState()) + " |",
@@ -109,6 +119,7 @@ const rows: string[] = [
   "| TTP223B     | Head Touch          | BCM 17   | " + statusCell(headState()) + " |",
   "| TTP223B     | Belly Touch         | BCM 22   | " + statusCell(bellyState()) + " |",
   "| SW-420      | Vibration (Shiver)  | BCM 23   | " + statusCell(vibeState()) + " |",
+  "| MAX98357A   | Voice (I2S)         | BCM 18,19,21 | " + statusCell(voiceState()) + " |",
   "| Cooling     | Fan (BCM 24)        | BCM 24   | " + statusCell(fanState()) + " |",
 ];
 
@@ -282,6 +293,7 @@ nsEventsSocket.bind(NS_EVENTS_PORT, "127.0.0.1", () => {
 
 console.log(msg.nervous_system.header);
 console.log(substitute(msg.nervous_system.eyes_listening, { host: visionHost }));
+console.log(substitute(msg.nervous_system.voice_ready, { card: process.env.FURBACCA_AUDIO_CARD ?? "0" }));
 if (matterEnabled) console.log(msg.nervous_system.matter_lobe_enabled);
 if (chipToolNodeId) console.log(substitute(msg.nervous_system.chip_tool_belly, { nodeId: chipToolNodeId, endpoint: chipToolEndpoint }));
 if (!headHw.ok && headHw.message) console.log(substitute(msg.nervous_system.head_touch_error, { message: headHw.message }));
@@ -347,6 +359,8 @@ function onTouch(sensor: "head" | "belly" | "shiver", active: boolean): void {
     console.log(msg.nervous_system.head_touch);
     eyes.blink();
     eyes.playAnimation("nervous_look", { replace: true });
+    console.log(msg.audio.giggle_playing);
+    playGiggle();
   } else if (sensor === "belly") {
     handleBellyTouch();
   } else if (sensor === "shiver") {

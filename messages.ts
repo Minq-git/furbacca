@@ -41,6 +41,7 @@ export const msg = raw as {
     eye_tracking_stopped: string;
     looking_started: string;
     looking_stopped: string;
+    voice_ready: string;
   };
   matter_lobe: {
     status: {
@@ -71,7 +72,7 @@ export const msg = raw as {
     belly_touch_gpio_error: string;
     vibration_gpio_error: string;
   };
-  audio: { aplay_failed: string; volume_set_50: string; volume_set_failed: string };
+  audio: { aplay_failed: string; volume_set_50: string; volume_set_failed: string; volume_no_control: string; giggle_playing: string };
   eyes: {
     display_init_failed: string;
     udp_bind: string;
