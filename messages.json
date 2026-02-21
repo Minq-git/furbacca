@@ -2,6 +2,7 @@
   "audio": {
     "aplay_failed": "🗣️ aplay failed: {message}",
     "volume_set_50": "🗣️ Volume set to 50% for bench test (TP4056 / 18.9 Ω speaker).",
+    "volume_set_1w8ohm": "🗣️ Volume set for 1W 8Ω micro speakers (software limiter active).",
     "volume_set_failed": "🗣️ Could not set volume to 50%: {message}",
     "volume_no_control": "🗣️ No ALSA volume control (I2S DAC fixed level); playback at hardware level.",
     "giggle_playing": "🗣️ Playing giggle (head touch).",

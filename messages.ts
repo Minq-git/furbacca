@@ -73,7 +73,7 @@ export const msg = raw as {
     belly_touch_gpio_error: string;
     vibration_gpio_error: string;
   };
-  audio: { aplay_failed: string; volume_set_50: string; volume_set_failed: string; volume_no_control: string; giggle_playing: string; aplay_exit: string };
+  audio: { aplay_failed: string; volume_set_50: string; volume_set_1w8ohm: string; volume_set_failed: string; volume_no_control: string; giggle_playing: string; aplay_exit: string };
   eyes: {
     display_init_failed: string;
     udp_bind: string;
