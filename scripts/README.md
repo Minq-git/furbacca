@@ -9,7 +9,7 @@
 | **eye-command.sh** | Send commands to eyes (blink, shape, type) while eyes are running. On Pi: `./scripts/eye-command.sh shape sharp`. From Mac: `./scripts/eye-command.sh furbacca.local type dragon`. |
 | **eye-track.sh** | Start/stop/run eye tracking (AI camera → eyes follow you). On Pi: `./scripts/eye-track.sh on` \| `off` \| `status`; `./scripts/eye-track.sh run --print-every 30` for foreground. From Mac: `./scripts/eye-track.sh furbacca.local on`. **eye-track** alias (setup-fresh.sh) runs this script; you can also alias as **fe-track**. Sends UDP to nervous system (127.0.0.1:5006) when tracking is turned on/off. |
 | **show-matter-pairing.sh** | Show Matter passcode, manual pairing code, and QR URL from service logs. On Pi: `./scripts/show-matter-pairing.sh`. From Mac: `./scripts/show-matter-pairing.sh furbacca.local` (SSH to Pi). |
-| **setup-fresh.sh** | Full Furbacca setup on the Pi (after a wipe): Node.js v20 64-bit if missing, SPI enable, memory tuning, **pigpio + pigpiod** (fan PWM at startup), venv, pip deps, gc9a01py, eye graphics, npm install/build, wake-furbacca alias, and furbacca systemd service (start at boot). Run from repo root: `cd ~/furbacca && bash scripts/setup-fresh.sh`. Idempotent. |
+| **setup-fresh.sh** | Full Furbacca setup on the Pi (after a wipe): Node.js v20 64-bit if missing, SPI enable, memory tuning, **pigpio + pigpiod** (fan PWM at startup), venv, pip deps, gc9a01py, eye graphics, npm install/build, wake-furbacca alias, and furbacca systemd service (installed, not enabled at boot by default — start manually until stable). Run from repo root: `cd ~/furbacca && bash scripts/setup-fresh.sh`. Idempotent. |
 
 ## Used by setup (don’t run directly unless needed)
 

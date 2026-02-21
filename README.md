@@ -197,15 +197,7 @@ See **docs/AI_CAMERA.md** for how we leverage the Raspberry Pi AI Camera (IMX500
   ```
   Then run `push-furbacca` before testing on the Pi; Pi keeps its own `env`, `dist`, and `vision/py/gc9a01py`. After a refactor, `--delete` removes leftover files on the Pi (e.g. old `vision/eyes.py`) so `wake-furbacca` runs the new code.
 
-**Systemd (full stack at startup):** To run `wake-furbacca` (eyes + nervous system) automatically on boot:
-```bash
-sudo cp scripts/furbacca.service /etc/systemd/system/
-```
-Edit `User`, `WorkingDirectory`, and `ExecStart` in the unit to match your Pi user and repo path (e.g. `/home/pi/furbacca`), then:
-```bash
-sudo systemctl daemon-reload && sudo systemctl enable --now furbacca
-```
-Check status: `sudo systemctl status furbacca`. **View event logs** (animations, touch, Matter) after SSH: `journalctl -u furbacca -f` (stream) or `journalctl -u furbacca -n 200` (last 200 lines). **Temporarily disable** auto-start: `sudo systemctl disable furbacca` (service stays installed; start manually with `wake-furbacca` or `sudo systemctl start furbacca`). **Re-enable** at boot: `sudo systemctl enable furbacca`.
+**Systemd (full stack):** **setup-fresh.sh** installs the `furbacca` service but does **not** enable it at boot (so it won't start automatically until you're ready). Start manually: `wake-furbacca` or `sudo systemctl start furbacca`. When stable, enable at boot: `sudo systemctl enable furbacca`. Check status: `sudo systemctl status furbacca`. **View event logs** (animations, touch, Matter) after SSH: `journalctl -u furbacca -f` (stream) or `journalctl -u furbacca -n 200` (last 200 lines). To stop auto-start: `sudo systemctl disable furbacca` (service stays installed; start manually).
 
 **Systemd (eyes only):** To run only eyes as a service (e.g. you run the nervous system manually), use `scripts/furbacca-eyes.service` instead—copy to `/etc/systemd/system/`, edit paths, then `sudo systemctl daemon-reload && sudo systemctl enable --now furbacca-eyes`.
 
