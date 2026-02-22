@@ -12,11 +12,13 @@ import fs from "fs";
 import path from "path";
 import { msg, substitute } from "../../messages.js";
 
-// WAV files next to compiled code: dist/sounds/assets/ (so copy sounds/assets/ into dist or build step)
-const SOUNDS_DIR = path.join(__dirname, "..", "assets");
+// Prefer dist/sounds/assets/ (next to compiled code). Fallback: repo root sounds/assets/ if sync-sounds wasn't run.
+const DIST_SOUNDS_ASSETS = path.join(__dirname, "..", "assets");
 
 /** ALSA card index for I2S DAC (default 0). Override with FURBACCA_AUDIO_CARD. */
 const AUDIO_CARD = process.env.FURBACCA_AUDIO_CARD ?? "0";
+/** Force I2S device so playback doesn't go to HDMI (default). */
+const APLAY_DEVICE = `plughw:${AUDIO_CARD},0`;
 
 /**
  * Max gain (0–1) applied to PCM before playback. Default 0.6 (60%) for 4 Ω parallel pair
@@ -31,10 +33,15 @@ let currentPlayback: ReturnType<typeof spawn> | null = null;
 
 /**
  * Set ALSA volume to 60% (hardware cap for 4 Ω 2W pair + TP4056). Runs once on first play.
+ * Skip if FURBACCA_SKIP_AMIXER=1 (e.g. if amixer puts I2S in a bad state after wake-furbacca).
  */
 function setVolumeFor4Ohm2W(): void {
   if (volumeInitialized) return;
   volumeInitialized = true;
+  if (process.env.FURBACCA_SKIP_AMIXER === "1") {
+    console.log(msg.audio.volume_no_control);
+    return;
+  }
   const controls = ["PCM", "Master", "Playback", "Digital"];
   for (const name of controls) {
     try {
@@ -99,10 +106,18 @@ function applyVolumeLimit(buffer: Buffer, dataOffset: number, dataLength: number
  * Play a WAV file with software volume limiter (1W 8Ω safe). Returns without waiting for playback to finish.
  * Parses WAV, applies MAX_GAIN to PCM, pipes raw S16_LE to aplay. Falls back to direct aplay if not 16-bit PCM.
  */
+/** Resolve WAV path: dist/sounds/assets first, then repo root sounds/assets (if sync-sounds wasn't run). */
+function resolveSoundPath(filename: string): string {
+  const distPath = path.join(DIST_SOUNDS_ASSETS, filename);
+  if (fs.existsSync(distPath)) return distPath;
+  const repoPath = path.join(process.cwd(), "sounds", "assets", filename);
+  return fs.existsSync(repoPath) ? repoPath : distPath; // try dist first; fallback repo; else return dist for clear error
+}
+
 export function playWav(filename: string): void {
   if (currentPlayback !== null) return; // one at a time to avoid device busy (exit 1) on rapid touches
   setVolumeFor4Ohm2W();
-  const filepath = path.join(SOUNDS_DIR, filename);
+  const filepath = resolveSoundPath(filename);
   let buffer: Buffer;
   try {
     buffer = fs.readFileSync(filepath);
@@ -113,7 +128,7 @@ export function playWav(filename: string): void {
   const header = parseWavHeader(buffer);
   if (!header) {
     // Not 16-bit PCM or invalid WAV — fall back to direct aplay (no software limit)
-    const fallbackChild = spawn("aplay", [filepath], { detached: true, stdio: "ignore" });
+    const fallbackChild = spawn("aplay", ["-D", APLAY_DEVICE, filepath], { detached: true, stdio: "ignore" });
     currentPlayback = fallbackChild;
     fallbackChild.on("error", (err) => {
       currentPlayback = null;
@@ -130,7 +145,7 @@ export function playWav(filename: string): void {
   const rawPcm = buffer.subarray(header.dataOffset, header.dataOffset + header.dataLength);
   const child = spawn(
     "aplay",
-    ["-f", "S16_LE", "-r", String(header.sampleRate), "-c", String(header.channels), "-q"],
+    ["-D", APLAY_DEVICE, "-f", "S16_LE", "-r", String(header.sampleRate), "-c", String(header.channels), "-q"],
     { stdio: ["pipe", "ignore", "ignore"] }
   );
   currentPlayback = child;

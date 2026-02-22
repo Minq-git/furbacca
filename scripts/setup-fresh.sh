@@ -74,15 +74,10 @@ fi
 NEED_REBOOT=false
 if [[ "$UNAME_S" == "Linux" ]]; then
   # zram: use systemd-zram-generator (Debian Trixie). zram-tools races with kernel/generator — mask it so it never starts.
-  sudo swapoff /dev/zram0 2>/dev/null || true
+  # Do not swapoff or unload zram here: that would break the working swap created at boot and the generator does not re-run mid-session.
   sudo systemctl stop zramswap 2>/dev/null || true
   sudo systemctl disable zramswap 2>/dev/null || true
   sudo systemctl mask zramswap 2>/dev/null || true
-  # Reset zram module so a stuck /dev/zram0 is cleared; generator will create it fresh at next boot.
-  if [[ -e /dev/zram0 ]]; then
-    sudo modprobe -r zram 2>/dev/null || true
-    sudo modprobe zram 2>/dev/null || true
-  fi
   if apt-cache show systemd-zram-generator &>/dev/null; then
     if ! dpkg -l systemd-zram-generator &>/dev/null; then
       echo "Installing systemd-zram-generator (compressed RAM swap for Pi Zero 2 W)..."
@@ -175,8 +170,8 @@ if [[ "$UNAME_S" == "Linux" ]]; then
   echo "Ensuring Raspberry Pi AI Camera deps (apt full-upgrade + imx500-all)..."
   sudo apt-get update -qq
   sudo apt-get full-upgrade -y
-  sudo apt-get install -y imx500-all
-  echo "AI camera (imx500-all) installed. Reboot once so IMX500 firmware loads (see https://www.raspberrypi.com/documentation/accessories/ai-camera.html)."
+  sudo apt-get install -y imx500-all python3-picamera2 python3-opencv
+  echo "AI camera (imx500-all), python3-picamera2, and python3-opencv installed. Reboot once so IMX500 firmware loads (see https://www.raspberrypi.com/documentation/accessories/ai-camera.html)."
 fi
 
 # 2. Python venv
@@ -209,6 +204,14 @@ echo "Installing npm deps and building..."
 npm install
 # On Pi (low RAM), use build:pi (450 MB heap); with zram active after reboot, tsc can complete.
 if [[ "$UNAME_S" == "Linux" ]]; then
+  # Avoid OOM: require zram to be active before running tsc (generator only creates it at boot).
+  if [[ "$UNAME_M" == "aarch64" ]] && ! grep -q '/dev/zram' /proc/swaps 2>/dev/null; then
+    echo "⚠ zram is not active (zramctl shows nothing). The TypeScript build will likely OOM."
+    echo "  Reboot first so zram starts, then re-run: sudo reboot"
+    echo "  After reboot: cd $REPO_DIR && bash scripts/setup-fresh.sh"
+    echo "  Or build on Mac and push: npm run build && ./scripts/push-furbacca.sh"
+    exit 1
+  fi
   echo "Building TypeScript (2–5 min on Pi Zero 2 W, no output until done — please wait)..."
   if ! npm run build:pi; then
     echo "⚠ Pi build failed (often OOM). Reboot so zram is active, then re-run setup-fresh; or build on Mac: npm run build && push-furbacca"
@@ -247,12 +250,28 @@ if [[ "$UNAME_S" == "Linux" ]]; then
   fi
 
   # 7b. Wi‑Fi config backup for network heal (head+belly 30s after brownout)
+  # Bookworm/Trixie often use NetworkManager; config is in /etc/NetworkManager/system-connections/*.nmconnection
+  BOOT_PARTITION=""
+  for b in /boot/firmware /boot; do [[ -d "$b" ]] && BOOT_PARTITION="$b" && break; done
   if [[ -f /etc/wpa_supplicant/wpa_supplicant.conf ]]; then
-    sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /boot/wpa_supplicant.conf 2>/dev/null && \
-      echo "Backed up wpa_supplicant.conf to /boot (for scripts/heal-network.sh)." || \
-      echo "⚠ Could not write /boot/wpa_supplicant.conf (e.g. read-only). After first boot, run: sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /boot/wpa_supplicant.conf"
+    if [[ -n "$BOOT_PARTITION" ]]; then
+      sudo cp /etc/wpa_supplicant/wpa_supplicant.conf "$BOOT_PARTITION/wpa_supplicant.conf" 2>/dev/null && \
+        echo "Backed up wpa_supplicant.conf to $BOOT_PARTITION (for scripts/heal-network.sh)." || \
+        echo "⚠ Could not write $BOOT_PARTITION/wpa_supplicant.conf (e.g. read-only). After first boot, run: sudo cp /etc/wpa_supplicant/wpa_supplicant.conf $BOOT_PARTITION/"
+    else
+      echo "⚠ Boot partition not writable. When Wi‑Fi is configured, run: sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /boot/"
+    fi
+  elif [[ -d /etc/NetworkManager/system-connections ]] && ls /etc/NetworkManager/system-connections/*.nmconnection 1>/dev/null 2>&1; then
+    FIRST_NM=$(ls /etc/NetworkManager/system-connections/*.nmconnection 2>/dev/null | head -n1)
+    if [[ -n "$FIRST_NM" && -n "$BOOT_PARTITION" ]]; then
+      sudo cp "$FIRST_NM" "$BOOT_PARTITION/NetworkManager-connection.nmconnection" 2>/dev/null && \
+        echo "Backed up NetworkManager Wi‑Fi to $BOOT_PARTITION/NetworkManager-connection.nmconnection (heal-network will restore on head+belly 30s)." || \
+        echo "⚠ Could not write to $BOOT_PARTITION. To backup Wi‑Fi manually: sudo cp $FIRST_NM $BOOT_PARTITION/NetworkManager-connection.nmconnection"
+    else
+      echo "Wi‑Fi is in NetworkManager (no wpa_supplicant.conf). To backup for heal: sudo cp /etc/NetworkManager/system-connections/*.nmconnection /boot/NetworkManager-connection.nmconnection"
+    fi
   else
-    echo "Skipping wpa_supplicant backup (file not found). When Wi‑Fi is configured, run: sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /boot/wpa_supplicant.conf"
+    echo "Skipping Wi‑Fi backup (no wpa_supplicant.conf or NetworkManager connections). When Wi‑Fi is configured, backup with: sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /boot/   or (NetworkManager): sudo cp /etc/NetworkManager/system-connections/*.nmconnection /boot/NetworkManager-connection.nmconnection"
   fi
 
   # 8. Optional: install furbacca systemd service (not enabled at boot — start manually until stable)

@@ -21,13 +21,18 @@ import json
 import socket
 import sys
 
-# Picamera2 is system-installed (python3-picamera2) on the Pi
+# Picamera2 + OpenCV are system-installed (python3-picamera2, python3-opencv) on the Pi
 try:
     from picamera2 import Picamera2
     from picamera2.devices import IMX500
     from picamera2.devices.imx500 import NetworkIntrinsics
 except ImportError as e:
-    print("picamera2 not found. On the Pi: sudo apt install -y python3-picamera2", file=sys.stderr)
+    err = str(e).lower()
+    if "cv2" in err or "opencv" in err:
+        print("OpenCV (cv2) not found. On the Pi: sudo apt install -y python3-opencv", file=sys.stderr)
+    else:
+        print("picamera2 not found. On the Pi: sudo apt install -y python3-picamera2", file=sys.stderr)
+    print(f"  ImportError: {e}", file=sys.stderr)
     sys.exit(1)
 
 UDP_PORT = 5005
@@ -179,4 +184,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(f"Eye tracking exited due to: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)

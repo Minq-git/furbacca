@@ -53,12 +53,24 @@ trap cleanup EXIT INT TERM
 # Bind 0.0.0.0 so remote (fe) and local (nervous system) commands both work
 export UDP_BIND=0.0.0.0
 
-# Build first. On Pi, use build:pi so tsc doesn't OOM.
+# Build first. On Pi, use build:pi so tsc doesn't OOM. Then sync sounds so dist/sounds/assets/ has WAVs (giggle, etc.).
 echo "Building nervous system..."
 if [[ "$(uname -s)" == "Linux" ]]; then
   npm run build:pi
 else
   npm run build
+fi
+npm run sync-sounds
+# Self-heal: if audio module missing (e.g. stale incremental build), clean build once
+if [[ ! -f dist/sounds/ts/audio.js ]]; then
+  echo "Missing dist/sounds/ts/audio.js, doing clean build..."
+  rm -rf dist
+  if [[ "$(uname -s)" == "Linux" ]]; then
+    npm run build:pi
+  else
+    npm run build
+  fi
+  npm run sync-sounds
 fi
 
 # On Pi (low RAM), limit Node heap for the runtime process
@@ -68,7 +80,9 @@ fi
 if [[ "$(uname -s)" == "Linux" && "${FURBACCA_EYE_TRACK:-1}" != "0" ]]; then
   if [[ -f vision/py/camera_track.py ]]; then
     if ! pgrep -f "vision/py/camera_track.py" >/dev/null 2>&1; then
-      "$REPO_DIR/scripts/eye-track.sh" on 2>/dev/null && EYE_TRACK_STARTED_BY_US=1 || true
+      if "$REPO_DIR/scripts/eye-track.sh" on; then
+        EYE_TRACK_STARTED_BY_US=1
+      fi
     fi
   fi
 fi

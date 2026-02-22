@@ -72,7 +72,7 @@
     "motion_sensor_enabled": "  👁  Motion: Sensor enabled. Furbacca will sleep/wake based on motion.",
     "eyes_full_reinit_trigger": "  👁  Head + belly held 5s → eyes full re-init (restart_both).",
     "network_heal_trigger": "  ⚠️  Head + belly held 30s → network heal script.",
-    "eye_tracker_starting": "  🧐  Eye tracker: starting (wake-furbacca default).",
+    "eye_tracker_starting": "  🧐  Eye tracker: starting in background (run 'eye-track status' to confirm; if it fails, check /tmp/eye-track.log).",
     "eye_tracking_started": "  🧐  Eye tracking: started.",
     "eye_tracking_stopped": "  🫣  Eye tracking: stopped.",
     "looking_started": "  🧐  Looking at target (in view).",

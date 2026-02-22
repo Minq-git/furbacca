@@ -5,8 +5,19 @@ import path from "path";
 import { fanControl } from "./cooling/fan_control.js";
 import { msg, substitute } from "./messages.js";
 import { monitorMotion } from "./senses/motion.js";
-import { initAudio, playGiggle } from "./sounds/ts/audio.js";
 import { TouchSenses, VIBE_BCM } from "./senses/touch";
+
+// Optional: load at runtime so Pi can start even if dist/sounds/ts/audio.js wasn't built (e.g. sounds/ts not synced)
+let initAudio: () => void = () => {};
+let playGiggle: () => void = () => {};
+try {
+  const audio = require("./sounds/ts/audio.js");
+  initAudio = audio.initAudio;
+  playGiggle = audio.playGiggle;
+  console.log("  🗣️  Audio: module loaded (head touch → giggle).");
+} catch {
+  console.warn("Audio module not found (dist/sounds/ts/audio.js). Head touch will not play sound. Sync sounds/ts/ to Pi and run: rm -rf dist && npm run build:pi");
+}
 import { EyeBridge } from "./vision/ts/eye_bridge";
 
 // First: prevent fan from floating (BCM 24 LOW) before any other GPIO or heavy work
