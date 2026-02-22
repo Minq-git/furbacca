@@ -77,6 +77,7 @@
     "eye_tracking_stopped": "  🫣  Eye tracking: stopped.",
     "looking_started": "  🧐  Looking at target (in view).",
     "looking_stopped": "  🫣  Target left field of view.",
+    "looking_at": "  🧐  Looking at: {label} {confidence} at ({x}, {y})",
     "voice_ready": "  🔊 Voice: aplay → I2S DAC (card {card})."
   },
   "touch": {

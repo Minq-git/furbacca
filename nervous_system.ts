@@ -342,6 +342,10 @@ const visionHost = process.env.VISION_HOST ?? "127.0.0.1";
 
 /** UDP port for local events (e.g. eye-track.sh notifies when tracking starts/stops). */
 const NS_EVENTS_PORT = 5006;
+/** Throttle "in view" / "left view" logs (camera can flicker at frame edge). */
+const LOOKING_LOG_INTERVAL_MS = 4000;
+let lastLookingStartedLog = 0;
+let lastLookingStoppedLog = 0;
 const nsEventsSocket = dgram.createSocket("udp4");
 nsEventsSocket.bind(NS_EVENTS_PORT, "127.0.0.1", () => {
   nsEventsSocket.on("message", (buf: Buffer) => {
@@ -349,8 +353,31 @@ nsEventsSocket.bind(NS_EVENTS_PORT, "127.0.0.1", () => {
       const payload = JSON.parse(buf.toString()) as { event?: string };
       if (payload.event === "eye_tracking_started") console.log(msg.nervous_system.eye_tracking_started);
       else if (payload.event === "eye_tracking_stopped") console.log(msg.nervous_system.eye_tracking_stopped);
-      else if (payload.event === "looking_started") console.log(msg.nervous_system.looking_started);
-      else if (payload.event === "looking_stopped") console.log(msg.nervous_system.looking_stopped);
+      else if (payload.event === "looking_started") {
+        const now = Date.now();
+        if (now - lastLookingStartedLog >= LOOKING_LOG_INTERVAL_MS) {
+          lastLookingStartedLog = now;
+          console.log(msg.nervous_system.looking_started);
+        }
+      } else if (payload.event === "looking_stopped") {
+        const now = Date.now();
+        if (now - lastLookingStoppedLog >= LOOKING_LOG_INTERVAL_MS) {
+          lastLookingStoppedLog = now;
+          console.log(msg.nervous_system.looking_stopped);
+        }
+      } else if (payload.event === "looking_at") {
+        const p = payload as { event: string; label?: string; confidence?: number; x?: number; y?: number };
+        if (p.label != null && p.confidence != null && p.x != null && p.y != null) {
+          console.log(
+            substitute(msg.nervous_system.looking_at, {
+              label: p.label,
+              confidence: String(p.confidence),
+              x: String(p.x),
+              y: String(p.y),
+            })
+          );
+        }
+      }
     } catch {
       /* ignore malformed */
     }

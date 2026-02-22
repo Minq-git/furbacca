@@ -42,6 +42,7 @@ export const msg = raw as {
     eye_tracking_stopped: string;
     looking_started: string;
     looking_stopped: string;
+    looking_at: string;
     voice_ready: string;
   };
   matter_lobe: {

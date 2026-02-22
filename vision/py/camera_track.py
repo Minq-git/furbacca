@@ -20,6 +20,7 @@ import argparse
 import json
 import socket
 import sys
+import time
 
 # Picamera2 + OpenCV are system-installed (python3-picamera2, python3-opencv) on the Pi
 try:
@@ -69,16 +70,15 @@ def parse_detections(imx500, picam2, intrinsics, metadata, threshold=0.5):
 
 
 def pick_target(detections, prefer_class=PERSON_CLASS_ID):
-    """Choose one detection: prefer prefer_class (person), else highest confidence. Returns (cx, cy, conf) or None."""
+    """Choose one detection: prefer prefer_class (person), else highest confidence. Returns (cx, cy, conf, cls) or None."""
     if not detections:
         return None
     person = [d for d in detections if d[2] == prefer_class]
     if person:
-        # Largest confidence person
         best = max(person, key=lambda d: d[3])
     else:
         best = max(detections, key=lambda d: d[3])
-    return (best[0], best[1], best[3])
+    return (best[0], best[1], best[3], best[2])
 
 
 def center_to_normalized(cx, cy, width, height):
@@ -135,7 +135,8 @@ def main():
 
     smooth_x, smooth_y = 0.0, 0.0
     frame = 0
-    was_looking = False  # true when we had a target last frame and sent look
+    was_looking = False
+    last_looking_at_sent = 0.0  # throttle "looking_at" events to NS (~every 2s)
     print(f"Camera tracking → UDP {args.host}:{args.port} (smooth={args.smooth}, threshold={args.threshold})", file=sys.stderr)
     print("Ctrl+C to stop.", file=sys.stderr)
 
@@ -159,7 +160,8 @@ def main():
                         pass
                     was_looking = False
                 continue
-            cx, cy, conf = target
+            cx, cy, conf, cls = target
+            label = labels[cls] if cls < len(labels) else str(cls)
             nx, ny = center_to_normalized(cx, cy, width, height)
 
             if not was_looking:
@@ -176,6 +178,21 @@ def main():
 
             payload = json.dumps({"action": "look", "x": round(smooth_x, 4), "y": round(smooth_y, 4)})
             sock.sendto(payload.encode(), (args.host, args.port))
+            # Notify nervous system what we're looking at (throttled: ~every 2s)
+            try:
+                now = time.monotonic()
+                if now - last_looking_at_sent >= 2.0:
+                    last_looking_at_sent = now
+                    ev = json.dumps({
+                        "event": "looking_at",
+                        "label": label,
+                        "confidence": round(conf, 2),
+                        "x": int(round(cx)),
+                        "y": int(round(cy)),
+                    })
+                    sock.sendto(ev.encode(), ("127.0.0.1", NS_EVENTS_PORT))
+            except OSError:
+                pass
     except KeyboardInterrupt:
         pass
     finally:
