@@ -2,11 +2,10 @@
  * Non-blocking WAV playback via aplay (ALSA) to I2S DAC.
  *
  * Hardware: MAX98357A I2S amp on Raspberry Pi — BCM 18 (BCLK), 19 (LRC), 21 (DIN).
- * Speaker: 8 Ω 1W micro speakers. A software volume limiter caps output so that
- * even at "100%" app/ALSA volume, power does not exceed ~1W to protect the coils.
+ * Speaker: Two 8 Ω 1W in parallel → 4 Ω, 2W total. Software + ALSA capped at 60%
+ * max gain so we stay within 2W and avoid TP4056 overheating.
  *
- * Does not block the event loop; suitable for use from touch handlers without
- * blocking eyes physics or fan monitoring.
+ * Does not block the event loop; suitable for use from touch handlers.
  */
 import { execSync, spawn } from "child_process";
 import fs from "fs";
@@ -20,27 +19,27 @@ const SOUNDS_DIR = path.join(__dirname, "..", "assets");
 const AUDIO_CARD = process.env.FURBACCA_AUDIO_CARD ?? "0";
 
 /**
- * Max gain (0–1) applied to PCM before playback to limit power for 1W 8Ω speakers.
- * At 0.5, peak power is ~¼ of full scale. Override with FURBACCA_AUDIO_MAX_GAIN (e.g. 0.5).
+ * Max gain (0–1) applied to PCM before playback. Default 0.6 (60%) for 4 Ω parallel pair
+ * (2W total); keeps power within speaker handling and avoids TP4056 overheating.
+ * Override with FURBACCA_AUDIO_MAX_GAIN (e.g. 0.6).
  */
-const MAX_GAIN = Math.max(0, Math.min(1, parseFloat(process.env.FURBACCA_AUDIO_MAX_GAIN ?? "0.5") || 0.5));
+const MAX_GAIN = Math.max(0, Math.min(1, parseFloat(process.env.FURBACCA_AUDIO_MAX_GAIN ?? "0.6") || 0.6));
 
 let volumeInitialized = false;
 /** Skip starting another aplay while one is running (avoids device busy / exit 1 on rapid head touches). */
 let currentPlayback: ReturnType<typeof spawn> | null = null;
 
 /**
- * Set playback volume for 1W 8Ω: moderate ALSA level so software limiter has headroom.
- * Runs once on first play. Uses amixer -c N set PCM 70% (or Master if PCM missing).
+ * Set ALSA volume to 60% (hardware cap for 4 Ω 2W pair + TP4056). Runs once on first play.
  */
-function setVolumeFor1W8Ohm(): void {
+function setVolumeFor4Ohm2W(): void {
   if (volumeInitialized) return;
   volumeInitialized = true;
   const controls = ["PCM", "Master", "Playback", "Digital"];
   for (const name of controls) {
     try {
-      execSync(`amixer -c ${AUDIO_CARD} set ${name} 70%`, { stdio: "ignore" });
-      console.log(msg.audio.volume_set_1w8ohm);
+      execSync(`amixer -c ${AUDIO_CARD} set ${name} 60%`, { stdio: "ignore" });
+      console.log(msg.audio.volume_set_4ohm_2w);
       return;
     } catch {
       /* try next */
@@ -102,7 +101,7 @@ function applyVolumeLimit(buffer: Buffer, dataOffset: number, dataLength: number
  */
 export function playWav(filename: string): void {
   if (currentPlayback !== null) return; // one at a time to avoid device busy (exit 1) on rapid touches
-  setVolumeFor1W8Ohm();
+  setVolumeFor4Ohm2W();
   const filepath = path.join(SOUNDS_DIR, filename);
   let buffer: Buffer;
   try {
@@ -160,5 +159,5 @@ export function playGiggle(): void {
  * Otherwise volume is set lazily on first playWav/playGiggle.
  */
 export function initAudio(): void {
-  setVolumeFor1W8Ohm();
+  setVolumeFor4Ohm2W();
 }

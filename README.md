@@ -111,7 +111,7 @@ npm install
 npm run build
 npm run sync-sounds
 ```
-**`npm start`** runs only **`tsc`** (no sound copy) so wake-furbacca starts quickly. Sounds are copied once by **setup-fresh.sh** on the Pi; after a fresh clone elsewhere, run **`npm run sync-sounds`** once (or **`npm run build:full`** to build + copy). **1W 8Ω micro speakers:** playback uses a software volume limiter (default 50% max gain) so output power stays within ~1W. **`npm run generate-test-tone`** generates **sounds/assets/test_tone_1w8ohm.wav** (100 Hz–4 kHz steps) for frequency response checks. Run with `npm start` (or `sudo npm start` for GPIO). See **Starting the services** above.
+**`npm start`** runs only **`tsc`** (no sound copy) so wake-furbacca starts quickly. Sounds are copied once by **setup-fresh.sh** on the Pi; after a fresh clone elsewhere, run **`npm run sync-sounds`** once (or **`npm run build:full`** to build + copy). **4 Ω 2W (two 8 Ω 1W in parallel):** software + ALSA capped at 60% max gain so we stay within 2W and avoid TP4056 overheating. **`npm run generate-test-tone`** generates **sounds/assets/test_tone_1w8ohm.wav** (100 Hz–4 kHz steps) for frequency response checks. Run with `npm start` (or `sudo npm start` for GPIO). See **Starting the services** above.
 
 ### Matter: Furbacca as a device
 Matter is **on by default** when you run `wake-furbacca` (requires **64-bit Node** on the Pi, e.g. `node -p "process.arch"` → `arm64`). Furbacca appears as one Matter device with:
