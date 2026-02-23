@@ -3,8 +3,9 @@
 .vscode
 .DS_Store
 .furbacca-hardware.json
+.ruff_cache/
 stills
-reference/picamera2
+.reference/picamera2
 
 node_modules
 env/

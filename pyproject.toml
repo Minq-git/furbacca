@@ -25,6 +25,32 @@ quote-style = "double"
 indent-style = "space"
 
 [tool.basedpyright]
+# Match ruff target (py311) so 3.10+ syntax (e.g. X | Y unions) is allowed
+pythonVersion = "3.11"
 # Use project venv so numpy, PIL, etc. resolve (reportMissingImports)
 venvPath = "."
 venv = "env"
+
+# Exclude reference/vendor code (e.g. picamera2) from type checking
+exclude = ["reference"]
+
+# Eyes are run as a module (`python -m vision.py.main_eyes`) from repo root.
+reportImplicitRelativeImport = "none"
+
+# Keep extraPaths so tools can resolve modules even when invoked outside repo root.
+extraPaths = ["vision/py", "synapses/py"]
+
+# Pi-only or optional deps (picamera2, gc9a01py, spidev, vision_messages) may be missing on Mac
+reportMissingImports = "warning"
+reportAttributeAccessIssue = "warning"
+
+# Reduce noise: focus on real type errors; treat unknown/missing annotations as warnings or hints
+typeCheckingMode = "basic"
+reportUnknownParameterType = "warning"
+reportUnknownVariableType = "warning"
+reportUnknownMemberType = "warning"
+reportMissingParameterType = "warning"
+reportAny = "warning"
+reportOptionalMemberAccess = "warning"
+reportUnusedCallResult = "warning"
+reportUnusedParameter = "warning"
