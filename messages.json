@@ -12,15 +12,16 @@
 		"aplay_exit": "🗣️ aplay exited with code {code} (check file path and device: aplay -l).",
 		"module_not_found": "Audio module not found (dist/voice/ts/audio.js). Head touch will not play sound. Sync voice/ts/ to Pi and run: rm -rf dist && npm run build:pi."
 	},
-	"eye_bridge": {
-		"error": "Eye Bridge Error: {message}"
-	},
+	"eye_bridge": { "error": "Eye Bridge Error: {message}" },
 	"eyes": {
 		"animation": "  🎬 Animation: {name}",
+		"booting": "👁️ Visual Cortex: Initializing...",
 		"display_init_failed": "⚠ Display init failed: {error}",
 		"eye_shape": "  👁  Eye shape: {shape}",
 		"eye_type": "  👁  Eye type: {type}",
+		"listening": "👁️ Visual Cortex: Online and listening.",
 		"opening_animated": "🥱 Furbacca waking up... Animated @ {fps} FPS.",
+		"restart_both_failed": "  ⚠ restart_both failed",
 		"restarting_eyes": "  👁  Eyes: restarting (remote refresh).",
 		"udp_bind": "ᯤ UDP {bind}:{port}"
 	},

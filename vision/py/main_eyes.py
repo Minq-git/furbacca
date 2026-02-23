@@ -45,7 +45,7 @@ UDP_PORT = 5005
 
 
 def run_eyes() -> None:
-    print("👁️ Visual Cortex: Initializing...")
+    print(messages.get("eyes", "booting"))
 
     hardware = GC9A01_Display(swap_left_right=config.SWAP_LEFT_RIGHT_SPI)
     try:
@@ -77,7 +77,7 @@ def run_eyes() -> None:
             recv_size=config.UDP_RECV_SIZE,
         )
         print(messages.get("eyes", "udp_bind", bind=UDP_BIND, port=UDP_PORT))
-        print("👁️ Visual Cortex: Online and listening.")
+        print(messages.get("eyes", "listening"))
 
         state = FurbaccaState()
 
@@ -109,7 +109,7 @@ def run_eyes() -> None:
                         print(messages.get("eyes", "restarting_eyes"))
                     else:
                         state.on_restart_failed()
-                        print("  ⚠ restart_both failed")
+                        print(messages.get("eyes", "restart_both_failed"))
 
             state.tick(frame_started_at)
             plan = engine.generate_frame(state, frame_started_at)
