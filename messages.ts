@@ -35,6 +35,7 @@ export const msg = raw as {
     motion_sleep: string;
     motion_event_driven: string;
     motion_sensor_enabled: string;
+    motion_sensor_triggered: string;
     eyes_full_reinit_trigger: string;
     network_heal_trigger: string;
     eye_tracker_starting: string;
@@ -74,7 +75,7 @@ export const msg = raw as {
     belly_touch_gpio_error: string;
     vibration_gpio_error: string;
   };
-  audio: { aplay_failed: string; volume_set_50: string; volume_set_1w8ohm: string; volume_set_4ohm_2w: string; volume_set_failed: string; volume_no_control: string; giggle_playing: string; aplay_exit: string };
+  audio: { aplay_failed: string; volume_set_50: string; volume_set_1w8ohm: string; volume_set_4ohm_2w: string; volume_set_failed: string; volume_no_control: string; module_loaded: string; module_not_found: string; giggle_playing: string; purr_playing: string; aplay_exit: string };
   eyes: {
     display_init_failed: string;
     udp_bind: string;

@@ -9,14 +9,16 @@ import { TouchSenses, VIBE_BCM } from "./senses/touch";
 
 // Optional: load at runtime so Pi can start even if dist/sounds/ts/audio.js wasn't built (e.g. sounds/ts not synced)
 let initAudio: () => void = () => {};
+let playPurr: () => void = () => {};
 let playGiggle: () => void = () => {};
 try {
   const audio = require("./sounds/ts/audio.js");
   initAudio = audio.initAudio;
+  playPurr = audio.playPurr;
   playGiggle = audio.playGiggle;
-  console.log("  🗣️  Audio: module loaded (head touch → giggle).");
+  console.log(msg.audio.module_loaded);
 } catch {
-  console.warn("Audio module not found (dist/sounds/ts/audio.js). Head touch will not play sound. Sync sounds/ts/ to Pi and run: rm -rf dist && npm run build:pi");
+  console.warn(msg.audio.module_not_found);
 }
 import { EyeBridge } from "./vision/ts/eye_bridge";
 
@@ -411,6 +413,8 @@ let headBellyHoldCooldown = false;
 
 function handleBellyTouch(): void {
   console.log(msg.nervous_system.belly_cycling);
+  console.log(msg.audio.giggle_playing);
+  playGiggle();
   eyes.cycleEyeType();
   eyes.sendCommand("look", { x: 0, y: 0, pupil_mode: "wide" });
   chipToolOn();
@@ -458,8 +462,8 @@ function onTouch(sensor: "head" | "belly" | "shiver", active: boolean): void {
     console.log(msg.nervous_system.head_touch);
     eyes.blink();
     eyes.playAnimation("nervous_look", { replace: true });
-    console.log(msg.audio.giggle_playing);
-    playGiggle();
+    console.log(msg.audio.purr_playing);
+    playPurr();
   } else if (sensor === "belly") {
     handleBellyTouch();
   } else if (sensor === "shiver") {
@@ -478,7 +482,7 @@ function startWarmupThenOpen(matterResultPromise: Promise<MatterStartResult | un
   if (motionFirstDetectedPendingLog) {
     motionFirstDetectedPendingLog = false;
     motionFirstDetectedLogged = true;
-    console.log("  👁  Motion: sensor triggered (Furbacca will say \"noticed someone!\" when waking from sleep).");
+    console.log(msg.nervous_system.motion_sensor_triggered);
   }
   eyes.openEyes();
   matterResultPromise.then((result) => {
@@ -518,7 +522,7 @@ function onMotion(detected: boolean): void {
     if (!motionFirstDetectedLogged) {
       if (warmupComplete) {
         motionFirstDetectedLogged = true;
-        console.log("  👁  Motion: sensor triggered (Furbacca will say \"noticed someone!\" when waking from sleep).");
+        console.log(msg.nervous_system.motion_sensor_triggered);
       } else {
         motionFirstDetectedPendingLog = true;
       }

@@ -6,8 +6,11 @@
     "volume_set_4ohm_2w": "🗣️ Volume set to 60% for 4 Ω 2W pair (software + ALSA cap; TP4056 safe).",
     "volume_set_failed": "🗣️ Could not set volume to 50%: {message}",
     "volume_no_control": "🗣️ No ALSA volume control (I2S DAC fixed level); playback at hardware level.",
-    "giggle_playing": "🗣️ Playing giggle (head touch).",
-    "aplay_exit": "🗣️ aplay exited with code {code} (check file path and device: aplay -l)."
+    "module_loaded": "  🗣️  Audio: module loaded (head touch → purr, belly touch → giggle).",
+    "giggle_playing": "🗣️ Playing giggle (belly touch).",
+    "purr_playing": "🗣️ Playing purr (head touch).",
+    "aplay_exit": "🗣️ aplay exited with code {code} (check file path and device: aplay -l).",
+    "module_not_found": "Audio module not found (dist/sounds/ts/audio.js). Head touch will not play sound. Sync sounds/ts/ to Pi and run: rm -rf dist && npm run build:pi."
   },
   "eye_bridge": {
     "error": "Eye Bridge Error: {message}"
@@ -70,6 +73,7 @@
     "motion_sleep": "  😴 No motion for 2 min — eyes closed (sleep).",
     "motion_event_driven": "  👁  PIR motion: event-driven (gpiomon, BCM 4).",
     "motion_sensor_enabled": "  👁  Motion: Sensor enabled. Furbacca will sleep/wake based on motion.",
+    "motion_sensor_triggered": "  👁  Motion: sensor triggered (Furbacca will say \"noticed someone!\" when waking from sleep).",
     "eyes_full_reinit_trigger": "  👁  Head + belly held 5s → eyes full re-init (restart_both).",
     "network_heal_trigger": "  ⚠️  Head + belly held 30s → network heal script.",
     "eye_tracker_starting": "  🧐  Eye tracker: starting in background (run 'eye-track status' to confirm; if it fails, check /tmp/eye-track.log).",

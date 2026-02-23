@@ -105,6 +105,7 @@ function applyVolumeLimit(buffer: Buffer, dataOffset: number, dataLength: number
 /**
  * Play a WAV file with software volume limiter (1W 8Ω safe). Returns without waiting for playback to finish.
  * Parses WAV, applies MAX_GAIN to PCM, pipes raw S16_LE to aplay. Falls back to direct aplay if not 16-bit PCM.
+ * @param maxDurationSeconds - if set, only play this many seconds (16-bit pipe path only; fallback plays full file)
  */
 /** Resolve WAV path: dist/sounds/assets first, then repo root sounds/assets (if sync-sounds wasn't run). */
 function resolveSoundPath(filename: string): string {
@@ -114,7 +115,7 @@ function resolveSoundPath(filename: string): string {
   return fs.existsSync(repoPath) ? repoPath : distPath; // try dist first; fallback repo; else return dist for clear error
 }
 
-export function playWav(filename: string): void {
+export function playWav(filename: string, maxDurationSeconds?: number): void {
   if (currentPlayback !== null) return; // one at a time to avoid device busy (exit 1) on rapid touches
   setVolumeFor4Ohm2W();
   const filepath = resolveSoundPath(filename);
@@ -141,8 +142,16 @@ export function playWav(filename: string): void {
     fallbackChild.unref();
     return;
   }
+  const bytesPerSample = 2; // 16-bit
+  const maxBytes =
+    maxDurationSeconds != null && maxDurationSeconds > 0
+      ? Math.min(
+          header.dataLength,
+          Math.floor(header.sampleRate * header.channels * maxDurationSeconds) * bytesPerSample
+        )
+      : header.dataLength;
   applyVolumeLimit(buffer, header.dataOffset, header.dataLength);
-  const rawPcm = buffer.subarray(header.dataOffset, header.dataOffset + header.dataLength);
+  const rawPcm = buffer.subarray(header.dataOffset, header.dataOffset + maxBytes);
   const child = spawn(
     "aplay",
     ["-D", APLAY_DEVICE, "-f", "S16_LE", "-r", String(header.sampleRate), "-c", String(header.channels), "-q"],
@@ -163,10 +172,17 @@ export function playWav(filename: string): void {
 }
 
 /**
- * Play the giggle sound (head touch). Non-blocking.
+ * Play the giggle sound. Plays first 2 seconds only.
  */
 export function playGiggle(): void {
-  playWav("giggle.wav");
+  playWav("giggle.wav", 2);
+}
+
+/**
+ * Play the purr (pet) sound. Plays first 3 seconds only.
+ */
+export function playPurr(): void {
+  playWav("pet.wav", 3);
 }
 
 /**
