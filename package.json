@@ -21,10 +21,13 @@
 	"license": "ISC",
 	"dependencies": {
 		"@matter/node": "0.12.6",
-		"@project-chip/matter-node.js": "^0.12.6",
-		"easy-gpiod": "^0.1.0"
+		"@project-chip/matter-node.js": "^0.12.6"
+	},
+	"optionalDependencies": {
+		"easy-gpiod": "^0.1.1"
 	},
 	"devDependencies": {
+		"@biomejs/biome": "^2.4.4",
 		"@types/node": "^25.2.2",
 		"ts-node": "^10.9.2",
 		"typescript": "^5.9.3"

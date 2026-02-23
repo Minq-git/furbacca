@@ -3,6 +3,7 @@
 .vscode
 .DS_Store
 .furbacca-hardware.json
+.ruff_cache/
 stills
 reference/picamera2
 

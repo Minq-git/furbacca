@@ -250,7 +250,7 @@ export class MatterLobe {
 			// Matter env expects a constructor key; we use an opaque object key — same ref for maybeGet in identify server.
 			node.env.set(
 				EyeBridgeForIdentify as unknown as abstract new (
-					...args: any[]
+					...args: unknown[]
 				) => EyeBridge,
 				this.eyes,
 			);
