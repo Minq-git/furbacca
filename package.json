@@ -1,31 +1,32 @@
 {
-  "name": "furbacca",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "engines": {
-    "node": ">=20"
-  },
-  "scripts": {
-    "build": "tsc",
-    "build:full": "tsc && rsync -a --delete sounds/ dist/sounds/",
-    "sync-sounds": "rsync -a --delete sounds/ dist/sounds/",
-    "start": "npm run build && node dist/nervous_system.js",
-    "dev": "ts-node nervous_system.ts",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build:pi": "node --max-old-space-size=450 node_modules/typescript/bin/tsc"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@matter/node": "0.12.6",
-    "@project-chip/matter-node.js": "^0.12.6",
-    "easy-gpiod": "^0.1.0"
-  },
-  "devDependencies": {
-    "@types/node": "^25.2.2",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
-  }
+	"name": "furbacca",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"engines": {
+		"node": ">=20"
+	},
+	"scripts": {
+		"build": "tsc",
+		"build:full": "tsc && rsync -a sounds/ dist/sounds/",
+		"sync-sounds": "rsync -a sounds/ dist/sounds/",
+		"generate-test-tone": "npx ts-node sounds/ts/generate-test-tone.ts",
+		"start": "npm run build && node dist/nervous_system.js",
+		"dev": "ts-node nervous_system.ts",
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"build:pi": "node --max-old-space-size=450 node_modules/typescript/bin/tsc"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"dependencies": {
+		"@matter/node": "0.12.6",
+		"@project-chip/matter-node.js": "^0.12.6",
+		"easy-gpiod": "^0.1.0"
+	},
+	"devDependencies": {
+		"@types/node": "^25.2.2",
+		"ts-node": "^10.9.2",
+		"typescript": "^5.9.3"
+	}
 }

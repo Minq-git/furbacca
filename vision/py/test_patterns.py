@@ -3,8 +3,8 @@ Test patterns for displays: XY gradient, circular rainbow. No image file; same b
 """
 import math
 
-import config
 import blit
+import config
 
 EYE_SIZE = config.EYE_SIZE
 

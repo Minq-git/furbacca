@@ -15,7 +15,7 @@
  * Disable: FURBACCA_FAN=0
  */
 
-import { execSync } from "child_process";
+import { execSync } from "node:child_process";
 
 const FAN_BCM = 24;
 const SOFT_START_MS = 2000;
@@ -32,13 +32,16 @@ const THERMAL_HIGH_TEMP_C = 58;
 const THERMAL_IDLE_SPEED = 50;
 
 interface LineLike {
-  setValue(value: number): void;
-  release?(): void;
+	setValue(value: number): void;
+	release?(): void;
 }
 
 /** Hold references so GC doesn't release (easy-gpiod requirement). */
 let fanChip: { close: () => void } | null = null;
-let fanRequest: { close: () => void; lines: { fan: { value: boolean } } } | null = null;
+let _fanRequest: {
+	close: () => void;
+	lines: { fan: { value: boolean } };
+} | null = null;
 let fanLine: LineLike | null = null;
 let initialized = false;
 /** Target duty 0–100 (percent). Used by the PWM tick. */
@@ -48,27 +51,31 @@ let pwmTimeout: ReturnType<typeof setTimeout> | null = null;
 let thermalWatchdogInterval: ReturnType<typeof setInterval> | null = null;
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** Read CPU temp via vcgencmd (Raspberry Pi). Returns °C or null if unavailable. */
 function getCpuTemp(): number | null {
-  try {
-    const out = execSync("/usr/bin/vcgencmd measure_temp", { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] });
-    const m = out.match(/temp=([\d.]+)/);
-    if (m) return parseFloat(m[1]);
-  } catch {
-    /* not on Pi or vcgencmd missing */
-  }
-  return null;
+	try {
+		const out = execSync("/usr/bin/vcgencmd measure_temp", {
+			encoding: "utf-8",
+			stdio: ["pipe", "pipe", "ignore"],
+		});
+		const m = out.match(/temp=([\d.]+)/);
+		if (m) return parseFloat(m[1]);
+	} catch {
+		/* not on Pi or vcgencmd missing */
+	}
+	return null;
 }
 
 /** Map CPU temp (°C) to fan speed 0–100. Idle (cool) = THERMAL_IDLE_SPEED, hot = 100%, linear between. */
 function tempToSpeed(tempC: number): number {
-  if (tempC <= THERMAL_IDLE_TEMP_C) return THERMAL_IDLE_SPEED;
-  if (tempC >= THERMAL_HIGH_TEMP_C) return 100;
-  const t = (tempC - THERMAL_IDLE_TEMP_C) / (THERMAL_HIGH_TEMP_C - THERMAL_IDLE_TEMP_C);
-  return Math.round(THERMAL_IDLE_SPEED + t * (100 - THERMAL_IDLE_SPEED));
+	if (tempC <= THERMAL_IDLE_TEMP_C) return THERMAL_IDLE_SPEED;
+	if (tempC >= THERMAL_HIGH_TEMP_C) return 100;
+	const t =
+		(tempC - THERMAL_IDLE_TEMP_C) / (THERMAL_HIGH_TEMP_C - THERMAL_IDLE_TEMP_C);
+	return Math.round(THERMAL_IDLE_SPEED + t * (100 - THERMAL_IDLE_SPEED));
 }
 
 /**
@@ -76,43 +83,46 @@ function tempToSpeed(tempC: number): number {
  * Called every PWM_PERIOD_MS by setInterval.
  */
 function pwmTick(): void {
-  const line = fanLine;
-  if (!line) return;
-  if (targetDutyPercent <= 0) {
-    line.setValue(0);
-    return;
-  }
-  line.setValue(1);
-  if (targetDutyPercent >= 100) return;
-  const offDelayMs = (1 - targetDutyPercent / 100) * PWM_PERIOD_MS;
-  if (pwmTimeout) clearTimeout(pwmTimeout);
-  pwmTimeout = setTimeout(() => {
-    pwmTimeout = null;
-    if (fanLine) fanLine.setValue(0);
-  }, Math.max(0, Math.round(offDelayMs)));
+	const line = fanLine;
+	if (!line) return;
+	if (targetDutyPercent <= 0) {
+		line.setValue(0);
+		return;
+	}
+	line.setValue(1);
+	if (targetDutyPercent >= 100) return;
+	const offDelayMs = (1 - targetDutyPercent / 100) * PWM_PERIOD_MS;
+	if (pwmTimeout) clearTimeout(pwmTimeout);
+	pwmTimeout = setTimeout(
+		() => {
+			pwmTimeout = null;
+			if (fanLine) fanLine.setValue(0);
+		},
+		Math.max(0, Math.round(offDelayMs)),
+	);
 }
 
 function startPwm(): void {
-  if (pwmInterval) return;
-  pwmInterval = setInterval(pwmTick, PWM_PERIOD_MS);
+	if (pwmInterval) return;
+	pwmInterval = setInterval(pwmTick, PWM_PERIOD_MS);
 }
 
 function stopPwm(): void {
-  if (pwmInterval) {
-    clearInterval(pwmInterval);
-    pwmInterval = null;
-  }
-  if (pwmTimeout) {
-    clearTimeout(pwmTimeout);
-    pwmTimeout = null;
-  }
-  if (fanLine) {
-    try {
-      fanLine.setValue(0);
-    } catch {
-      /* ignore */
-    }
-  }
+	if (pwmInterval) {
+		clearInterval(pwmInterval);
+		pwmInterval = null;
+	}
+	if (pwmTimeout) {
+		clearTimeout(pwmTimeout);
+		pwmTimeout = null;
+	}
+	if (fanLine) {
+		try {
+			fanLine.setValue(0);
+		} catch {
+			/* ignore */
+		}
+	}
 }
 
 /**
@@ -120,76 +130,77 @@ function stopPwm(): void {
  * Sets BCM 24 to OUTPUT and LOW immediately so the fans don't float or flicker.
  */
 export function init(): void {
-  if (initialized) return;
-  if (process.env.FURBACCA_FAN === "0" || process.env.FURBACCA_FAN === "false") return;
-  if (process.platform !== "linux") return;
+	if (initialized) return;
+	if (process.env.FURBACCA_FAN === "0" || process.env.FURBACCA_FAN === "false")
+		return;
+	if (process.platform !== "linux") return;
 
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { openGpioChip, Output } = require("easy-gpiod");
-    const chip = openGpioChip("/dev/gpiochip0");
-    const request = chip.requestLines("furbacca-fan", {
-      fan: Output(FAN_BCM, { initial_value: false, final_value: false }),
-    });
-    const lineObj = request.lines.fan;
-    // Wrap so we have setValue(0|1) and release() for cleanup
-    const line: LineLike = {
-      setValue(value: number) {
-        lineObj.value = !!value;
-      },
-      release() {
-        request.close();
-      },
-    };
-    line.setValue(0); // Immediate: LOW so fans don't float
-    fanChip = chip;
-    fanRequest = request;
-    fanLine = line;
-    targetDutyPercent = 0;
-    startPwm();
-    initialized = true;
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		const { openGpioChip, Output } = require("easy-gpiod");
+		const chip = openGpioChip("/dev/gpiochip0");
+		const request = chip.requestLines("furbacca-fan", {
+			fan: Output(FAN_BCM, { initial_value: false, final_value: false }),
+		});
+		const lineObj = request.lines.fan;
+		// Wrap so we have setValue(0|1) and release() for cleanup
+		const line: LineLike = {
+			setValue(value: number) {
+				lineObj.value = !!value;
+			},
+			release() {
+				request.close();
+			},
+		};
+		line.setValue(0); // Immediate: LOW so fans don't float
+		fanChip = chip;
+		_fanRequest = request;
+		fanLine = line;
+		targetDutyPercent = 0;
+		startPwm();
+		initialized = true;
 
-    const cleanup = (): void => {
-      if (thermalWatchdogInterval) {
-        clearInterval(thermalWatchdogInterval);
-        thermalWatchdogInterval = null;
-      }
-      stopPwm();
-      targetDutyPercent = 0;
-      if (fanLine) {
-        try {
-          fanLine.setValue(0);
-          if (typeof fanLine.release === "function") fanLine.release();
-        } catch {
-          /* ignore */
-        }
-        fanLine = null;
-      }
-      fanRequest = null;
-      if (fanChip) {
-        try {
-          fanChip.close();
-        } catch {
-          /* ignore */
-        }
-        fanChip = null;
-      }
-    };
-    process.on("exit", cleanup);
-    process.on("SIGINT", () => {
-      cleanup();
-      process.exit(0);
-    });
-    process.on("SIGTERM", () => {
-      cleanup();
-      process.exit(0);
-    });
-  } catch {
-    // easy-gpiod not installed, or not on Pi, or gpiod not available
-    fanChip = null;
-    fanRequest = null;
-    fanLine = null;
-  }
+		const cleanup = (): void => {
+			if (thermalWatchdogInterval) {
+				clearInterval(thermalWatchdogInterval);
+				thermalWatchdogInterval = null;
+			}
+			stopPwm();
+			targetDutyPercent = 0;
+			if (fanLine) {
+				try {
+					fanLine.setValue(0);
+					if (typeof fanLine.release === "function") fanLine.release();
+				} catch {
+					/* ignore */
+				}
+				fanLine = null;
+			}
+			_fanRequest = null;
+			if (fanChip) {
+				try {
+					fanChip.close();
+				} catch {
+					/* ignore */
+				}
+				fanChip = null;
+			}
+		};
+		process.on("exit", cleanup);
+		process.on("SIGINT", () => {
+			cleanup();
+			process.exit(0);
+		});
+		process.on("SIGTERM", () => {
+			cleanup();
+			process.exit(0);
+		});
+	} catch {
+		// easy-gpiod not installed, or not on Pi, or gpiod not available
+		fanChip = null;
+		_fanRequest = null;
+		fanLine = null;
+	}
 }
 
 /**
@@ -197,29 +208,29 @@ export function init(): void {
  * Call after init(); safe to call even if init() was no-op.
  */
 export async function softStart(rampMs: number = SOFT_START_MS): Promise<void> {
-  if (!fanLine || !initialized) return;
+	if (!fanLine || !initialized) return;
 
-  const steps = 50;
-  const stepMs = rampMs / steps;
-  const dutyPerStep = 100 / steps;
+	const steps = 50;
+	const stepMs = rampMs / steps;
+	const dutyPerStep = 100 / steps;
 
-  for (let i = 1; i <= steps; i++) {
-    targetDutyPercent = Math.min(100, Math.round(dutyPerStep * i));
-    await sleep(stepMs);
-  }
-  targetDutyPercent = 100;
+	for (let i = 1; i <= steps; i++) {
+		targetDutyPercent = Math.min(100, Math.round(dutyPerStep * i));
+		await sleep(stepMs);
+	}
+	targetDutyPercent = 100;
 }
 
 /**
  * Set fan duty 0–100 (percent). Use after softStart for runtime control.
  */
 export function setSpeed(percent: number): void {
-  if (!initialized) return;
-  targetDutyPercent = Math.max(0, Math.min(100, Math.round(percent)));
+	if (!initialized) return;
+	targetDutyPercent = Math.max(0, Math.min(100, Math.round(percent)));
 }
 
 export function isInitialized(): boolean {
-  return initialized;
+	return initialized;
 }
 
 /**
@@ -228,15 +239,21 @@ export function isInitialized(): boolean {
  * First tick is deferred by one interval so vcgencmd never runs during the critical eyes-open startup window.
  */
 export function startThermalWatchdog(): void {
-  if (!initialized || process.platform !== "linux") return;
-  if (thermalWatchdogInterval) return;
-  const tick = (): void => {
-    const temp = getCpuTemp();
-    if (temp !== null) setSpeed(tempToSpeed(temp));
-  };
-  thermalWatchdogInterval = setInterval(tick, THERMAL_POLL_MS);
-  // Defer first tick: avoid execSync(vcgencmd) during 0–3s when eyes warmup/open runs (reduces right-eye blackout)
-  setTimeout(tick, THERMAL_POLL_MS);
+	if (!initialized || process.platform !== "linux") return;
+	if (thermalWatchdogInterval) return;
+	const tick = (): void => {
+		const temp = getCpuTemp();
+		if (temp !== null) setSpeed(tempToSpeed(temp));
+	};
+	thermalWatchdogInterval = setInterval(tick, THERMAL_POLL_MS);
+	// Defer first tick: avoid execSync(vcgencmd) during 0–3s when eyes warmup/open runs (reduces right-eye blackout)
+	setTimeout(tick, THERMAL_POLL_MS);
 }
 
-export const fanControl = { init, softStart, setSpeed, isInitialized, startThermalWatchdog };
+export const fanControl = {
+	init,
+	softStart,
+	setSpeed,
+	isInitialized,
+	startThermalWatchdog,
+};

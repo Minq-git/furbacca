@@ -1,19 +1,15 @@
 {
-  "compilerOptions": {
-    "target": "ESNext",
-    "module": "Node16",
-    "moduleResolution": "node16",
-    "outDir": "./dist",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "incremental": true
-  },
-  "exclude": [
-    "node_modules",
-    "dist",
-    "**/*.test.ts",
-    "**/*.spec.ts"
-  ]
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "Node16",
+		"moduleResolution": "node16",
+		"outDir": "./dist",
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"incremental": true
+	},
+	"include": ["**/*.ts"],
+	"exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
 }

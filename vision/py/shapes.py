@@ -3,9 +3,9 @@ Optimized Eye Shapes: NumPy-native masking without PIL.
 Vectorized implementations for Heart, Gemini, Stern, Sus, and more.
 Orientation corrected for 180-degree display flip.
 """
-import numpy as np
 import math
-import config
+
+import numpy as np
 
 # Cache for NumPy boolean masks: (shape_name, size, mirror) -> bool array
 _mask_cache_np = {}
@@ -17,7 +17,7 @@ def get_shape_mask_numpy(shape_name, size, mirror=False):
     """
     shape_name = (shape_name or "round").strip().lower()
     key = (shape_name, size, mirror)
-    
+
     if key in _mask_cache_np:
         return _mask_cache_np[key]
 
@@ -93,8 +93,8 @@ def get_shape_mask_numpy(shape_name, size, mirror=False):
         # Cat-eye shape
         lx, ly = 0.10 * size, 0.75 * size
         rx, ry = 0.95 * size, 0.35 * size
-        tx, ty = 0.25 * size, -0.15 * size
-        bx, by = 0.50 * size, 1.05 * size
+        ty = -0.15 * size
+        by = 1.05 * size
         within_x = (x_idx >= lx) & (x_idx <= rx)
         t = np.clip((x_idx - lx) / (rx - lx), 0, 1)
         y_top = (1-t)**2 * ly + 2*(1-t)*t * ty + t**2 * ry
@@ -137,7 +137,8 @@ def get_shape_mask_numpy(shape_name, size, mirror=False):
     return mask
 
 def apply_shape_mask_numpy(frame_arr, shape_name=None, mirror=False):
-    if frame_arr is None: return None
+    if frame_arr is None:
+        return None
     size = frame_arr.shape[0]
     mask = get_shape_mask_numpy(shape_name, size, mirror=mirror)
     frame_arr[~mask] = 0
@@ -150,14 +151,14 @@ def get_blink_line(shape_name, size):
     """
     shape_name = (shape_name or "round").strip().lower()
     cy = size // 2
-    
+
     # Standard horizontal blink
     if shape_name in ("round", "oval", "pill", "half_moon", "bean", "dome", "heart", "gemini", "kawaii", "glare", "anime"):
         return ((0, cy), (size, cy))
-    
+
     if shape_name == "sharp":
         return ((int(size * 0.10), int(size * 0.75)), (int(size * 0.95), int(size * 0.35)))
-        
+
     if shape_name == "sus":
         # Slant follows the squashed 15-degree tilt
         tan15 = math.tan(math.radians(15))
@@ -167,10 +168,10 @@ def get_blink_line(shape_name, size):
     if shape_name in ("stern", "concern"):
         # Slant follows the heavy brow cut
         return ((int(size * 0.05), int(size * 0.4)), (int(size * 0.95), int(size * 0.8)))
-        
+
     if shape_name == "tilted":
         tan18 = math.tan(math.radians(18))
         offset = int((size / 2) * tan18)
         return ((0, cy - offset), (size, cy + offset))
-        
+
     return ((0, cy), (size, cy))
