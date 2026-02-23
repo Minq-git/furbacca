@@ -35,6 +35,26 @@ wake-furbacca
 sleep-furbacca
 ```
 
+### Updating / Rebooting After Code Changes
+
+After pulling or syncing new code onto the Pi, rebuild TypeScript and restart the stack:
+
+```bash
+cd ~/furbacca
+npm run build:pi
+./.scripts/wake-furbacca.sh
+```
+
+If you installed the systemd service instead of running manually:
+
+```bash
+cd ~/furbacca
+npm run build:pi
+sudo systemctl restart furbacca
+```
+
+Tip: you can also halt directly from the touch sensors by holding **Head + Belly** for **30 seconds**.
+
 ### Sending Eye Commands (UDP 5005)
 
 You can manually send commands to the eyes from the Pi or your local Mac:

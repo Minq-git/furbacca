@@ -84,7 +84,7 @@
 		"motion_sensor_triggered": "  👁  Motion: sensor triggered (Furbacca will say \"noticed someone!\" when waking from sleep).",
 		"eyes_full_reinit_trigger": "  👁  Head + belly held 5s → eyes full re-init (restart_both).",
 		"network_heal_trigger": "  ⚠️  Belly held 15s → network heal script.",
-		"halt_trigger": "  🛑 Head + belly held 60s → halting now.",
+		"halt_trigger": "  🛑 Head + belly held 30s → halting now.",
 		"eye_tracker_starting": "  🧐  Eye tracker: starting in background (run 'eye-track status' to confirm; if it fails, check /tmp/eye-track.log).",
 		"eye_tracking_started": "  🧐  Eye tracking: started.",
 		"eye_tracking_stopped": "  🫣  Eye tracking: stopped.",

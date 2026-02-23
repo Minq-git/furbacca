@@ -49,11 +49,11 @@ export class Reflexes {
 	 * Holds:
 	 * - Head + belly: 5s = eyes re-init
 	 * - Belly only: 15s = network heal
-	 * - Head + belly: 60s = system halt (immediate)
+	 * - Head + belly: 30s = system halt (immediate)
 	 */
 	private readonly HEAD_BELLY_HOLD_MS = 5000;
 	private readonly BELLY_HEAL_HOLD_MS = 15000;
-	private readonly HEAD_BELLY_SHUTDOWN_HOLD_MS = 60000;
+	private readonly HEAD_BELLY_SHUTDOWN_HOLD_MS = 30000;
 	private headBellyHoldTimer: ReturnType<typeof setTimeout> | null = null;
 	private headBellyShutdownTimer: ReturnType<typeof setTimeout> | null = null;
 	private bellyHealTimer: ReturnType<typeof setTimeout> | null = null;
@@ -227,7 +227,7 @@ export class Reflexes {
 				if (!this.bellyActive) this.bellyHealCooldown = false;
 			}
 
-			// Head + belly: 5s → eyes re-init; 60s → halt
+			// Head + belly: 5s → eyes re-init; 30s → halt
 			if (!this.headActive || !this.bellyActive) {
 				if (this.headBellyHoldTimer !== null) {
 					clearTimeout(this.headBellyHoldTimer);
