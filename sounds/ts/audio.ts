@@ -7,9 +7,9 @@
  *
  * Does not block the event loop; suitable for use from touch handlers.
  */
-import { execSync, spawn } from "child_process";
-import fs from "fs";
-import path from "path";
+import { execSync, spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import { msg, substitute } from "../../messages.js";
 
 // Prefer dist/sounds/assets/ (next to compiled code). Fallback: repo root sounds/assets/ if sync-sounds wasn't run.

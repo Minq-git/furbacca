@@ -1,7 +1,7 @@
-import { execSync, spawn } from "child_process";
-import * as dgram from "dgram";
-import fs from "fs";
-import path from "path";
+import { execSync, spawn } from "node:child_process";
+import * as dgram from "node:dgram";
+import fs from "node:fs";
+import path from "node:path";
 import { fanControl } from "./cooling/fan_control.js";
 import { msg, substitute } from "./messages.js";
 import { monitorMotion } from "./senses/motion.js";
@@ -53,7 +53,7 @@ function loadWarmupConfig(): {
 
 const {
 	EYE_WARMUP_STEPS: WARMUP_STEPS,
-	WARMUP_MS,
+	WARMUP_MS: _WARMUP_MS,
 	WARMUP_BEIGE,
 	WARMUP_GREEN,
 	STATUS_FAIL_RED,
@@ -201,7 +201,7 @@ function warmupBar(filled: number, total: number, label: string): string {
 		if (i < filled) {
 			const blend = total > 1 ? i / (total - 1) : 0;
 			const [r, g, b] = warmupSegmentColor(blend);
-			bar += ansiRgb(r, g, b) + "█" + ANSI_RESET;
+			bar += `${ansiRgb(r, g, b)}█${ANSI_RESET}`;
 		} else {
 			bar += "░";
 		}
@@ -219,10 +219,10 @@ const eyes = new EyeBridge();
 function advanceWarmup(step: number): void {
 	const label = WARMUP_STEP_LABELS[step] ?? "Starting";
 	if (step === 0) {
-		process.stdout.write(warmupBar(0, WARMUP_STEPS, label) + "\n");
+		process.stdout.write(`${warmupBar(0, WARMUP_STEPS, label)}\n`);
 	} else {
 		process.stdout.write(
-			"\r" + CLEAR_LINE + warmupBar(step, WARMUP_STEPS, label),
+			`\r${CLEAR_LINE}${warmupBar(step, WARMUP_STEPS, label)}`,
 		);
 	}
 	eyes.warmup(step);
@@ -245,7 +245,7 @@ function forwardWithPrefix(
 	stream.on("data", (chunk: string) => {
 		const lines = String(chunk).split(/\r?\n/).filter(Boolean);
 		for (const line of lines) {
-			const out = prefix + line + "\n";
+			const out = `${prefix + line}\n`;
 			if (eyesOutputBuffered) eyesOutputBuffer.push(out);
 			else process.stderr.write(out);
 		}
@@ -270,7 +270,7 @@ function startEyesProcess(): void {
 	});
 	if (eyesChild.stdout) forwardWithPrefix(eyesChild.stdout, "");
 	if (eyesChild.stderr) forwardWithPrefix(eyesChild.stderr, "");
-	eyesChild.on("exit", (code, signal) => {
+	eyesChild.on("exit", (_code, _signal) => {
 		eyesChild = null;
 		if (isShuttingDown) return;
 		console.log(msg.nervous_system.eyes_restarted);
@@ -359,7 +359,8 @@ async function startMatterIfEnabled(): Promise<MatterStartResult | undefined> {
 	}
 	if (showedCachedPairing) {
 		for (let i = matterLogBuffer.length - 1; i >= 0; i--) {
-			if (PAIRING_QR_PATTERN.test(matterLogBuffer[i]!))
+			const line = matterLogBuffer[i];
+			if (line !== undefined && PAIRING_QR_PATTERN.test(line))
 				matterLogBuffer.splice(i, 1);
 		}
 	} else {
@@ -600,7 +601,9 @@ function startWarmupThenOpen(
 	matterResultPromise.then((result) => {
 		if (result?.buffer?.length) {
 			console.log(msg.nervous_system.matter_startup_logs_header);
-			result.buffer.forEach((line) => console.log(line));
+			result.buffer.forEach((line) => {
+				console.log(line);
+			});
 		}
 		if (!result?.showedCachedPairing) console.log(sep);
 		// Re-trigger eyes after Matter finishes (shared RST/SPI can leave one panel black; openEyes redraws)
@@ -712,9 +715,9 @@ const matterLobeStatusLines = msg.matter_lobe.status_order.map((key) => {
 if (stopEventWatch) {
 	console.log(msg.nervous_system.touch_event_driven);
 	if (matterEnabled) {
-		matterLobeStatusLines.forEach((line) =>
-			console.log(msg.nervous_system.matter_lobe_prefix + line),
-		);
+		matterLobeStatusLines.forEach((line) => {
+			console.log(msg.nervous_system.matter_lobe_prefix + line);
+		});
 		console.log(
 			msg.nervous_system.matter_lobe_prefix +
 				`Storage: ${path.join(process.cwd(), ".matter")} (cwd: ${process.cwd()})`,
@@ -723,9 +726,9 @@ if (stopEventWatch) {
 } else {
 	console.log(msg.nervous_system.touch_polling);
 	if (matterEnabled) {
-		matterLobeStatusLines.forEach((line) =>
-			console.log(msg.nervous_system.matter_lobe_prefix + line),
-		);
+		matterLobeStatusLines.forEach((line) => {
+			console.log(msg.nervous_system.matter_lobe_prefix + line);
+		});
 		console.log(
 			msg.nervous_system.matter_lobe_prefix +
 				`Storage: ${path.join(process.cwd(), ".matter")} (cwd: ${process.cwd()})`,
@@ -743,8 +746,10 @@ advanceWarmup(5); // Matter starting
 // Matter and warmup run in parallel; eyes open when warmup finishes, Matter logs when Matter finishes
 const matterPromise = matterEnabled
 	? startMatterIfEnabled()
-	: (console.log(msg.nervous_system.matter_disabled),
-		Promise.resolve(undefined));
+	: (() => {
+			console.log(msg.nervous_system.matter_disabled);
+			return Promise.resolve(undefined);
+		})();
 
 if (stopEventWatch) {
 	void fanControl.softStart().then(() => fanControl.startThermalWatchdog()); // ramp then thermal-based speed

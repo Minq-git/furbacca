@@ -15,7 +15,7 @@
  * Disable: FURBACCA_FAN=0
  */
 
-import { execSync } from "child_process";
+import { execSync } from "node:child_process";
 
 const FAN_BCM = 24;
 const SOFT_START_MS = 2000;
@@ -38,7 +38,7 @@ interface LineLike {
 
 /** Hold references so GC doesn't release (easy-gpiod requirement). */
 let fanChip: { close: () => void } | null = null;
-let fanRequest: {
+let _fanRequest: {
 	close: () => void;
 	lines: { fan: { value: boolean } };
 } | null = null;
@@ -154,7 +154,7 @@ export function init(): void {
 		};
 		line.setValue(0); // Immediate: LOW so fans don't float
 		fanChip = chip;
-		fanRequest = request;
+		_fanRequest = request;
 		fanLine = line;
 		targetDutyPercent = 0;
 		startPwm();
@@ -176,7 +176,7 @@ export function init(): void {
 				}
 				fanLine = null;
 			}
-			fanRequest = null;
+			_fanRequest = null;
 			if (fanChip) {
 				try {
 					fanChip.close();
@@ -198,7 +198,7 @@ export function init(): void {
 	} catch {
 		// easy-gpiod not installed, or not on Pi, or gpiod not available
 		fanChip = null;
-		fanRequest = null;
+		_fanRequest = null;
 		fanLine = null;
 	}
 }

@@ -6,7 +6,7 @@
  * - Event-driven: startEventWatch() spawns gpiomon (libgpiod) for ~instant response.
  * - Polling fallback: poll() with setInterval when gpiomon is not available.
  */
-import { type ChildProcess, execSync, spawn } from "child_process";
+import { type ChildProcess, execSync, spawn } from "node:child_process";
 import { msg, substitute } from "../messages.js";
 
 const VIBE_BCM = 23;

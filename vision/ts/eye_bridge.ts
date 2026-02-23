@@ -1,4 +1,4 @@
-import * as dgram from "dgram";
+import * as dgram from "node:dgram";
 import { msg, substitute } from "../../messages.js";
 
 const PORT = 5005;

@@ -2,11 +2,11 @@
  * PIR motion sensor (e.g. AM312) on BCM 4.
  * Event-driven via gpiomon (same pattern as touch.ts). Active-high: rising = motion detected.
  */
-import { type ChildProcess, execSync, spawn } from "child_process";
+import { type ChildProcess, execSync, spawn } from "node:child_process";
 
 const MOTION_BCM = 4; // BCM 4 (Physical Pin 7) — instruction.md §1.D
 const EDGE_RISING = 1;
-const EDGE_FALLING = 2;
+const _EDGE_FALLING = 2;
 
 export type MotionCallback = (detected: boolean) => void;
 

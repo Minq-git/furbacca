@@ -11,9 +11,9 @@ import { Identify } from "@matter/types/clusters/identify";
 import type { EyeBridge } from "../../vision/ts/eye_bridge.js";
 
 /** Environment key: set node.env.set(EyeBridgeForIdentify, eyes) before adding the eye endpoint. */
-export class EyeBridgeForIdentify {
-	static readonly id = "EyeBridgeForIdentify";
-}
+export const EyeBridgeForIdentify = {
+	id: "EyeBridgeForIdentify",
+} as const;
 
 /** Build the custom device using the same ExtendedColorLight types passed in (from matter_lobe's import of @matter/node/devices). */
 export function createFurbaccaExtendedColorLight(

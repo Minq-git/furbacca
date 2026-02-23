@@ -11,9 +11,9 @@
  * Storage (fabric, CASE, pairing) is in repo .matter/ so it persists across restarts.
  * Do not set MATTER_STORAGE_CLEAR=1 in production or devices will go offline after reboot.
  */
-import * as dgram from "dgram";
-import * as fs from "fs/promises";
-import * as path from "path";
+import * as dgram from "node:dgram";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { msg, substitute } from "../../messages.js";
 import type { TouchSenses } from "../../senses/touch.js";
 import type { EyeBridge } from "../../vision/ts/eye_bridge.js";
@@ -88,16 +88,14 @@ export type TouchSensor = "head" | "belly" | "shiver";
 
 export class MatterLobe {
 	private eyes: EyeBridge;
-	private touch: TouchSenses;
 	private matterNode: unknown = undefined;
 	/** Set after endpoints are ready; used to forward touch events from nervous_system (single GPIO owner). */
 	private onTouchForMatter:
 		| ((sensor: TouchSensor, active: boolean) => void)
 		| null = null;
 
-	constructor(eyes: EyeBridge, touch: TouchSenses) {
+	constructor(eyes: EyeBridge, _touch: TouchSenses) {
 		this.eyes = eyes;
-		this.touch = touch;
 	}
 
 	/** Call when touch is event-driven (gpiomon). Do not use touch.poll() — it conflicts with gpiomon. */
@@ -249,7 +247,13 @@ export class MatterLobe {
 			status(msg.matter_lobe.status.node_created);
 
 			// Endpoint 1: Eyes (Extended Color Light with custom Identify triggerEffect → Furbacca animations)
-			node.env.set(EyeBridgeForIdentify, this.eyes);
+			// Matter env expects a constructor key; we use an opaque object key — same ref for maybeGet in identify server.
+			node.env.set(
+				EyeBridgeForIdentify as unknown as abstract new (
+					...args: any[]
+				) => EyeBridge,
+				this.eyes,
+			);
 			const eyeEndpoint = await node.add(
 				FurbaccaExtendedColorLightDeviceDefinition as unknown as Parameters<
 					typeof node.add
@@ -502,7 +506,9 @@ export class MatterLobe {
 				const pairingQrPattern =
 					/Commissioning|passcode|discriminator|pairing|uncommissioned|qrcode|QR code|manual pairing|▄|▀|█|project-chip\.github\.io/i;
 				for (let i = buffer.length - 1; i >= 0; i--) {
-					if (pairingQrPattern.test(buffer[i]!)) buffer.splice(i, 1);
+					const line = buffer[i];
+					if (line !== undefined && pairingQrPattern.test(line))
+						buffer.splice(i, 1);
 				}
 				try {
 					await fs.unlink(path.join(getMatterDir(), "pairing_display.txt"));

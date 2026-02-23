@@ -2,12 +2,11 @@
  * Central user-facing messages. Loaded from messages.json at repo root (process.cwd() when run from root).
  * Use msg.key or substitute(msg.key, { param: value }).
  */
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 
 const messagesPath = path.join(process.cwd(), "messages.json");
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const raw: Record<string, any> = JSON.parse(
+const raw: Record<string, unknown> = JSON.parse(
 	fs.readFileSync(messagesPath, "utf-8"),
 );
 

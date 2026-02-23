@@ -6,8 +6,8 @@
  * Tone: 100, 250, 500, 1000, 2000, 3000, 4000 Hz, 0.5s each with 0.1s silence between.
  * 44.1 kHz, 16-bit mono. Amplitude 0.3 (safe for small drivers; software limiter applies on playback).
  */
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 
 const SAMPLE_RATE = 44100;
 const BITS_PER_SAMPLE = 16;
@@ -84,9 +84,9 @@ function main(): void {
 
 	const chunks: Int16Array[] = [];
 	for (let i = 0; i < FREQUENCIES_HZ.length; i++) {
-		chunks.push(
-			generateSine(FREQUENCIES_HZ[i]!, TONE_DURATION_S, SAMPLE_RATE, AMPLITUDE),
-		);
+		const freq = FREQUENCIES_HZ[i];
+		if (freq !== undefined)
+			chunks.push(generateSine(freq, TONE_DURATION_S, SAMPLE_RATE, AMPLITUDE));
 		if (i < FREQUENCIES_HZ.length - 1) {
 			chunks.push(generateSilence(SILENCE_DURATION_S, SAMPLE_RATE));
 		}
@@ -97,8 +97,11 @@ function main(): void {
 	let offset = 0;
 	for (const chunk of chunks) {
 		for (let i = 0; i < chunk.length; i++) {
-			data.writeInt16LE(chunk[i]!, offset);
-			offset += 2;
+			const sample = chunk[i];
+			if (sample !== undefined) {
+				data.writeInt16LE(sample, offset);
+				offset += 2;
+			}
 		}
 	}
 	const header = writeWavHeader(
