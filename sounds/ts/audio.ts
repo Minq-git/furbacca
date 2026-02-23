@@ -81,7 +81,8 @@ function parseWavHeader(buffer: Buffer): { sampleRate: number; channels: number;
       dataOffset = i + 8;
       dataLength = chunkSize;
     }
-    i += 8 + chunkSize;
+    // RIFF chunks are word-aligned; skip padding byte when chunk size is odd
+    i += 8 + chunkSize + (chunkSize & 1);
   }
   if (sampleRate <= 0 || channels <= 0 || bitsPerSample !== 16 || dataLength <= 0) return null;
   return { sampleRate, channels, bitsPerSample, dataOffset, dataLength };
@@ -151,7 +152,9 @@ export function playWav(filename: string, maxDurationSeconds?: number): void {
         )
       : header.dataLength;
   applyVolumeLimit(buffer, header.dataOffset, header.dataLength);
-  const rawPcm = buffer.subarray(header.dataOffset, header.dataOffset + maxBytes);
+  const rawPcm = Buffer.from(
+    buffer.subarray(header.dataOffset, header.dataOffset + maxBytes)
+  );
   const child = spawn(
     "aplay",
     ["-D", APLAY_DEVICE, "-f", "S16_LE", "-r", String(header.sampleRate), "-c", String(header.channels), "-q"],
@@ -159,7 +162,9 @@ export function playWav(filename: string, maxDurationSeconds?: number): void {
   );
   currentPlayback = child;
   child.stdin?.on("error", () => {});
-  child.stdin?.end(rawPcm);
+  child.stdin?.write(rawPcm, (err) => {
+    if (!err) child.stdin?.end();
+  });
   child.on("error", (err) => {
     currentPlayback = null;
     console.error(substitute(msg.audio.aplay_failed, { message: err.message }));
