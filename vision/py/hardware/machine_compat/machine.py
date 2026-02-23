@@ -5,17 +5,41 @@ Used by russhughes/gc9a01py on Raspberry Pi (spidev + RPi.GPIO).
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Sequence
+from typing import Protocol, cast
 
 try:
-    import spidev
+    import spidev  # pyright: ignore[reportMissingImports]
 except ImportError:
     spidev = None  # type: ignore[assignment]
 
 try:
-    import RPi.GPIO as GPIO
+    import RPi.GPIO as GPIO  # pyright: ignore[reportMissingModuleSource]
 except ImportError:
     GPIO = None  # type: ignore[assignment]
+
+
+class _SpiDevLike(Protocol):
+    mode: int
+    max_speed_hz: int
+
+    def open(self, bus: int, device: int) -> None: ...
+    def writebytes(self, values: Sequence[int]) -> None: ...
+    def close(self) -> None: ...
+
+
+class _GpioLike(Protocol):
+    BCM: int
+    OUT: int
+    IN: int
+    HIGH: int
+    LOW: int
+
+    def setmode(self, mode: int) -> None: ...
+    def setwarnings(self, state: bool) -> None: ...
+    def setup(self, channel: int, mode: int) -> None: ...
+    def output(self, channel: int, value: int) -> None: ...
+    def input(self, channel: int) -> int: ...
 
 
 class SPI:
@@ -25,14 +49,17 @@ class SPI:
         """baudrate default 10 MHz; display.py passes SPI_BAUDRATE (env, default 60 MHz)."""
         if spidev is None:
             raise RuntimeError("spidev required; install with: pip install spidev (or apt install python3-spidev)")
-        _spi_raw: Any = spidev.SpiDev()
+        spi_ctor = getattr(spidev, "SpiDev", None)
+        if spi_ctor is None:
+            raise RuntimeError("spidev module missing SpiDev()")
+        _spi_raw = cast(_SpiDevLike, spi_ctor())
         _spi_raw.open(bus, device)
         _spi_raw.mode = 0
         _spi_raw.max_speed_hz = baudrate
-        self._spi: Any = _spi_raw
+        self._spi: _SpiDevLike = _spi_raw
 
     # Linux SPI message size limit (e.g. 4096); chunk large writes
-    _CHUNK_SIZE = 4096
+    _CHUNK_SIZE: int = 4096
 
     def write(self, buf: bytes | bytearray | object) -> None:
         """Write bytes to SPI (gc9a01py calls this). Chunks to avoid kernel limit."""
@@ -58,23 +85,27 @@ class Pin:
     def __init__(self, pin_id: int, mode: int = OUT) -> None:
         if GPIO is None:
             raise RuntimeError("RPi.GPIO required; install with: apt install python3-rpi.gpio")
+        gpio = cast(_GpioLike, GPIO)
         self._pin = pin_id
         self._mode = mode
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setwarnings(False)
-        GPIO.setup(self._pin, GPIO.OUT if mode == self.OUT else GPIO.IN)
+        gpio.setmode(gpio.BCM)
+        gpio.setwarnings(False)
+        gpio.setup(self._pin, gpio.OUT if mode == self.OUT else gpio.IN)
 
-    def on(self):
+    def on(self) -> None:
         assert GPIO is not None  # already raised in __init__ if missing
-        GPIO.output(self._pin, GPIO.HIGH)
+        gpio = cast(_GpioLike, GPIO)
+        gpio.output(self._pin, gpio.HIGH)
 
-    def off(self):
+    def off(self) -> None:
         assert GPIO is not None
-        GPIO.output(self._pin, GPIO.LOW)
+        gpio = cast(_GpioLike, GPIO)
+        gpio.output(self._pin, gpio.LOW)
 
     def value(self, v: bool | int | None = None) -> int | None:
         assert GPIO is not None
+        gpio = cast(_GpioLike, GPIO)
         if v is None:
-            return int(GPIO.input(self._pin))
-        GPIO.output(self._pin, GPIO.HIGH if v else GPIO.LOW)
+            return int(gpio.input(self._pin))
+        gpio.output(self._pin, gpio.HIGH if v else gpio.LOW)
         return None

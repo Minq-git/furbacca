@@ -6,6 +6,7 @@ Source of truth is NumPy; PIL is only used for asset loading and final output.
 from __future__ import annotations
 
 import math
+from typing import cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -26,6 +27,12 @@ from engine import shapes
 _texture_arrays: dict[str, dict[str, NDArray[np.uint8] | None]] = {}
 _gaze_cache_numpy: dict[tuple[str, int, int], NDArray[np.uint8]] = {}
 _blink_overlay_cache: dict[tuple[str, bool], object] = {}
+
+_F32 = NDArray[np.float32]
+_F64 = NDArray[np.float64]
+_I32 = NDArray[np.int32]
+_U8 = NDArray[np.uint8]
+_Bool = NDArray[np.bool_]
 
 
 def _get_textures_numpy(eye_type: str) -> dict[str, NDArray[np.uint8] | None]:
@@ -56,27 +63,29 @@ def _sample_texture_spherical_numpy(
     h_tex, w_tex = tex_arr.shape[:2]
 
     # 1. Create coordinate grid for the output image
-    y_idx, x_idx = np.indices((h_out, w_out), dtype=np.float32)
+    grid = cast(_F32, np.indices((h_out, w_out), dtype=np.float32))
+    y_idx = cast(_F32, grid[0])
+    x_idx = cast(_F32, grid[1])
 
     # 2. Distance and angle relative to the center of the gaze (pole)
-    dx = x_idx - cx
-    dy = y_idx - cy
-    r = np.sqrt(dx * dx + dy * dy)
-    mask = r <= r_max
+    dx = cast(_F32, x_idx - float(cx))
+    dy = cast(_F32, y_idx - float(cy))
+    r = cast(_F32, np.sqrt(dx * dx + dy * dy))
+    mask = cast(_Bool, r <= float(r_max))
 
     # 3. Calculate mapping (atan2 and r/r_max)
-    angle = np.arctan2(dy, dx)
-    u = (angle + np.pi) / (2.0 * np.pi)
-    v = r / r_max
+    angle = cast(_F32, np.arctan2(dy, dx))
+    u = cast(_F32, (angle + np.pi) / (2.0 * np.pi))
+    v = cast(_F32, r / float(r_max))
 
     # 4. Map to texture pixel indices
-    sx = ((u * (w_tex - 1)) + 0.5).astype(np.int32) % w_tex
+    sx = cast(_I32, ((u * float(w_tex - 1)) + 0.5).astype(np.int32) % w_tex)
     if invert_v:
-        sy = ((v * (h_tex - 1)) + 0.5).astype(np.int32)
+        sy = cast(_I32, ((v * float(h_tex - 1)) + 0.5).astype(np.int32))
     else:
-        sy = (((1.0 - v) * (h_tex - 1)) + 0.5).astype(np.int32)
+        sy = cast(_I32, (((1.0 - v) * float(h_tex - 1)) + 0.5).astype(np.int32))
 
-    sy = np.clip(sy, 0, h_tex - 1)
+    sy = cast(_I32, np.clip(sy, 0, h_tex - 1))
     return sx, sy, mask
 
 
@@ -174,26 +183,32 @@ def render_spinner(angle_rad: float, mirror: bool = True, color_phase: float = 0
         return None
     size = config.EYE_SIZE
     # 1. Create coordinate grid
-    y_idx, x_idx = np.indices((size, size), dtype=np.float32)
-    cx, cy = size / 2.0, size / 2.0
+    grid = cast(_F32, np.indices((size, size), dtype=np.float32))
+    y_idx = cast(_F32, grid[0])
+    x_idx = cast(_F32, grid[1])
+    cx: float = size / 2.0
+    cy: float = size / 2.0
 
     # 2. Ring matches default eye iris/pupil size (same as build_eye_base sclera/iris)
     r_out = config.IRIS_R * config.EYE_LAYER_VIEWPORT_SCALE  # iris outer edge
     r_in = float(config.eye_type_pupil_radii("default")[0])  # relaxed pupil = inner edge
-    dist_sq = (x_idx - cx) ** 2 + (y_idx - cy) ** 2
-    ring_mask = (dist_sq <= r_out**2) & (dist_sq >= r_in**2)
+    dist_sq = cast(_F32, (x_idx - cx) ** 2 + (y_idx - cy) ** 2)
+    ring_mask = cast(_Bool, cast(_Bool, dist_sq <= r_out**2) & cast(_Bool, dist_sq >= r_in**2))
 
     # Softer AA edges: wider falloff so the ring doesn't look stepped
-    dist = np.sqrt(dist_sq)
+    dist = cast(_F32, np.sqrt(dist_sq))
     half_width = (r_out - r_in) / 2.0
     mid_r = (r_out + r_in) / 2.0
-    edge_dist = np.abs(dist - mid_r) - half_width
+    edge_dist = cast(_F32, np.abs(dist - mid_r) - half_width)
     falloff_px = 3.0  # spread over ~3 px for smoother blend
-    edge_mask = np.clip(1.0 - edge_dist / falloff_px, 0, 1)
+    edge_mask = cast(_F32, np.clip(1.0 - edge_dist / falloff_px, 0.0, 1.0))
 
     # 3. Angular check for the gap (all angles in [0, 2π] for consistent comparison)
-    pixel_angles = np.arctan2(y_idx - cy, x_idx - cx)  # [-π, π]
-    pixel_angles = np.where(pixel_angles < 0, pixel_angles + 2 * math.pi, pixel_angles)  # [0, 2π]
+    pixel_angles = cast(_F32, np.arctan2(y_idx - cy, x_idx - cx))  # [-π, π]
+    pixel_angles = cast(
+        _F32,
+        np.where(pixel_angles < 0, pixel_angles + 2 * math.pi, pixel_angles),  # [0, 2π]
+    )
 
     a0 = angle_rad % (2 * math.pi)
     gap_width = math.radians(60)
@@ -206,30 +221,33 @@ def render_spinner(angle_rad: float, mirror: bool = True, color_phase: float = 0
 
     # Angular distance from a0 (trailing edge of C) so we can fade in the gap
     two_pi = 2 * math.pi
-    d = np.where(pixel_angles >= a0, pixel_angles - a0, (two_pi - a0) + pixel_angles)
-    t = np.clip(d / gap_width, 0.0, 1.0)  # t=0 at C edge (beige), t=1 into gap (black)
+    d = cast(_F32, np.where(pixel_angles >= a0, pixel_angles - a0, (two_pi - a0) + pixel_angles))
+    t = cast(_F32, np.clip(d / gap_width, 0.0, 1.0))  # t=0 at C edge (beige), t=1 into gap (black)
 
     # 4. Ring color: step from beige to green (from config)
-    beige = np.array(config.WARMUP_BEIGE, dtype=np.float64)
-    green = np.array(config.WARMUP_GREEN, dtype=np.float64)
+    beige = cast(_F64, np.array(config.WARMUP_BEIGE, dtype=np.float64))
+    green = cast(_F64, np.array(config.WARMUP_GREEN, dtype=np.float64))
     num_steps = config.EYE_WARMUP_STEPS
     p = max(0, min(1, color_phase))
     step = min(int(round(p * (num_steps - 1))), num_steps - 1)
     blend_t = step / (num_steps - 1) if num_steps > 1 else 0
-    ring_color = (1 - blend_t) * beige + blend_t * green
+    ring_color = cast(_F64, (1 - blend_t) * beige + blend_t * green)
 
-    out_arr = np.zeros((size, size, 3), dtype=np.uint8)
-    final_mask = ring_mask & ~gap_mask
-    out_arr[final_mask] = np.clip(ring_color, 0, 255).astype(np.uint8)
-    gap_ring_mask = ring_mask & gap_mask
+    out_arr = cast(_U8, np.zeros((size, size, 3), dtype=np.uint8))
+    final_mask = cast(_Bool, ring_mask & cast(_Bool, ~gap_mask))
+    out_arr[final_mask] = cast(_U8, np.clip(ring_color, 0, 255).astype(np.uint8))
+    gap_ring_mask = cast(_Bool, ring_mask & gap_mask)
     blend = (1.0 - t[gap_ring_mask])[:, np.newaxis] * ring_color
-    out_arr[gap_ring_mask] = np.clip(blend, 0, 255).astype(np.uint8)
+    out_arr[gap_ring_mask] = cast(_U8, np.clip(blend, 0, 255).astype(np.uint8))
 
     # Apply soft edge mask for organic, anti-aliased inner/outer ring edges
-    out_arr = np.clip(out_arr.astype(np.float64) * edge_mask[:, :, np.newaxis], 0, 255).astype(np.uint8)
+    out_arr = cast(
+        _U8,
+        np.clip(cast(_F64, out_arr.astype(np.float64)) * edge_mask[:, :, np.newaxis], 0, 255).astype(np.uint8),
+    )
 
     if mirror:
-        out_arr = np.flip(out_arr, axis=1)
+        out_arr = cast(_U8, np.flip(out_arr, axis=1))
 
     return Image.fromarray(out_arr)
 

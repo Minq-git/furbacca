@@ -9,7 +9,8 @@ from __future__ import annotations
 import os
 import sys
 import time
-from typing import Any, Protocol
+from collections.abc import Callable
+from typing import Protocol, cast
 
 # vision/py (parent of hardware/) for gc9a01py path
 _vision_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -20,6 +21,10 @@ class _Gc9a01Display(Protocol):
 
     def _write(self, *args: object) -> None: ...
     def rotation(self, value: int) -> None: ...
+
+
+class _BacklightLike(Protocol):
+    def value(self, v: int) -> object | None: ...
 
 
 # Inject MicroPython compat before importing gc9a01py
@@ -168,15 +173,18 @@ def init_displays(swap_left_right: bool = False) -> tuple[object | None, object 
         return None, None
 
     try:
-        left_eye: Any = GC9A01(spi_left, dc=dc, cs=None, reset=reset, backlight=backlight, rotation=4)
+        gc9_ctor = cast(Callable[..., object], GC9A01)
+        left_eye: object = gc9_ctor(spi_left, dc=dc, cs=None, reset=reset, backlight=backlight, rotation=4)
         _sleep_ms(20)
-        right_eye: Any = GC9A01(spi_right, dc=dc, cs=None, reset=reset, backlight=None, rotation=4)
+        right_eye: object = gc9_ctor(spi_right, dc=dc, cs=None, reset=reset, backlight=None, rotation=4)
         # Both panels share RST: right's init may reset both. Give right time to finish init, then re-init left.
         _sleep_ms(80)
-        _reinit_gc9a01_registers(left_eye)
+        _reinit_gc9a01_registers(cast(_Gc9a01Display, left_eye))
         _sleep_ms(30)
-        if getattr(left_eye, "backlight", None) is not None:
-            getattr(left_eye.backlight, "value", lambda _: None)(1)
+        backlight_obj = getattr(left_eye, "backlight", None)
+        if backlight_obj is not None:
+            bl = cast(_BacklightLike, backlight_obj)
+            _ = bl.value(1)
         _write_display_status(True)
         return left_eye, right_eye
     except Exception as e:

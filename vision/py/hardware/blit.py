@@ -10,7 +10,8 @@ import os
 import queue
 import struct
 import threading
-from typing import Any, Protocol, cast
+from collections.abc import Callable
+from typing import Protocol, cast
 
 try:
     from PIL import Image as PILImage
@@ -49,6 +50,31 @@ class _PilImageLike(Protocol):
     def load(self) -> object: ...
 
 
+class _PixelAccessRGBLike(Protocol):
+    """PixelAccess-like object for RGB pixels."""
+
+    def __getitem__(self, xy: tuple[int, int]) -> tuple[int, int, int]: ...
+
+
+def _maybe_blit_buffer(
+    handle: object | None,
+    buf: bytes | bytearray,
+    *,
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+) -> None:
+    """Call `blit_buffer` on unknown display handles safely."""
+    if handle is None:
+        return
+    blit = getattr(handle, "blit_buffer", None)
+    if blit is None:
+        return
+    blit_fn = cast(Callable[[bytes | bytearray, int, int, int, int], None], blit)
+    blit_fn(buf, x, y, width, height)
+
+
 def rgb565(r: int, g: int, b: int) -> bytes:
     """Pack one pixel as big-endian RGB565 (2 bytes). Used by test_patterns."""
     c = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
@@ -77,12 +103,12 @@ def _blit_worker() -> None:
         # failing eye (e.g. SPI busy, wiring) doesn't skip the other — fixes "only one eye" updates.
         try:
             if l_handle and l_buf:
-                l_handle.blit_buffer(l_buf, 0, 0, EYE_SIZE, EYE_SIZE)
+                _maybe_blit_buffer(l_handle, l_buf, x=0, y=0, width=EYE_SIZE, height=EYE_SIZE)
         except Exception as e:
             print(f"SPI Worker Error (left eye): {e}")
         try:
             if r_handle and r_buf:
-                r_handle.blit_buffer(r_buf, 0, 0, EYE_SIZE, EYE_SIZE)
+                _maybe_blit_buffer(r_handle, r_buf, x=0, y=0, width=EYE_SIZE, height=EYE_SIZE)
         except Exception as e:
             print(f"SPI Worker Error (right eye): {e}")
         finally:
@@ -173,11 +199,11 @@ def pil_to_rgb565_buffer(img: _PilImageLike | object | None) -> bytearray | byte
 def _pil_to_rgb565_fallback(img: _PilImageLike) -> bytearray:
     """Slow fallback without NumPy."""
     img = img.rotate(180)
-    pix = cast(Any, img.load())  # PIL PixelAccess supports [x, y]
+    pix = cast(_PixelAccessRGBLike, img.load())
     buf = bytearray(EYE_SIZE * EYE_SIZE * 2)
     for y in range(EYE_SIZE):
         for x in range(EYE_SIZE):
-            r, g, b = cast(tuple[int, int, int], pix[x, y])
+            r, g, b = pix[(x, y)]
             c565: int = (r & 0xF8) << 8 | (g & 0xFC) << 3 | (b >> 3)
             offset = (y * EYE_SIZE + x) * 2
             buf[offset : offset + 2] = struct.pack(">H", c565)
@@ -206,10 +232,8 @@ def blit_pil_to_both(
         buf_right = buf_left
 
     if not reverse_rows and not outside_in and not inside_out and partial_rows is None:
-        if left_eye is not None:
-            left_eye.blit_buffer(buf_left, 0, 0, EYE_SIZE, EYE_SIZE)
-        if right_eye is not None:
-            right_eye.blit_buffer(buf_right, 0, 0, EYE_SIZE, EYE_SIZE)
+        _maybe_blit_buffer(left_eye, buf_left, x=0, y=0, width=EYE_SIZE, height=EYE_SIZE)
+        _maybe_blit_buffer(right_eye, buf_right, x=0, y=0, width=EYE_SIZE, height=EYE_SIZE)
     else:
         blit_buffer_row_by_row_both(
             left_eye, right_eye, buf_left, buf_right, reverse_rows, outside_in, inside_out, partial_rows
@@ -259,6 +283,6 @@ def blit_buffer_row_by_row_both(
         row_left = buf_left[start : start + row_bytes]
         row_right = buf_right[start : start + row_bytes]
         if left_eye is not None and row_left:
-            left_eye.blit_buffer(row_left, 0, y, EYE_SIZE, 1)
+            _maybe_blit_buffer(left_eye, row_left, x=0, y=y, width=EYE_SIZE, height=1)
         if right_eye is not None and row_right:
-            right_eye.blit_buffer(row_right, 0, y, EYE_SIZE, 1)
+            _maybe_blit_buffer(right_eye, row_right, x=0, y=y, width=EYE_SIZE, height=1)

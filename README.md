@@ -22,6 +22,7 @@ Furbacca's codebase is structured around physical systems, bridging a Node.js/Ty
 ## 🚀 Quick Start
 
 **Main Entry Point:** Start all services (eyes, nervous system, and eye-tracking).
+
 ```bash
 ./scripts/wake-furbacca.sh
 # OR use the alias if configured:
@@ -29,12 +30,15 @@ wake-furbacca
 ```
 
 **Safe Shutdown:** Safely halt the Pi to prevent SD card corruption or inductive kickback from the fans.
+
 ```bash
 sleep-furbacca
 ```
 
 ### Sending Eye Commands (UDP 5005)
+
 You can manually send commands to the eyes from the Pi or your local Mac:
+
 ```bash
 # Shapes: round, sharp, half_moon, bean, oval, tilted, dome, pill, anime, concern, glare, gemini, heart, kawaii, stern, sus
 ./scripts/vision/eye-command.sh shape sharp
@@ -42,6 +46,7 @@ You can manually send commands to the eyes from the Pi or your local Mac:
 # Types: default, human, dragon, demon
 ./scripts/vision/eye-command.sh type dragon
 ```
+
 *(Note: To send from a remote machine, pass the host as the first argument, e.g., `./scripts/vision/eye-command.sh furbacca.local shape sharp`)*
 
 ---
@@ -61,7 +66,7 @@ You can manually send commands to the eyes from the Pi or your local Mac:
 | **Eye DC** | 25 | 22 | GC9A01 |
 | **Eye RST** | 27 | 13 | GC9A01 |
 | **Eye CS (Left)** | 8 | 24 | Display 1 |
-| **Eye CS (Right)**| 7 | 26 | Display 2 |
+| **Eye CS (Right)** | 7 | 26 | Display 2 |
 | **Cooling Fan** | 24 | 18 | 2N2222 NPN (Active-High PWM) |
 | **Audio BCLK** | 18 | 12 | MAX98357A I2S DAC |
 | **Audio LRC** | 19 | 35 | MAX98357A I2S DAC |
@@ -72,20 +77,26 @@ You can manually send commands to the eyes from the Pi or your local Mac:
 ## 🔧 Installation & Setup
 
 ### 1. Fresh Pi Setup
+
 Enable SPI (`sudo raspi-config nonint do_spi 0`) and reboot. Then, run the master setup script to install dependencies, configure zRAM, and build the environment:
+
 ```bash
 cd ~/furbacca
 bash scripts/setup/setup-fresh.sh
 ```
 
 ### 2. Code Synchronization (Mac to Pi)
+
 Add this alias to your local Mac's `~/.zshrc` to safely push code updates:
+
 ```bash
 alias push-furbacca='rsync -avz --delete --exclude node_modules --exclude .git --exclude env --exclude dist --exclude vision/py/gc9a01py /Users/YOUR_PATH/furbacca/ minqz@furbacca.local:~/furbacca/'
 ```
 
 ### 3. Code Quality (Biome & Ruff)
+
 Furbacca uses **Biome** (TypeScript) and **Ruff** (Python) for ultra-fast linting and formatting.
+
 ```bash
 # Format & Lint everything (run locally)
 npx @biomejs/biome check --write
@@ -97,11 +108,13 @@ ruff check --fix .
 ## 🏠 Matter Integration
 
 Furbacca acts as a native Matter bridge on your network (UDP `5540`).
+
 * **Endpoint 1 (Extended Color Light):** Controls the eyes (brightness/hue maps to species and animations).
 * **Endpoints 2-4 (Generic Switches):** Expose the Head, Belly, and Shiver sensors to your smart home.
 
 **To Pair:**
 Check the logs during startup for the QR code URL and manual pairing code, or run:
+
 ```bash
 ./scripts/matter/show-matter-pairing.sh
 ```
@@ -111,17 +124,22 @@ Check the logs during startup for the QR code URL and manual pairing code, or ru
 ## 📝 Troubleshooting
 
 **Audio/I2S is dead or crackling:**
+
 * Run `./scripts/diagnostics/audio-check.sh`.
 * Ensure `/boot/firmware/config.txt` contains `dtparam=audio=off` and `dtoverlay=max98357a,no-sdmode`.
 
 **One or both displays are black / corrupted:**
+
 * Shared SPI buses can occasionally glitch during high-load startups. Trigger a hardware reset by running `./scripts/fe-restart.sh` or by holding the **Head + Belly** sensors together for 5 seconds.
 
 **Matter fails to start or crashes:**
+
 * Corrupt pairing states can halt the Node.js process. Factory reset the Matter node by running `./scripts/matter/matter-factory-reset.sh` (or `rm -rf .matter`), then re-pair the device.
 
 **Touch sensors are unresponsive (`Device or resource busy`):**
+
 * Another process is locking the `gpiomon` pins. Stop all services (`sudo systemctl stop furbacca-eyes`), kill zombie processes (`sudo killall gpiomon`), and restart `wake-furbacca`.
 
 **Network drops under heavy load:**
+
 * Hold **Head + Belly** for 30 seconds. The nervous system will trigger `./scripts/diagnostics/heal-network.sh` to restart the Wi-Fi stack and recover connection.
