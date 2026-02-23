@@ -27,7 +27,7 @@ shift || true
 # On Linux, find a Python that can import picamera2 (apt installs to one version; default may differ).
 # Prefer explicit versioned binaries so "run" and "on" use the same interpreter.
 find_picamera2_python() {
-  local py result
+  local py
   if [[ -n "$FURBACCA_CAMERA_PYTHON" ]]; then
     "$FURBACCA_CAMERA_PYTHON" -c "import picamera2" 2>/dev/null && echo "$FURBACCA_CAMERA_PYTHON" && return
   fi

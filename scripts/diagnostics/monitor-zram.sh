@@ -89,8 +89,8 @@ while true; do
   COMPR_KB=$((COMPR_DATA / 1024))
 
   printf "\r\033[K"
-  printf "zRAM: %s KB -> %s KB | Ratio: %s:1 | SD swap: %s KB | %s" \
-         "$RAW_KB" "$COMPR_KB" "$RATIO" "${SD_SWAP:-0}" "$POWER"
+  printf "zRAM: %s total | %s KB -> %s KB | Ratio: %s:1 | SD swap: %s KB | %s" \
+         "$DISKSIZE" "$RAW_KB" "$COMPR_KB" "$RATIO" "${SD_SWAP:-0}" "$POWER"
 
   sleep 2
 done

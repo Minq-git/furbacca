@@ -236,9 +236,7 @@ if [[ "$UNAME_S" == "Linux" ]]; then
   if [[ -n "$RC" ]]; then
     if ! grep -q "wake-furbacca" "$RC" 2>/dev/null; then
       LINE="alias wake-furbacca='$REPO_DIR/scripts/wake-furbacca.sh'"
-      echo "" >> "$RC"
-      echo "# Furbacca" >> "$RC"
-      echo "$LINE" >> "$RC"
+      { echo ""; echo "# Furbacca"; echo "$LINE"; } >> "$RC"
       echo "Added to $RC: $LINE"
     fi
     if ! grep -q "sleep-furbacca" "$RC" 2>/dev/null; then
@@ -267,8 +265,11 @@ if [[ "$UNAME_S" == "Linux" ]]; then
     else
       echo "⚠ Boot partition not writable. When Wi‑Fi is configured, run: sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /boot/"
     fi
-  elif [[ -d /etc/NetworkManager/system-connections ]] && ls /etc/NetworkManager/system-connections/*.nmconnection 1>/dev/null 2>&1; then
-    FIRST_NM=$(ls /etc/NetworkManager/system-connections/*.nmconnection 2>/dev/null | head -n1)
+  elif [[ -d /etc/NetworkManager/system-connections ]]; then
+    shopt -s nullglob
+    NM_FILES=(/etc/NetworkManager/system-connections/*.nmconnection)
+    shopt -u nullglob
+    FIRST_NM="${NM_FILES[0]:-}"
     if [[ -n "$FIRST_NM" && -n "$BOOT_PARTITION" ]]; then
       sudo cp "$FIRST_NM" "$BOOT_PARTITION/NetworkManager-connection.nmconnection" 2>/dev/null && \
         echo "Backed up NetworkManager Wi‑Fi to $BOOT_PARTITION/NetworkManager-connection.nmconnection (heal-network will restore on head+belly 30s)." || \
