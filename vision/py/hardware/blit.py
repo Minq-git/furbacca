@@ -10,6 +10,7 @@ import os
 import queue
 import struct
 import threading
+from typing import Any, Protocol, cast
 
 try:
     from PIL import Image as PILImage
@@ -29,6 +30,25 @@ from assets import config
 EYE_SIZE = config.EYE_SIZE
 
 
+class _DisplayLike(Protocol):
+    """Display handle with blit_buffer (e.g. gc9a01py)."""
+
+    def blit_buffer(self, buffer: bytes | bytearray, x: int, y: int, width: int, height: int) -> None: ...
+
+
+class _PilImageLike(Protocol):
+    """Minimal PIL Image interface for RGB565 conversion."""
+
+    @property
+    def mode(self) -> str: ...
+    def convert(self, mode: str) -> _PilImageLike: ...
+    @property
+    def size(self) -> tuple[int, int]: ...
+    def resize(self, size: tuple[int, int], resample: int) -> _PilImageLike: ...
+    def rotate(self, angle: float) -> _PilImageLike: ...
+    def load(self) -> object: ...
+
+
 def rgb565(r: int, g: int, b: int) -> bytes:
     """Pack one pixel as big-endian RGB565 (2 bytes). Used by test_patterns."""
     c = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
@@ -40,13 +60,14 @@ _NUMPY_SWAP_RB = os.environ.get("EYES_NUMPY_SWAP_RB", "").strip().lower() in ("1
 _USE_NUMPY_BLIT = os.environ.get("EYES_USE_NUMPY_BLIT", "1").strip().lower() not in ("0", "false", "no")
 
 # Async blit: depth 1 so we only care about the most recent frame; drops older pending frame if full.
-_blit_queue = queue.Queue(maxsize=1)
+_BlitTask = tuple[object, bytes, object, bytes]
+_blit_queue: queue.Queue[_BlitTask | None] = queue.Queue(maxsize=1)
 
 
 def _blit_worker() -> None:
     """Background thread: processes both eyes as a single atomic task."""
     while True:
-        task = _blit_queue.get()
+        task: _BlitTask | None = _blit_queue.get()
         if task is None:
             break
 
@@ -73,8 +94,8 @@ _worker_thread.start()
 
 
 def blit_pil_to_both_async(
-    left_eye: object,
-    right_eye: object,
+    left_eye: object | None,
+    right_eye: object | None,
     left_img: object,
     right_img: object | None = None,
     reverse_rows: bool = False,
@@ -105,7 +126,7 @@ def blit_pil_to_both_async(
     try:
         if _blit_queue.full():
             try:
-                _blit_queue.get_nowait()
+                _ = _blit_queue.get_nowait()
             except queue.Empty:
                 pass
         _blit_queue.put_nowait((left_eye, buf_left, right_eye, buf_right))
@@ -132,31 +153,32 @@ def _pil_to_rgb565_numpy(img: object) -> bytes:
     return rgb565_u16.astype(">u2").tobytes()
 
 
-def pil_to_rgb565_buffer(img: object | None) -> bytearray | bytes | None:
+def pil_to_rgb565_buffer(img: _PilImageLike | object | None) -> bytearray | bytes | None:
     """Convert PIL RGB to RGB565 buffer."""
     if img is None or PILImage is None:
         return None
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-    if img.size != (EYE_SIZE, EYE_SIZE):
+    img_pil = cast(_PilImageLike, img)
+    if img_pil.mode != "RGB":
+        img_pil = img_pil.convert("RGB")
+    if img_pil.size != (EYE_SIZE, EYE_SIZE):
         resampling = getattr(PILImage, "Resampling", PILImage)
         resample = getattr(resampling, "LANCZOS", 1)
-        img = img.resize((EYE_SIZE, EYE_SIZE), resample)
+        img_pil = img_pil.resize((EYE_SIZE, EYE_SIZE), resample)
 
     if _HAS_NUMPY and _USE_NUMPY_BLIT:
-        return _pil_to_rgb565_numpy(img)
-    return _pil_to_rgb565_fallback(img)
+        return _pil_to_rgb565_numpy(img_pil)
+    return _pil_to_rgb565_fallback(img_pil)
 
 
-def _pil_to_rgb565_fallback(img: object) -> bytearray:
+def _pil_to_rgb565_fallback(img: _PilImageLike) -> bytearray:
     """Slow fallback without NumPy."""
     img = img.rotate(180)
-    pix = img.load()
+    pix = cast(Any, img.load())  # PIL PixelAccess supports [x, y]
     buf = bytearray(EYE_SIZE * EYE_SIZE * 2)
     for y in range(EYE_SIZE):
         for x in range(EYE_SIZE):
-            r, g, b = pix[x, y]
-            c565 = (r & 0xF8) << 8 | (g & 0xFC) << 3 | (b >> 3)
+            r, g, b = cast(tuple[int, int, int], pix[x, y])
+            c565: int = (r & 0xF8) << 8 | (g & 0xFC) << 3 | (b >> 3)
             offset = (y * EYE_SIZE + x) * 2
             buf[offset : offset + 2] = struct.pack(">H", c565)
     return buf
@@ -196,7 +218,7 @@ def blit_pil_to_both(
 
 def _row_order_outside_in() -> list[int]:
     """Row indices top→bottom then bottom→top so lids appear to close from edges toward center."""
-    order = []
+    order: list[int] = []
     for i in range((EYE_SIZE + 1) // 2):
         order.append(i)
         if EYE_SIZE - 1 - i != i:

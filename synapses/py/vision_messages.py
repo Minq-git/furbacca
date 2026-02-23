@@ -4,9 +4,10 @@ UDP message contracts shared with synapses/ts. Keep in sync when adding fields.
 
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 # --- UDP 5005: Nervous System → Eyes ---
+
 
 @dataclass
 class LookCommand:
@@ -18,14 +19,14 @@ class LookCommand:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "LookCommand":
         return cls(
-            action=data.get("action", "look"),
-            x=float(data.get("x", 0)),
-            y=float(data.get("y", 0)),
-            pupil_mode=str(data.get("pupil_mode", "normal")),
+            action=str(cast(str, data.get("action", "look"))),
+            x=float(cast(int | float, data.get("x", 0))),
+            y=float(cast(int | float, data.get("y", 0))),
+            pupil_mode=str(cast(str, data.get("pupil_mode", "normal"))),
         )
 
     def to_json(self) -> str:
-        out = {"action": self.action, "x": self.x, "y": self.y}
+        out: dict[str, Any] = {"action": self.action, "x": self.x, "y": self.y}
         if self.pupil_mode != "normal":
             out["pupil_mode"] = self.pupil_mode
         return json.dumps(out)
@@ -56,9 +57,9 @@ class EyeTrackingEvent:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "EyeTrackingEvent":
         return cls(
-            event=str(data.get("event", "")),
-            label=data.get("label"),
-            confidence=data.get("confidence"),
-            x=data.get("x"),
-            y=data.get("y"),
+            event=str(cast(str, data.get("event", ""))),
+            label=cast(str | None, data.get("label")),
+            confidence=cast(float | None, data.get("confidence")),
+            x=cast(float | None, data.get("x")),
+            y=cast(float | None, data.get("y")),
         )

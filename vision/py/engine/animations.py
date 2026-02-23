@@ -4,6 +4,7 @@ Each animation is a list of AnimationSegment objects.
 """
 
 import random
+from collections.abc import Callable
 from typing import NamedTuple
 
 # Descriptive labels for pupil modes
@@ -26,7 +27,7 @@ def get_animation(name: str, **kwargs: object) -> list[AnimationSegment]:
     """
     name = (name or "").strip().lower()
 
-    animations_map = {
+    animations_map: dict[str, Callable[..., list[AnimationSegment]]] = {
         "nervous_look": _nervous_look,
         "shiver": _shiver,
         "double_blink": _double_blink,
@@ -63,7 +64,7 @@ def _nervous_look(n_repeats: int | None = None) -> list[AnimationSegment]:
         n_repeats = random.randint(2, 3)
     n_repeats = max(1, min(5, int(n_repeats)))
 
-    segments = []
+    segments: list[AnimationSegment] = []
     for _ in range(n_repeats):
         segments.append(AnimationSegment(0.28, -1.0, 0.0, PUPIL_FOCUSED))  # Left
         segments.append(AnimationSegment(0.28, 1.0, 0.0, PUPIL_FOCUSED))  # Right

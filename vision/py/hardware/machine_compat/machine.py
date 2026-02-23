@@ -5,6 +5,8 @@ Used by russhughes/gc9a01py on Raspberry Pi (spidev + RPi.GPIO).
 
 from __future__ import annotations
 
+from typing import Any
+
 try:
     import spidev
 except ImportError:
@@ -23,10 +25,11 @@ class SPI:
         """baudrate default 10 MHz; display.py passes SPI_BAUDRATE (env, default 60 MHz)."""
         if spidev is None:
             raise RuntimeError("spidev required; install with: pip install spidev (or apt install python3-spidev)")
-        self._spi = spidev.SpiDev()
-        self._spi.open(bus, device)
-        self._spi.mode = 0
-        self._spi.max_speed_hz = baudrate
+        _spi_raw: Any = spidev.SpiDev()
+        _spi_raw.open(bus, device)
+        _spi_raw.mode = 0
+        _spi_raw.max_speed_hz = baudrate
+        self._spi: Any = _spi_raw
 
     # Linux SPI message size limit (e.g. 4096); chunk large writes
     _CHUNK_SIZE = 4096

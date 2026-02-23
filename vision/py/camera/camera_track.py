@@ -1,26 +1,16 @@
 #!/usr/bin/env python3
 """
 Furbacca eye tracking: Picamera2 + IMX500 object detection → UDP "look x y" to eyes.
-
-Runs headless (no preview). Picks one target (prefer "person"), converts center to
-normalized x,y in [-1, 1], and sends JSON {"action": "look", "x": x, "y": y} to the
-eyes (UDP port 5005). Use with system Python and python3-picamera2 on the Pi.
-
-Preferred: use the eye-track script (on/off/run). Examples:
-  eye-track on                    # start in background
-  eye-track run --print-every 30  # foreground, print detections
-  eye-track furbacca.local on    # from Mac: start on Pi via SSH
-
-Or run this module directly:
-  python3 vision/py/camera/camera_track.py
-  python3 vision/py/camera/camera_track.py --print-every 30 --smooth 0.2
 """
+
+from __future__ import annotations
 
 import argparse
 import os
 import socket
 import sys
 import time
+from typing import Any
 
 # Synapses shared contract (UDP message shapes)
 _synapses_py = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "synapses", "py"))
@@ -28,7 +18,7 @@ if _synapses_py not in sys.path:
     sys.path.insert(0, _synapses_py)
 from vision_messages import EyeTrackingEvent, LookCommand  # noqa: E402
 
-# Picamera2 + OpenCV are system-installed (python3-picamera2, python3-opencv) on the Pi
+# Picamera2 + OpenCV are system-installed on the Pi
 try:
     from picamera2 import Picamera2
     from picamera2.devices import IMX500
@@ -47,21 +37,32 @@ NS_EVENTS_PORT = 5006  # nervous system: looking_started / looking_stopped
 # COCO: 0 = person (prefer for tracking)
 PERSON_CLASS_ID = 0
 
+Detection = tuple[float, float, int, float]  # (cx, cy, class_id, confidence)
+Target = tuple[float, float, float, int]  # (cx, cy, conf, cls)
 
-def parse_detections(imx500, picam2, intrinsics, metadata, threshold=0.5):
+
+def parse_detections(
+    imx500: Any,
+    picam2: Any,
+    intrinsics: Any,
+    metadata: Any,
+    threshold: float = 0.5,
+) -> list[Detection]:
     """Return list of (center_x, center_y, class_id, confidence) in ISP output pixel coords."""
     np_outputs = imx500.get_outputs(metadata, add_batch=True)
     if np_outputs is None:
         return []
+    input_w: int
+    input_h: int
     input_w, input_h = imx500.get_input_size()
-    boxes = np_outputs[0][0]
-    scores = np_outputs[1][0]
-    classes = np_outputs[2][0]
+    boxes: Any = np_outputs[0][0]
+    scores: Any = np_outputs[1][0]
+    classes: Any = np_outputs[2][0]
     if getattr(intrinsics, "bbox_normalization", False):
         boxes = boxes / input_h
     if getattr(intrinsics, "bbox_order", "yx") == "xy":
         boxes = boxes[:, [1, 0, 3, 2]]  # to y0,x0,y1,x1 for convert_inference_coords
-    out = []
+    out: list[Detection] = []
     for box, score, cls in zip(boxes, scores, classes):
         if score < threshold:
             continue
@@ -75,19 +76,22 @@ def parse_detections(imx500, picam2, intrinsics, metadata, threshold=0.5):
     return out
 
 
-def pick_target(detections, prefer_class=PERSON_CLASS_ID):
-    """Choose one detection: prefer prefer_class (person), else highest confidence. Returns (cx, cy, conf, cls) or None."""
+def pick_target(
+    detections: list[Detection],
+    prefer_class: int = PERSON_CLASS_ID,
+) -> Target | None:
+    """Choose one detection: prefer prefer_class (person), else highest confidence."""
     if not detections:
         return None
-    person = [d for d in detections if d[2] == prefer_class]
+    person: list[Detection] = [d for d in detections if d[2] == prefer_class]
     if person:
-        best = max(person, key=lambda d: d[3])
+        best: Detection = max(person, key=lambda d: d[3])
     else:
         best = max(detections, key=lambda d: d[3])
     return (best[0], best[1], best[3], best[2])
 
 
-def center_to_normalized(cx, cy, width, height):
+def center_to_normalized(cx: float, cy: float, width: float, height: float) -> tuple[float, float]:
     """Map pixel center (cx, cy) to normalized x, y in [-1, 1]. Center of frame = (0, 0)."""
     if width <= 0 or height <= 0:
         return 0.0, 0.0
@@ -96,24 +100,31 @@ def center_to_normalized(cx, cy, width, height):
     return max(-1.0, min(1.0, nx)), max(-1.0, min(1.0, ny))
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser(description="Furbacca camera tracking: IMX500 → UDP look to eyes")
-    ap.add_argument(
+    _ = ap.add_argument(
         "--model",
         default="/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk",
         help="IMX500 model (.rpk)",
     )
-    ap.add_argument("--host", default="127.0.0.1", help="UDP host for eyes (default 127.0.0.1)")
-    ap.add_argument("--port", type=int, default=UDP_PORT, help=f"UDP port (default {UDP_PORT})")
-    ap.add_argument("--threshold", type=float, default=0.5, help="Detection confidence threshold")
-    ap.add_argument("--smooth", type=float, default=0.25, help="EMA smoothing 0..1 (0=no smooth, 1=no movement)")
-    ap.add_argument("--print-every", type=int, default=0, help="Print detections every N frames (0=off)")
-    ap.add_argument("--no-preview", action="store_true", default=True, help="No display (default on)")
+    _ = ap.add_argument("--host", default="127.0.0.1", help="UDP host for eyes (default 127.0.0.1)")
+    _ = ap.add_argument("--port", type=int, default=UDP_PORT, help=f"UDP port (default {UDP_PORT})")
+    _ = ap.add_argument("--threshold", type=float, default=0.5, help="Detection confidence threshold")
+    _ = ap.add_argument("--smooth", type=float, default=0.25, help="EMA smoothing 0..1 (0=no smooth, 1=no movement)")
+    _ = ap.add_argument("--print-every", type=int, default=0, help="Print detections every N frames (0=off)")
+    _ = ap.add_argument("--no-preview", action="store_true", default=True, help="No display (default on)")
     args = ap.parse_args()
 
+    host: str = str(args.host)
+    port: int = int(args.port)
+    threshold: float = float(args.threshold)
+    smooth: float = float(args.smooth)
+    print_every: int = int(args.print_every)
+    model_path: str = str(args.model)
+
     # IMX500 must be created before Picamera2
-    imx500 = IMX500(args.model)
-    intrinsics = imx500.network_intrinsics
+    imx500: Any = IMX500(model_path)
+    intrinsics: Any = imx500.network_intrinsics
     if not intrinsics:
         intrinsics = NetworkIntrinsics()
         intrinsics.task = "object detection"
@@ -122,8 +133,8 @@ def main():
         sys.exit(1)
     intrinsics.update_with_defaults()
 
-    picam2 = Picamera2(imx500.camera_num)
-    config = picam2.create_preview_configuration(
+    picam2: Any = Picamera2(imx500.camera_num)
+    config: Any = picam2.create_preview_configuration(
         main={"size": (640, 480)},
         controls={"FrameRate": getattr(intrinsics, "inference_rate", 15)},
         buffer_count=6,
@@ -133,43 +144,47 @@ def main():
     if getattr(intrinsics, "preserve_aspect_ratio", False):
         imx500.set_auto_aspect_ratio()
 
+    width: int = 640
+    height: int = 480
     try:
-        main_config = picam2.camera_configuration()
-        main_size = main_config.get("main", {}).get("size", (640, 480))
-        width, height = main_size[0], main_size[1]
+        main_config: Any = picam2.camera_configuration()
+        main_size: Any = main_config.get("main", {}).get("size", (640, 480))
+        if isinstance(main_size, (list, tuple)) and len(main_size) >= 2:
+            width, height = int(main_size[0]), int(main_size[1])
     except Exception:
-        width, height = 640, 480
+        pass
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    labels = getattr(intrinsics, "labels", None) or []
+    labels_raw: Any = getattr(intrinsics, "labels", None)
+    labels: list[str] = list(labels_raw) if labels_raw else []
 
     smooth_x, smooth_y = 0.0, 0.0
     frame = 0
     was_looking = False
     last_looking_at_sent = 0.0  # throttle "looking_at" events to NS (~every 2s)
     print(
-        f"Camera tracking → UDP {args.host}:{args.port} (smooth={args.smooth}, threshold={args.threshold})",
+        f"Camera tracking → UDP {host}:{port} (smooth={smooth}, threshold={threshold})",
         file=sys.stderr,
     )
     print("Ctrl+C to stop.", file=sys.stderr)
 
     try:
         while True:
-            metadata = picam2.capture_metadata()
-            detections = parse_detections(imx500, picam2, intrinsics, metadata, threshold=args.threshold)
+            metadata: Any = picam2.capture_metadata()
+            detections: list[Detection] = parse_detections(imx500, picam2, intrinsics, metadata, threshold=threshold)
             frame += 1
 
-            if args.print_every and frame % args.print_every == 0 and detections:
+            if print_every and frame % print_every == 0 and detections:
                 for cx, cy, cls, conf in detections:
                     label = labels[cls] if cls < len(labels) else str(cls)
                     print(f"  [{frame}] {label} {conf:.2f} at ({cx:.0f}, {cy:.0f})")
 
-            target = pick_target(detections)
+            target: Target | None = pick_target(detections)
             if target is None:
                 if was_looking:
                     try:
                         ev = EyeTrackingEvent(event="looking_stopped")
-                        sock.sendto(ev.to_json().encode(), ("127.0.0.1", NS_EVENTS_PORT))
+                        _ = sock.sendto(ev.to_json().encode(), ("127.0.0.1", NS_EVENTS_PORT))
                     except OSError:
                         pass
                     was_looking = False
@@ -181,19 +196,18 @@ def main():
             if not was_looking:
                 try:
                     ev = EyeTrackingEvent(event="looking_started")
-                    sock.sendto(ev.to_json().encode(), ("127.0.0.1", NS_EVENTS_PORT))
+                    _ = sock.sendto(ev.to_json().encode(), ("127.0.0.1", NS_EVENTS_PORT))
                 except OSError:
                     pass
                 was_looking = True
 
             # EMA smoothing
-            alpha = 1.0 - args.smooth
+            alpha: float = 1.0 - smooth
             smooth_x = alpha * smooth_x + (1 - alpha) * nx
             smooth_y = alpha * smooth_y + (1 - alpha) * ny
 
             look = LookCommand(action="look", x=round(smooth_x, 4), y=round(smooth_y, 4))
-            sock.sendto(look.to_json().encode(), (args.host, args.port))
-            # Notify nervous system what we're looking at (throttled: ~every 2s)
+            _ = sock.sendto(look.to_json().encode(), (host, port))
             try:
                 now = time.monotonic()
                 if now - last_looking_at_sent >= 2.0:
@@ -205,7 +219,7 @@ def main():
                         x=float(int(round(cx))),
                         y=float(int(round(cy))),
                     )
-                    sock.sendto(ev.to_json().encode(), ("127.0.0.1", NS_EVENTS_PORT))
+                    _ = sock.sendto(ev.to_json().encode(), ("127.0.0.1", NS_EVENTS_PORT))
             except OSError:
                 pass
     except KeyboardInterrupt:

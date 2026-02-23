@@ -38,6 +38,8 @@ def load_eye_image() -> object | None:
         path = os.path.join(gdir, name)
         if os.path.isfile(path):
             try:
+                if Image is None:
+                    return None
                 img = Image.open(path).convert("RGB")
                 resampling = getattr(Image, "Resampling", Image)
                 resample = getattr(resampling, "LANCZOS", 1)
@@ -64,6 +66,8 @@ def load_sclera_image(eye_type: str | None = None) -> object | None:
         path = os.path.join(gdir, name)
         if os.path.isfile(path):
             try:
+                if Image is None:
+                    return None
                 img = Image.open(path).convert("RGB")
                 resampling = getattr(Image, "Resampling", Image)
                 resample = getattr(resampling, "LANCZOS", 1)
@@ -90,6 +94,8 @@ def load_iris_image(eye_type: str | None = None) -> object | None:
         path = os.path.join(gdir, name)
         if os.path.isfile(path):
             try:
+                if Image is None:
+                    return None
                 img = Image.open(path).convert("RGB")
                 resampling = getattr(Image, "Resampling", Image)
                 resample = getattr(resampling, "LANCZOS", 1)

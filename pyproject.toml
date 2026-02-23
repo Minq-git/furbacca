@@ -39,7 +39,8 @@ exclude = ["reference"]
 reportImplicitRelativeImport = "none"
 
 # Resolve flat imports under vision/py (e.g. from assets import config in engine/)
-extraPaths = ["vision/py"]
+# and synapses/py for camera_track's vision_messages import
+extraPaths = ["vision/py", "synapses/py"]
 
 # Pi-only or optional deps (picamera2, gc9a01py, spidev, vision_messages) may be missing on Mac
 reportMissingImports = "warning"

@@ -14,11 +14,12 @@ import sys
 import threading
 import time
 from types import FrameType
+from typing import Any, cast
 
 _shutdown_requested = False
 
 
-def _handle_shutdown(signum: int | signal.Signals | None, frame: FrameType | None) -> None:
+def _handle_shutdown(_signum: int | signal.Signals | None, _frame: FrameType | None) -> None:
     global _shutdown_requested
     _shutdown_requested = True
 
@@ -34,6 +35,7 @@ except ImportError:
 import messages  # noqa: E402
 from assets import config, loaders  # noqa: E402
 from engine import animations, blink, render, shapes  # noqa: E402
+from engine.animations import AnimationSegment  # noqa: E402
 from hardware import blit, display  # noqa: E402
 
 # Re-export for callers
@@ -178,7 +180,7 @@ def run_eyes() -> None:
         radius_transition_from = float(relaxed)
         radius_transition_to = float(relaxed)
         animated_blink = blink.AnimatedBlink()
-        animation_segments = []
+        animation_segments: list[AnimationSegment] = []
         animation_start_time = 0.0
         animation_index = 0
         segment_start_x, segment_start_y = 0.0, 0.0
@@ -187,10 +189,10 @@ def run_eyes() -> None:
         last_impulse_at = 0.0
         sleep_close_hold = False  # True when sleep_close triggered; on just_opened we hold closed instead of opening
 
-        signal.signal(signal.SIGINT, _handle_shutdown)
-        signal.signal(signal.SIGTERM, _handle_shutdown)
+        _ = signal.signal(signal.SIGINT, _handle_shutdown)
+        _ = signal.signal(signal.SIGTERM, _handle_shutdown)
 
-        def _start_animation(name, replace=False):
+        def _start_animation(name: str, replace: bool = False) -> None:
             nonlocal animation_segments, animation_start_time, animation_index
             nonlocal segment_start_x, segment_start_y, segment_end_x, segment_end_y
             nonlocal last_blink_triggered_segment_index
@@ -217,8 +219,9 @@ def run_eyes() -> None:
             while True:
                 try:
                     data, _ = sock.recvfrom(config.UDP_RECV_SIZE)
-                    msg = json.loads(data.decode())
-                    action = msg.get("action")
+                    raw: dict[str, object] = json.loads(data.decode())
+                    msg = raw
+                    action = str(msg.get("action", "look"))
                     if action == "eyes_open":
                         lids_held_closed = False
                         has_opened_once = True
@@ -244,13 +247,15 @@ def run_eyes() -> None:
                         if not lids_held_closed and not animated_blink.is_closed:
                             default_duration = getattr(config, "SLEEP_CLOSE_DURATION_S", 1.0)
                             min_duration = getattr(config, "SLEEP_CLOSE_MIN_S", 0.2)
-                            duration_s = max(min_duration, float(msg.get("duration_s", default_duration)))
+                            duration_s = max(
+                                min_duration, float(cast(float | int, msg.get("duration_s", default_duration)))
+                            )
                             sleep_close_hold = True
                             animated_blink.trigger_sleep(now, duration_s)
                     elif action == "warmup":
                         s = msg.get("step")
                         if s is not None:
-                            warmup_step = max(0, min(config.EYE_WARMUP_STEPS - 1, int(s)))
+                            warmup_step = max(0, min(config.EYE_WARMUP_STEPS - 1, int(cast(int | str, s))))
                     elif action == "blink":
                         if not lids_held_closed and not animation_segments and animated_blink.can_trigger(now):
                             print("  👁  UDP: blink")
@@ -258,29 +263,33 @@ def run_eyes() -> None:
                     elif action == "look":
                         tx, ty = msg.get("x"), msg.get("y")
                         if tx is not None:
-                            target_x = max(config.LOOK_CLAMP_MIN, min(config.LOOK_CLAMP_MAX, float(tx)))
+                            target_x = max(
+                                config.LOOK_CLAMP_MIN, min(config.LOOK_CLAMP_MAX, float(cast(float | int, tx)))
+                            )
                         if ty is not None:
-                            target_y = max(config.LOOK_CLAMP_MIN, min(config.LOOK_CLAMP_MAX, float(ty)))
+                            target_y = max(
+                                config.LOOK_CLAMP_MIN, min(config.LOOK_CLAMP_MAX, float(cast(float | int, ty)))
+                            )
                         last_look_time, focus_until = now, now + config.FOCUS_HOLD_S
                     elif action == "set_eye_shape":
-                        shape = (msg.get("shape") or "round").strip().lower()
+                        shape = str(msg.get("shape") or "round").strip().lower()
                         config.set_eye_shape(shape)
                         print(messages.get("eyes", "eye_shape", shape=config.get_eye_shape()))
                     elif action == "set_eye_type":
-                        eye_type = (msg.get("type") or msg.get("eye_type") or "default").strip().lower()
+                        eye_type = str(msg.get("type") or msg.get("eye_type") or "default").strip().lower()
                         config.set_eye_type(eye_type)
                         cached_eye_base_240 = render.build_eye_base_sclera_iris()
                         relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
                         pupil_radius_current = float(relaxed)
                         print(messages.get("eyes", "eye_type", type=config.get_eye_type()))
                     elif action == "cycle_eye_type":
-                        config.cycle_eye_type()
+                        _ = config.cycle_eye_type()
                         cached_eye_base_240 = render.build_eye_base_sclera_iris()
                         relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
                         pupil_radius_current = float(relaxed)
                         print(messages.get("eyes", "eye_type", type=config.get_eye_type()))
                     elif action == "animation":
-                        anim_name = (msg.get("name") or "").strip().lower()
+                        anim_name = str(msg.get("name") or "").strip().lower()
                         replace = msg.get("replace") is True
                         if anim_name:
                             _start_animation(anim_name, replace=replace)
@@ -322,7 +331,7 @@ def run_eyes() -> None:
 
             # --- Animation Segment Processing (Readable) ---
             if animation_segments:
-                seg = animation_segments[animation_index]
+                seg: AnimationSegment = animation_segments[animation_index]
                 # Programmed blink: segment can request a blink even during animation (no blocker)
                 if (
                     getattr(seg, "trigger_blink", False)
@@ -348,7 +357,7 @@ def run_eyes() -> None:
                         last_blink_triggered_segment_index = config.SEGMENT_INDEX_NONE
                     else:
                         segment_start_x, segment_start_y = pupil_x, pupil_y
-                        next_seg = animation_segments[animation_index]
+                        next_seg: AnimationSegment = animation_segments[animation_index]
 
                         segment_end_x, segment_end_y = next_seg.x, next_seg.y
 
@@ -384,11 +393,11 @@ def run_eyes() -> None:
             relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
 
             if animation_segments and animation_index < len(animation_segments):
-                seg = animation_segments[animation_index]
+                current_seg: AnimationSegment = animation_segments[animation_index]
                 # Check for pupil_mode override in the current segment
-                if seg.pupil_mode == "wide":
+                if current_seg.pupil_mode == "wide":
                     pupil_radius_target = wide
-                elif seg.pupil_mode == "focused":
+                elif current_seg.pupil_mode == "focused":
                     pupil_radius_target = focused
                 else:
                     pupil_radius_target = relaxed
@@ -453,7 +462,7 @@ def run_eyes() -> None:
                     overlay_r = render.render_blink_overlay(mirror=True)
                     if overlay_l and overlay_r and np is not None:
 
-                        def _composite_overlay(frame, overlay_pil):
+                        def _composite_overlay(_frame: object, overlay_pil: object) -> object:
                             assert np is not None
                             ov = np.array(overlay_pil, dtype=np.uint8)
                             from PIL import Image
@@ -468,15 +477,15 @@ def run_eyes() -> None:
                     elif overlay_l and overlay_r:
                         from PIL import Image
 
-                        pil_frame = (
+                        pil_frame: Any = (
                             Image.fromarray(eye_frame)
                             if (np is not None and isinstance(eye_frame, np.ndarray))
                             else eye_frame
                         )
-                        comp_l = pil_frame.copy()
-                        comp_l.paste(overlay_l, (0, 0))  # pyright: ignore[reportArgumentType]
-                        comp_r = pil_frame.copy()
-                        comp_r.paste(overlay_r, (0, 0))  # pyright: ignore[reportArgumentType]
+                        comp_l = cast(Any, pil_frame).copy()
+                        _ = cast(Any, comp_l).paste(overlay_l, (0, 0))  # pyright: ignore[reportArgumentType]
+                        comp_r = cast(Any, pil_frame).copy()
+                        _ = cast(Any, comp_r).paste(overlay_r, (0, 0))  # pyright: ignore[reportArgumentType]
                         blit.blit_pil_to_both_async(
                             left_eye, right_eye, _apply_eye_shape_left(comp_l), _apply_eye_shape_right(comp_r)
                         )
@@ -485,7 +494,7 @@ def run_eyes() -> None:
                 overlay_r = render.render_blink_overlay(mirror=True)
                 if overlay_l and overlay_r and np is not None:
 
-                    def _composite_overlay(frame, overlay_pil):
+                    def _composite_overlay(_frame: object, overlay_pil: object) -> object:
                         assert np is not None
                         ov = np.array(overlay_pil, dtype=np.uint8)
                         from PIL import Image
@@ -509,10 +518,10 @@ def run_eyes() -> None:
                         if (np is not None and isinstance(eye_frame, np.ndarray))
                         else eye_frame
                     )
-                    comp_l = pil_frame.copy()
-                    comp_l.paste(overlay_l, (0, 0))  # pyright: ignore[reportArgumentType]
-                    comp_r = pil_frame.copy()
-                    comp_r.paste(overlay_r, (0, 0))  # pyright: ignore[reportArgumentType]
+                    comp_l = cast(Any, pil_frame).copy()
+                    _ = cast(Any, comp_l).paste(overlay_l, (0, 0))  # pyright: ignore[reportArgumentType]
+                    comp_r = cast(Any, pil_frame).copy()
+                    _ = cast(Any, comp_r).paste(overlay_r, (0, 0))  # pyright: ignore[reportArgumentType]
                     blit.blit_pil_to_both_async(
                         left_eye,
                         right_eye,

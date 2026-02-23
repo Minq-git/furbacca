@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
+from numpy.typing import NDArray
 
 try:
     from PIL import Image
@@ -21,13 +22,13 @@ from assets import config, loaders
 
 from engine import shapes
 
-# Internal caches
-_texture_arrays: dict[str, dict[str, np.ndarray | None]] = {}
-_gaze_cache_numpy: dict[tuple[str, int, int], np.ndarray] = {}
+# Internal caches (uint8 RGB arrays)
+_texture_arrays: dict[str, dict[str, NDArray[np.uint8] | None]] = {}
+_gaze_cache_numpy: dict[tuple[str, int, int], NDArray[np.uint8]] = {}
 _blink_overlay_cache: dict[tuple[str, bool], object] = {}
 
 
-def _get_textures_numpy(eye_type: str) -> dict[str, np.ndarray | None]:
+def _get_textures_numpy(eye_type: str) -> dict[str, NDArray[np.uint8] | None]:
     """Retrieve or load eye textures as NumPy arrays."""
     if eye_type not in _texture_arrays:
         s_img = loaders.load_sclera_image(eye_type)
@@ -40,13 +41,13 @@ def _get_textures_numpy(eye_type: str) -> dict[str, np.ndarray | None]:
 
 
 def _sample_texture_spherical_numpy(
-    tex_arr: np.ndarray,
+    tex_arr: NDArray[np.uint8],
     cx: float,
     cy: float,
     r_max: float,
     out_shape: tuple[int, int],
     invert_v: bool = False,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[NDArray[np.int32], NDArray[np.int32], NDArray[np.bool_]]:
     """
     Vectorized spherical sampling using NumPy indexing.
     Returns (sx, sy) index arrays and a validity mask.
@@ -84,7 +85,7 @@ def build_eye_base_sclera_iris_at_center(
     pole_y: float,
     eye_type: str | None = None,
     size: int | None = None,
-) -> np.ndarray:
+) -> NDArray[np.uint8]:
     """Builds the eyeball (sclera + iris) as a NumPy array."""
     eye_type = eye_type or config.get_eye_type()
     size = size or config.EYE_SIZE
@@ -123,15 +124,15 @@ def build_eye_base_sclera_iris() -> object | None:
     Returns the eyeball at the default center (EYE_SIZE // 2) as a PIL image.
     """
     center = config.EYE_SIZE // 2
-    # Call the new centered NumPy function
     arr = build_eye_base_sclera_iris_at_center(center, center)
     if arr is None:
         return None
-    # Convert to PIL so main_eyes.py can validate HAS_PIL and basic rendering
+    if Image is None:
+        return None
     return Image.fromarray(arr)
 
 
-def _get_eye_base_cached_numpy(px: int, py: int, force_type: str | None = None) -> np.ndarray:
+def _get_eye_base_cached_numpy(px: int, py: int, force_type: str | None = None) -> NDArray[np.uint8]:
     """Retrieves quantized gaze base from cache as a NumPy array."""
     cx, cy = config.EYE_SIZE // 2, config.EYE_SIZE // 2
     step = config.EYE_GAZE_CACHE_STEP
@@ -153,7 +154,7 @@ def _get_eye_base_cached_numpy(px: int, py: int, force_type: str | None = None) 
     return _gaze_cache_numpy[key].copy()
 
 
-def _draw_pupil_numpy(base_arr: np.ndarray, px: float, py: float, r: float, eye_type: str) -> None:
+def _draw_pupil_numpy(base_arr: NDArray[np.uint8], px: float, py: float, r: float, eye_type: str) -> None:
     """Vectorized pupil mask."""
     h, w = base_arr.shape[:2]
     y_grid, x_grid = np.ogrid[:h, :w]
@@ -169,6 +170,8 @@ def render_spinner(angle_rad: float, mirror: bool = True, color_phase: float = 0
     Vectorized NumPy spinner: smooth rotating ring with a gap.
     color_phase in [0, 1]: 0 = beige, 1 = green (one-way transition over startup).
     """
+    if Image is None:
+        return None
     size = config.EYE_SIZE
     # 1. Create coordinate grid
     y_idx, x_idx = np.indices((size, size), dtype=np.float32)
@@ -238,6 +241,7 @@ def render_blink_overlay(mirror: bool = False) -> object | None:
     """
     if not HAS_PIL:
         return None
+    assert Image is not None  # set when HAS_PIL is True
 
     from PIL import ImageDraw
 
@@ -267,12 +271,12 @@ def render_blink_overlay(mirror: bool = False) -> object | None:
 
 
 def render_animated_frame(
-    cached_eye_base_240: object | None,
+    _cached_eye_base_240: object | None,
     pupil_x: float,
     pupil_y: float,
-    blink_state: str = "open",
+    _blink_state: str = "open",
     pupil_radius: int | float | None = None,
-) -> object:
+) -> object | None:
     """Final render: Everything is NumPy until the final PIL conversion for the UI/shapes stack."""
     cx, cy = config.EYE_SIZE // 2, config.EYE_SIZE // 2
     eye_type = config.get_eye_type()
@@ -289,6 +293,8 @@ def render_animated_frame(
     _draw_pupil_numpy(base_arr, px * scale_build, py * scale_build, r * scale_build, eye_type)
 
     # 4. Final conversion to PIL only for compatibility with the blit/shape pipeline
+    if Image is None:
+        return None
     result = Image.fromarray(base_arr)
 
     if config.EYE_BUILD_SIZE != config.EYE_SIZE:
@@ -312,7 +318,7 @@ def preload_all_types(skip_type: str | None = None) -> None:
         if skip_type and etype == skip_type:
             continue
         try:
-            _get_textures_numpy(etype)
-            _get_eye_base_cached_numpy(center, center, force_type=etype)
+            _ = _get_textures_numpy(etype)
+            _ = _get_eye_base_cached_numpy(center, center, force_type=etype)
         except Exception:
             pass

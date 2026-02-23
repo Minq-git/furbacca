@@ -9,12 +9,13 @@ from __future__ import annotations
 import math
 
 import numpy as np
+from numpy.typing import NDArray
 
 # Cache for NumPy boolean masks: (shape_name, size, mirror) -> bool array
-_mask_cache_np: dict[tuple[str, int, bool], np.ndarray] = {}
+_mask_cache_np: dict[tuple[str, int, bool], NDArray[np.bool_]] = {}
 
 
-def get_shape_mask_numpy(shape_name: str | None, size: int, mirror: bool = False) -> np.ndarray:
+def get_shape_mask_numpy(shape_name: str | None, size: int, mirror: bool = False) -> NDArray[np.bool_]:
     """
     Returns a boolean NumPy mask: True inside the shape, False outside.
     Algebraic vectorized implementation for high-speed masking.
@@ -142,8 +143,8 @@ def get_shape_mask_numpy(shape_name: str | None, size: int, mirror: bool = False
 
 
 def apply_shape_mask_numpy(
-    frame_arr: np.ndarray | None, shape_name: str | None = None, mirror: bool = False
-) -> np.ndarray | None:
+    frame_arr: NDArray[np.uint8] | None, shape_name: str | None = None, mirror: bool = False
+) -> NDArray[np.uint8] | None:
     if frame_arr is None:
         return None
     size = frame_arr.shape[0]

@@ -9,9 +9,17 @@ from __future__ import annotations
 import os
 import sys
 import time
+from typing import Any, Protocol
 
 # vision/py (parent of hardware/) for gc9a01py path
 _vision_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+class _Gc9a01Display(Protocol):
+    """Minimal display protocol for gc9a01py panel reinit."""
+
+    def _write(self, *args: object) -> None: ...
+    def rotation(self, value: int) -> None: ...
 
 
 # Inject MicroPython compat before importing gc9a01py
@@ -26,15 +34,15 @@ def _install_compat() -> None:
     sys.modules["ustruct"] = __import__("struct")
     # time.sleep_ms
     _sleep = time.sleep
-    setattr(time, "sleep_ms", lambda ms: _sleep(ms / 1000.0))
+    _ = setattr(time, "sleep_ms", lambda ms: _sleep(ms / 1000.0))
 
 
 def _sleep_ms(ms: float) -> None:
     """CPython compat for time.sleep_ms (set by _install_compat when running)."""
-    getattr(time, "sleep_ms", lambda m: time.sleep(m / 1000.0))(ms)
+    _ = getattr(time, "sleep_ms", lambda m: time.sleep(m / 1000.0))(ms)
 
 
-def _reinit_gc9a01_registers(disp: object) -> None:
+def _reinit_gc9a01_registers(disp: _Gc9a01Display) -> None:
     """Re-send GC9A01 init register sequence (no RST). Used for left panel after right's hard_reset() resets both."""
     disp._write(0xEF)
     disp._write(0xEB, b"\x14")
@@ -90,7 +98,7 @@ def _reinit_gc9a01_registers(disp: object) -> None:
     disp.rotation(4)
 
 
-def reinit_panel(disp: object | None) -> None:
+def reinit_panel(disp: _Gc9a01Display | None) -> None:
     """Re-send GC9A01 register sequence (no RST). Use when a panel blacked out (e.g. shared SPI glitch)."""
     if disp is None:
         return
@@ -122,6 +130,7 @@ def init_displays(swap_left_right: bool = False) -> tuple[object | None, object 
     and will conflict, causing garbled output.
     Returns (left_eye, right_eye).
     """
+    _ = swap_left_right  # reserved for future left/right swap
     _install_compat()
 
     if os.path.exists("/dev/fb1"):
@@ -152,22 +161,22 @@ def init_displays(swap_left_right: bool = False) -> tuple[object | None, object 
     backlight = None
 
     try:
-        from gc9a01py import GC9A01
+        from gc9a01py import GC9A01  # type: ignore[reportMissingImports]
     except ImportError as e:
         print(f"⚠ Could not import gc9a01py: {e}")
         _write_display_status(False)
         return None, None
 
     try:
-        left_eye = GC9A01(spi_left, dc=dc, cs=None, reset=reset, backlight=backlight, rotation=4)
+        left_eye: Any = GC9A01(spi_left, dc=dc, cs=None, reset=reset, backlight=backlight, rotation=4)
         _sleep_ms(20)
-        right_eye = GC9A01(spi_right, dc=dc, cs=None, reset=reset, backlight=None, rotation=4)
+        right_eye: Any = GC9A01(spi_right, dc=dc, cs=None, reset=reset, backlight=None, rotation=4)
         # Both panels share RST: right's init may reset both. Give right time to finish init, then re-init left.
         _sleep_ms(80)
         _reinit_gc9a01_registers(left_eye)
         _sleep_ms(30)
-        if left_eye.backlight:
-            left_eye.backlight.value(1)
+        if getattr(left_eye, "backlight", None) is not None:
+            getattr(left_eye.backlight, "value", lambda _: None)(1)
         _write_display_status(True)
         return left_eye, right_eye
     except Exception as e:
