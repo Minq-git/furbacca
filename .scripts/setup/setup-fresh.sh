@@ -295,8 +295,11 @@ if [[ "$UNAME_S" == "Linux" ]]; then
     else
       echo "Wi‑Fi looks NetworkManager-managed, but no *.nmconnection file was found in /etc/NetworkManager/system-connections."
       echo "To identify the active profile: sudo nmcli -f NAME,TYPE,DEVICE connection show --active"
-      echo "Then either export it (preferred): sudo nmcli connection export \"<NAME>\" $BOOT_PARTITION/NetworkManager-connection.nmconnection"
-      echo "Or copy its backing file: sudo nmcli -g connection.filename connection show \"<NAME>\"  (then sudo cp that path to $BOOT_PARTITION/NetworkManager-connection.nmconnection)"
+      echo "Some nmcli versions do not support discovering the backing keyfile path (e.g. no connection.filename) or exporting Wi‑Fi profiles."
+      echo "If your active connection name starts with netplan-wlan0-..., back up netplan instead:"
+      echo "  sudo cp /etc/netplan/*.yaml $BOOT_PARTITION/"
+      echo "Otherwise, if you have any *.nmconnection files, copy one to:"
+      echo "  $BOOT_PARTITION/NetworkManager-connection.nmconnection"
     fi
   else
     echo "Skipping Wi‑Fi backup (no wpa_supplicant.conf or NetworkManager connections). When Wi‑Fi is configured, backup with: sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /boot/   or (NetworkManager): sudo cp /etc/NetworkManager/system-connections/*.nmconnection /boot/NetworkManager-connection.nmconnection"
