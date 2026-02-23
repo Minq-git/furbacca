@@ -113,6 +113,31 @@ npm run sync-sounds
 ```
 **`npm start`** runs only **`tsc`** (no sound copy) so wake-furbacca starts quickly. Sounds are copied once by **setup-fresh.sh** on the Pi; after a fresh clone elsewhere, run **`npm run sync-sounds`** once (or **`npm run build:full`** to build + copy). **4 Ω 2W (two 8 Ω 1W in parallel):** software + ALSA capped at 60% max gain so we stay within 2W and avoid TP4056 overheating. **`npm run generate-test-tone`** generates **sounds/assets/test_tone_1w8ohm.wav** (100 Hz–4 kHz steps) for frequency response checks. Run with `npm start` (or `sudo npm start` for GPIO). See **Starting the services** above.
 
+### Linting & formatting (Biome)
+The project uses [Biome](https://biomejs.dev/) for formatting and linting TypeScript and Python. Use it for all formatting and safe fixes so style stays consistent.
+
+```bash
+# Format all files
+npx @biomejs/biome format --write
+
+# Format specific files
+npx @biomejs/biome format --write <files>
+
+# Lint files and apply safe fixes to all files
+npx @biomejs/biome lint --write
+
+# Lint files and apply safe fixes to specific files
+npx @biomejs/biome lint --write <files>
+
+# Format, lint, and organize imports of all files
+npx @biomejs/biome check --write
+
+# Format, lint, and organize imports of specific files
+npx @biomejs/biome check --write <files>
+```
+
+Config: **biome.json** (VCS-aware, uses `.gitignore`; excludes **dist**).
+
 ### Matter: Furbacca as a device
 Matter is **on by default** when you run `wake-furbacca` (requires **64-bit Node** on the Pi, e.g. `node -p "process.arch"` → `arm64`). Furbacca appears as one Matter device with:
 - **Endpoint 1 — Extended Color Light (eyes):** On/off, brightness, color → impulse, animations, eye type (human/dragon/demon). Identify/triggerEffect → blinks and eye effects.
