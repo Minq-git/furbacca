@@ -55,7 +55,7 @@ case "$ACTION" in
         echo "If already installed, try: FURBACCA_CAMERA_PYTHON=/usr/bin/python3.12 $0 on   (or python3.11)"
         exit 1
       fi
-      # Clear PYTHONPATH so reference/picamera2 or other paths don't shadow system python3-picamera2
+      # Clear PYTHONPATH so reference/picamera2 doesn't shadow system python3-picamera2
       ( cd "$REPO_DIR" && env -u PYTHONPATH nohup "$PYTHON3" vision/py/camera_track.py >> /tmp/eye-track.log 2>&1 ) &
       PID=$!
       echo "Eye tracking starting (PID $PID). Log: /tmp/eye-track.log"
@@ -99,7 +99,7 @@ case "$ACTION" in
     if [[ "$(uname -s)" == "Linux" ]]; then
       PYTHON3="$(find_picamera2_python)"
       [[ -z "$PYTHON3" ]] && { echo "No Python with picamera2. Install: sudo apt install -y python3-picamera2"; exit 1; }
-      # Run from repo root; clear PYTHONPATH so reference/picamera2 doesn't shadow system python3-picamera2
+      # Run from repo root
       cd "$REPO_DIR" && exec env -u PYTHONPATH "$PYTHON3" vision/py/camera_track.py "$@"
     else
       PYTHON3="${FURBACCA_CAMERA_PYTHON:-python3}"

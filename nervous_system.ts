@@ -390,7 +390,7 @@ console.log(substitute(msg.nervous_system.voice_ready, { card: process.env.FURBA
 if (process.platform === "linux" && (process.env.FURBACCA_EYE_TRACK ?? "1") !== "0") {
   console.log(msg.nervous_system.eye_tracker_starting);
 }
-initAudio(); // volume/no-control message once at startup so first head touch only logs "Playing giggle"
+initAudio(); // set ALSA volume once at startup (or no-op if FURBACCA_SKIP_AMIXER=1)
 if (matterEnabled) console.log(msg.nervous_system.matter_lobe_enabled);
 if (chipToolNodeId) console.log(substitute(msg.nervous_system.chip_tool_belly, { nodeId: chipToolNodeId, endpoint: chipToolEndpoint }));
 if (!headHw.ok && headHw.message) console.log(substitute(msg.nervous_system.head_touch_error, { message: headHw.message }));
