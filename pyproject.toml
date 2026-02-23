@@ -1,0 +1,30 @@
+[tool.ruff]
+# Set line length slightly longer (120) for math-heavy NumPy arrays
+line-length = 120
+# Debian Trixie on Pi uses modern Python
+target-version = "py311"
+
+[tool.ruff.lint]
+# Enable standard rules + import sorting + NumPy + Modern syntax upgrades
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes (unused variables/imports)
+    "I",   # isort (import sorting)
+    "NPY", # NumPy-specific rules
+    "UP"   # pyupgrade (modernize syntax)
+]
+
+# We ignore E501 (line too long) so the linter doesn't yell at you 
+# if a specific math formula in shapes.py needs to be on one line.
+ignore = ["E501"]
+
+[tool.ruff.format]
+# Standard formatting style
+quote-style = "double"
+indent-style = "space"
+
+[tool.basedpyright]
+# Use project venv so numpy, PIL, etc. resolve (reportMissingImports)
+venvPath = "."
+venv = "env"

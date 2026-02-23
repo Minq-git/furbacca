@@ -37,9 +37,9 @@ def _blit_worker():
         task = _blit_queue.get()
         if task is None:
             break
-        
+
         l_handle, l_buf, r_handle, r_buf = task
-        
+
         # Shared SPI bus: blit left then right sequentially. Use separate try/except so one
         # failing eye (e.g. SPI busy, wiring) doesn't skip the other — fixes "only one eye" updates.
         try:
@@ -93,7 +93,7 @@ def _pil_to_rgb565_numpy(img):
     """Fast path: whole-image RGB565 via NumPy without redundant copies."""
     arr = np.array(img, dtype=np.uint8)
     flipped_view = np.flip(arr, axis=(0, 1))
-    
+
     if _NUMPY_SWAP_RB:
         r = flipped_view[:, :, 2].astype(np.uint16)
         g = flipped_view[:, :, 1].astype(np.uint16)
@@ -115,7 +115,7 @@ def pil_to_rgb565_buffer(img):
     if img.size != (EYE_SIZE, EYE_SIZE):
         resample = getattr(PILImage, "Resampling", PILImage).LANCZOS if hasattr(PILImage, "Resampling") else PILImage.LANCZOS
         img = img.resize((EYE_SIZE, EYE_SIZE), resample)
-        
+
     if _HAS_NUMPY and _USE_NUMPY_BLIT:
         return _pil_to_rgb565_numpy(img)
     return _pil_to_rgb565_fallback(img)
@@ -144,7 +144,7 @@ def blit_pil_to_both(left_eye, right_eye, left_img, right_img=None, reverse_rows
     buf_right = pil_to_rgb565_buffer(actual_right)
     if buf_right is None:
         buf_right = buf_left
-        
+
     if not reverse_rows and not outside_in and not inside_out and partial_rows is None:
         if left_eye is not None:
             left_eye.blit_buffer(buf_left, 0, 0, EYE_SIZE, EYE_SIZE)

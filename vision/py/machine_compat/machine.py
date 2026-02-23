@@ -2,7 +2,6 @@
 CPython compat for MicroPython machine.SPI and machine.Pin.
 Used by russhughes/gc9a01py on Raspberry Pi (spidev + RPi.GPIO).
 """
-import time
 
 try:
     import spidev
