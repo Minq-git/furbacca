@@ -1,8 +1,8 @@
 import * as dgram from "node:dgram";
 
-import { msg, substitute } from "../../messages.js";
-import type { EyeTrackingEvent } from "../../synapses/ts/vision_messages.js";
-import type { EyeBridge } from "../../vision/ts/eye_bridge.js";
+import { msg, substitute } from "../../../messages.js";
+import type { EyeTrackingEvent } from "../../../synapses/ts/vision_messages.js";
+import type { EyeBridge } from "../../../vision/ts/eye_bridge.js";
 
 /** UDP port for local events (e.g. eye-track.sh notifies when tracking starts/stops). */
 const NS_EVENTS_PORT = 5006;
@@ -91,3 +91,4 @@ export class VisualCortex {
 		});
 	}
 }
+

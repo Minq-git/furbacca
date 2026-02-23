@@ -21,7 +21,7 @@ This doc summarizes the [Raspberry Pi AI Camera documentation](https://www.raspb
 ### 1.3 Existing apps we can use
 
 | App / API | Use |
-|-----------|-----|
+| ----------- | ----- |
 | **rpicam-hello** | Live viewfinder with object detection or pose overlay; good for quick tests. |
 | **rpicam-vid** | Record video with detection overlays. |
 | **Picamera2** (Python) | Full control in Python: start camera, get frames + metadata, read `imx500.get_outputs(metadata)` for boxes/scores/classes or pose keypoints. Best fit for a **Furbacca camera process** that streams results (e.g. UDP) to the nervous system. |
@@ -71,20 +71,26 @@ So: **build/convert on a powerful machine; package RPK on the Pi.** Pre-built mo
 
 - **Model:** MobileNet SSD (pre-packaged). Config: `/usr/share/rpi-camera-assets/imx500_mobilenet_ssd.json`.
 - **rpicam-hello (quick test):**
+
   ```bash
   rpicam-hello -t 0s --post-process-file /usr/share/rpi-camera-assets/imx500_mobilenet_ssd.json --viewfinder-width 1920 --viewfinder-height 1080 --framerate 30
   ```
+
 - **Picamera2:** The demo script lives in the picamera2 repo. Clone it, install deps, then run from the repo root:
+
   ```bash
   git clone https://github.com/raspberrypi/picamera2.git ~/picamera2
   cd ~/picamera2
   sudo apt install -y python3-opencv python3-munkres   # if not already
   python examples/imx500/imx500_object_detection_demo.py --model /usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk
   ```
+
   **Headless (no display / GC9A01 eyes only):** Add **`--no-preview`** so the demo doesn’t try to use DRM and crash with “Failed to reserve DRM plane”:
+
   ```bash
   python examples/imx500/imx500_object_detection_demo.py --model /usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk --no-preview
   ```
+
   (Picamera2 is usually installed system-wide on Pi; if the script fails with import errors, install with `sudo apt install -y python3-picamera2` or use the repo’s Python path.)
 - **Output:** Bounding boxes + confidence. Filter by class (e.g. “person”) and take the largest or highest-confidence box as “target” for tracking.
 
@@ -92,9 +98,11 @@ So: **build/convert on a powerful machine; package RPK on the Pi.** Pre-built mo
 
 - **Model:** PoseNet or HigherHRNet (pre-packaged). Config: `/usr/share/rpi-camera-assets/imx500_posenet.json`.
 - **rpicam-hello:**
+
   ```bash
   rpicam-hello -t 0s --post-process-file /usr/share/rpi-camera-assets/imx500_posenet.json --viewfinder-width 1920 --viewfinder-height 1080 --framerate 30
   ```
+  
 - **Picamera2:** e.g. `imx500_pose_estimation_higherhrnet_demo.py`.
 - **Output:** Keypoints (e.g. nose, eyes, shoulders). Use a central point (e.g. nose or mid-torso) as the tracking target.
 

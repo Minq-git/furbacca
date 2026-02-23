@@ -8,7 +8,7 @@
  * so the custom Identify server shares the SDK's Behavior prototype chain (fixes "is not a Behavior.Type" on Pi).
  */
 import { Identify } from "@matter/types/clusters/identify";
-import type { EyeBridge } from "../../vision/ts/eye_bridge.js";
+import type { EyeBridge } from "../../../vision/ts/eye_bridge.js";
 
 /** Environment key: set node.env.set(EyeBridgeForIdentify, eyes) before adding the eye endpoint. */
 export const EyeBridgeForIdentify = {
@@ -63,3 +63,4 @@ export function createFurbaccaExtendedColorLight(
 
 	return ExtendedColorLightDeviceDefinition.with(FurbaccaIdentifyServer);
 }
+

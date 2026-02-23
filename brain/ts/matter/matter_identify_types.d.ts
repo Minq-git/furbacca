@@ -18,3 +18,4 @@ declare module "@matter/types/clusters/identify" {
 		}
 	}
 }
+

@@ -14,9 +14,9 @@
 import * as dgram from "node:dgram";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { msg, substitute } from "../../messages.js";
-import type { TouchSenses } from "../../senses/touch.js";
-import type { EyeBridge } from "../../vision/ts/eye_bridge.js";
+import { msg, substitute } from "../../../messages.js";
+import type { TouchSenses } from "../../../senses/touch.js";
+import type { EyeBridge } from "../../../vision/ts/eye_bridge.js";
 
 const MATTER_UDP_PORT = 5540;
 const MATTER_STARTUP_TIMEOUT_MS = 90_000;
@@ -28,7 +28,7 @@ const CORRUPT_GENERAL_DIAGNOSTICS_KEYS = [
 ];
 
 /** Matter storage in repo so factory reset (rm -rf .matter) clears commissioning. Anchored to __dirname so path is stable under systemd (WorkingDirectory may differ). */
-const REPO_ROOT = path.resolve(__dirname, "../../.."); // dist/brain/ts → repo root
+const REPO_ROOT = path.resolve(__dirname, "../../../.."); // dist/brain/ts/matter → repo root
 function getMatterDir(): string {
 	return path.join(REPO_ROOT, ".matter");
 }
@@ -521,3 +521,4 @@ export class MatterLobe {
 		await Promise.race([doStart(), timeoutPromise]);
 	}
 }
+

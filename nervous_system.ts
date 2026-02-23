@@ -1,6 +1,6 @@
-import { startMatterIfEnabled } from "./brain/ts/matter_boot.js";
-import { Reflexes } from "./brain/ts/reflexes.js";
-import { VisualCortex } from "./brain/ts/visual_cortex.js";
+import { Reflexes } from "./brain/ts/cortex/reflexes.js";
+import { VisualCortex } from "./brain/ts/cortex/visual_cortex.js";
+import { startMatterIfEnabled } from "./brain/ts/matter/matter_boot.js";
 import { Brainstem } from "./homeostasis/brainstem.js";
 import { msg, substitute } from "./messages.js";
 import { TouchSenses } from "./senses/touch";

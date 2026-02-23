@@ -1,7 +1,7 @@
 import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import type { Reflexes } from "../brain/ts/reflexes.js";
+import type { Reflexes } from "../brain/ts/cortex/reflexes.js";
 import { msg } from "../messages.js";
 import { TouchSenses } from "../senses/touch";
 import type { EyeBridge } from "../vision/ts/eye_bridge.js";

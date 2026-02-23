@@ -1,15 +1,15 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 
-import { msg, substitute } from "../../messages.js";
-import { monitorMotion } from "../../senses/motion.js";
+import { msg, substitute } from "../../../messages.js";
+import { monitorMotion } from "../../../senses/motion.js";
 import {
 	type TouchCallback,
 	type TouchSenses,
 	type TouchSensor,
 	VIBE_BCM,
-} from "../../senses/touch";
-import type { EyeBridge } from "../../vision/ts/eye_bridge.js";
+} from "../../../senses/touch";
+import type { EyeBridge } from "../../../vision/ts/eye_bridge.js";
 
 // Optional: load at runtime so Pi can start even if dist/voice/ts/audio.js wasn't built (e.g. voice/ts not synced)
 let initAudio: () => void = () => {};
@@ -17,7 +17,7 @@ let playPurr: () => void = () => {};
 let playGiggle: () => void = () => {};
 try {
 	// eslint-disable-next-line @typescript-eslint/no-require-imports
-	const audio = require("../../voice/ts/audio.js");
+	const audio = require("../../../voice/ts/audio.js");
 	initAudio = audio.initAudio;
 	playPurr = audio.playPurr;
 	playGiggle = audio.playGiggle;
@@ -286,3 +286,4 @@ export class Reflexes {
 		}
 	}
 }
+
