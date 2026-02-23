@@ -12,7 +12,10 @@ const PAIRING_QR_PATTERN =
 	/Commissioning|passcode|discriminator|pairing|uncommissioned|qrcode|QR code|manual pairing|▄|▀|█|project-chip\.github\.io/i;
 
 /** Result when Matter is enabled: buffer + whether we already printed pairing block and sep. */
-export type MatterStartResult = { buffer: string[]; showedCachedPairing: boolean };
+export type MatterStartResult = {
+	buffer: string[];
+	showedCachedPairing: boolean;
+};
 
 export async function startMatterIfEnabled(opts: {
 	enabled: boolean;
@@ -21,7 +24,10 @@ export async function startMatterIfEnabled(opts: {
 	sep: string;
 }): Promise<
 	| (MatterStartResult & {
-			matter: { notifyTouch(sensor: string, active: boolean): void; close(): Promise<void> };
+			matter: {
+				notifyTouch(sensor: string, active: boolean): void;
+				close(): Promise<void>;
+			};
 	  })
 	| undefined
 > {
@@ -49,7 +55,8 @@ export async function startMatterIfEnabled(opts: {
 	const matterLogBuffer: string[] = [];
 	// Use require() for local module so TS (node16/CJS) resolves without needing a sibling .js file in source.
 	// eslint-disable-next-line @typescript-eslint/no-require-imports
-	const { MatterLobe } = require("./matter_lobe") as typeof import("./matter_lobe.js");
+	const { MatterLobe } =
+		require("./matter_lobe") as typeof import("./matter_lobe.js");
 	const matter = new MatterLobe(eyes, touch);
 
 	try {
@@ -90,4 +97,3 @@ export async function startMatterIfEnabled(opts: {
 	// Expose the Matter instance to the caller (touch forwarding + shutdown close)
 	return { buffer: matterLogBuffer, showedCachedPairing, matter };
 }
-

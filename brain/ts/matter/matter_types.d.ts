@@ -13,4 +13,3 @@ declare module "@matter/types" {
 	// biome-ignore lint/suspicious/noRedeclare: type and value coexist in declaration file
 	export function VendorId(vendorId: number, validate?: boolean): VendorId;
 }
-

@@ -63,4 +63,3 @@ export function createFurbaccaExtendedColorLight(
 
 	return ExtendedColorLightDeviceDefinition.with(FurbaccaIdentifyServer);
 }
-
