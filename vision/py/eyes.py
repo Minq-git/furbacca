@@ -4,12 +4,12 @@ Restored version with original state logic + NumPy performance optimizations.
 """
 import json
 import os
+import random
 import signal
 import socket
 import sys
 import threading
 import time
-import random
 
 _shutdown_requested = False
 
@@ -25,16 +25,15 @@ try:
 except ImportError:
     np = None
 
-import config
-import messages
-import assets
-import blit
-import render
-import shapes
-import test_patterns
-import animations
-import blink
-from display import init_displays
+import animations  # noqa: E402
+import assets  # noqa: E402
+import blink  # noqa: E402
+import blit  # noqa: E402
+import config  # noqa: E402
+import messages  # noqa: E402
+import render  # noqa: E402
+import shapes  # noqa: E402
+from display import init_displays  # noqa: E402
 
 # Re-export for callers
 get_eye_type = config.get_eye_type
@@ -57,18 +56,24 @@ sock.setblocking(False)
 print(messages.get("eyes", "udp_bind", bind=UDP_BIND, port=UDP_PORT))
 
 def _apply_eye_shape_left(frame):
-    if frame is None: return frame
+    if frame is None:
+        return frame
+    assert np is not None  # NumPy required for shape masking
     # frame is a PIL Image; convert to array for NumPy masking
     arr = np.array(frame, dtype=np.uint8)
     masked_arr = shapes.apply_shape_mask_numpy(arr, config.get_eye_shape(), mirror=False)
+    assert masked_arr is not None  # we pass non-None arr
     # Copy so the PIL Image owns its data (avoids async blit seeing reused buffer → one eye blackout)
     from PIL import Image
     return Image.fromarray(masked_arr.copy())
 
 def _apply_eye_shape_right(frame):
-    if frame is None: return frame
+    if frame is None:
+        return frame
+    assert np is not None  # NumPy required for shape masking
     arr = np.array(frame, dtype=np.uint8)
     masked_arr = shapes.apply_shape_mask_numpy(arr, config.get_eye_shape(), mirror=True)
+    assert masked_arr is not None  # we pass non-None arr
     from PIL import Image
     return Image.fromarray(masked_arr.copy())
 
@@ -136,14 +141,12 @@ def run_eyes():
                 blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(first_frame), _apply_eye_shape_right(first_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
         focus_until = 0.0
         wide_until = 0.0
-        next_wide_at = 0.0
         pupil_radius_current = float(relaxed)
         pupil_radius_target = relaxed
         radius_transition_start = 0.0
         radius_transition_from = float(relaxed)
         radius_transition_to = float(relaxed)
         animated_blink = blink.AnimatedBlink()
-        do_cycle_on_next_open = False
         animation_segments = []
         animation_start_time = 0.0
         animation_index = 0
@@ -223,8 +226,10 @@ def run_eyes():
                             animated_blink.trigger(now)
                     elif action == "look":
                         tx, ty = msg.get("x"), msg.get("y")
-                        if tx is not None: target_x = max(config.LOOK_CLAMP_MIN, min(config.LOOK_CLAMP_MAX, float(tx)))
-                        if ty is not None: target_y = max(config.LOOK_CLAMP_MIN, min(config.LOOK_CLAMP_MAX, float(ty)))
+                        if tx is not None:
+                            target_x = max(config.LOOK_CLAMP_MIN, min(config.LOOK_CLAMP_MAX, float(tx)))
+                        if ty is not None:
+                            target_y = max(config.LOOK_CLAMP_MIN, min(config.LOOK_CLAMP_MAX, float(ty)))
                         last_look_time, focus_until = now, now + config.FOCUS_HOLD_S
                     elif action == "set_eye_shape":
                         shape = (msg.get("shape") or "round").strip().lower()
@@ -259,13 +264,13 @@ def run_eyes():
             # Trigger ONLY if the timer is up and we aren't already blinking (disabled while lids held closed at startup)
             if not lids_held_closed and not animation_segments and not animated_blink.is_closed and now >= next_auto_blink:
                 animated_blink.trigger(now)
-                # Important: DO NOT update next_auto_blink here. 
+                # Important: DO NOT update next_auto_blink here.
                 # Let the advance() function decide the next time.
 
             # --- 2. Blink & State Advancement ---
             # This is where blink.py manages the duration and the NEXT delay
             just_opened, next_delay = animated_blink.advance(now)
-            
+
             if just_opened:
                 if sleep_close_hold:
                     # Sleep close: hold closed instead of opening
@@ -287,14 +292,14 @@ def run_eyes():
                     animated_blink.trigger(now)
                     last_blink_triggered_segment_index = animation_index
                 elapsed = now - animation_start_time
-                
+
                 progress = min(1.0, max(0.0, elapsed / seg.duration)) if seg.duration > 0 else 1.0
                 idx = min(EASE_INDEX_MAX, int(progress * EASE_INDEX_MAX))
                 e = EASE_TABLE[idx] / EASE_INDEX_MAX
 
                 pupil_x = segment_start_x + (seg.x - segment_start_x) * e
                 pupil_y = segment_start_y + (seg.y - segment_start_y) * e
-                
+
                 if elapsed >= seg.duration:
                     animation_index += 1
                     animation_start_time = now
@@ -331,7 +336,7 @@ def run_eyes():
 
             # --- Pupil Radius: Logic with Animation Overrides ---
             relaxed, focused, wide = config.eye_type_pupil_radii(config.get_eye_type())
-            
+
             if animation_segments and animation_index < len(animation_segments):
                 seg = animation_segments[animation_index]
                 # Check for pupil_mode override in the current segment
@@ -341,7 +346,7 @@ def run_eyes():
                     pupil_radius_target = focused
                 else:
                     pupil_radius_target = relaxed
-                
+
                 # Apply immediately for animations to feel snappy
                 pupil_radius_current = float(pupil_radius_target)
                 radius_transition_from = pupil_radius_target
@@ -358,10 +363,10 @@ def run_eyes():
                 radius_transition_from = pupil_radius_current
                 radius_transition_to = pupil_radius_target
                 radius_transition_start = now
-            
+
             # Use faster transitions during animations
             transition_s = config.PUPIL_TRANSITION_ANIM_S if animation_segments else config.PUPIL_TRANSITION_S
-            
+
             elapsed_r = now - radius_transition_start
             if elapsed_r >= transition_s or radius_transition_from == radius_transition_to:
                 pupil_radius_current = float(radius_transition_to)
@@ -374,7 +379,7 @@ def run_eyes():
 
             # --- Rendering & Async Blitting ---
             eye_frame = render.render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, "open", pupil_radius=pupil_radius_current)
-            
+
             if blit_open_bottom_to_top:
                 blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), inside_out=True)
                 blit_open_bottom_to_top = False
@@ -392,6 +397,7 @@ def run_eyes():
                     overlay_r = render.render_blink_overlay(mirror=True)
                     if overlay_l and overlay_r and np is not None:
                         def _composite_overlay(frame, overlay_pil):
+                            assert np is not None
                             ov = np.array(overlay_pil, dtype=np.uint8)
                             from PIL import Image
                             return Image.fromarray(ov.copy())
@@ -411,6 +417,7 @@ def run_eyes():
                 overlay_r = render.render_blink_overlay(mirror=True)
                 if overlay_l and overlay_r and np is not None:
                     def _composite_overlay(frame, overlay_pil):
+                        assert np is not None
                         ov = np.array(overlay_pil, dtype=np.uint8)
                         from PIL import Image
                         return Image.fromarray(ov.copy())

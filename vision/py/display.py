@@ -3,11 +3,9 @@ Initialize dual GC9A01 displays using russhughes/gc9a01py and machine_compat (CP
 Pinout: DC=25, RST=27, CS_L=8 (spidev0.0), CS_R=7 (spidev0.1). BL not used — BCM 18 is I2S BCLK (MAX98357A).
 See instruction.md §3.1.
 """
+import os
 import sys
 import time
-import os
-
-import config
 
 _vision_dir = os.path.dirname(os.path.abspath(__file__))
 
