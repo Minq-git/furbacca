@@ -54,7 +54,7 @@
 | ------ | ------- |
 | **audio-check.sh** | On the Pi: check I2S DAC config and list ALSA devices. Run: `./.scripts/diagnostics/audio-check.sh`. |
 | **monitor-zram.sh** | Live zRAM and swap monitor. On Pi: `./.scripts/diagnostics/monitor-zram.sh`. From Mac: `./.scripts/diagnostics/monitor-zram.sh furbacca.local`. |
-| **heal-network.sh** | Emergency network repair (head + belly 30 s triggers from nervous system). Run manually: `./.scripts/diagnostics/heal-network.sh`. |
+| **heal-network.sh** | Emergency network repair (belly 15 s triggers from nervous system). Run manually: `./.scripts/diagnostics/heal-network.sh`. |
 | **test-fan.ts** | Test fan on BCM 24. After build: `node dist/.scripts/diagnostics/test-fan.js`. |
 
 ## matter/

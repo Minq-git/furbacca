@@ -142,4 +142,4 @@ Check the logs during startup for the QR code URL and manual pairing code, or ru
 
 **Network drops under heavy load:**
 
-* Hold **Head + Belly** for 30 seconds. The nervous system will trigger `./.scripts/diagnostics/heal-network.sh` to restart the Wi-Fi stack and recover connection.
+* Hold **Belly** for 15 seconds. The nervous system will trigger `./.scripts/diagnostics/heal-network.sh` to restart the Wi-Fi stack and recover connection.

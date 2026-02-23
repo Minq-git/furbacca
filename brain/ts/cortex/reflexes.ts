@@ -13,14 +13,12 @@ import type { EyeBridge } from "../../../vision/ts/eye_bridge.js";
 
 // Optional: load at runtime so Pi can start even if dist/voice/ts/audio.js wasn't built (e.g. voice/ts not synced)
 let initAudio: () => void = () => {};
-let playPurr: () => void = () => {};
-let playGiggle: () => void = () => {};
+let playWav: (filename: string, maxDurationSeconds?: number) => void = () => {};
 try {
 	// eslint-disable-next-line @typescript-eslint/no-require-imports
 	const audio = require("../../../voice/ts/audio.js");
 	initAudio = audio.initAudio;
-	playPurr = audio.playPurr;
-	playGiggle = audio.playGiggle;
+	playWav = audio.playWav;
 	console.log(msg.audio.module_loaded);
 } catch {
 	console.warn(msg.audio.module_not_found);
@@ -47,12 +45,20 @@ export class Reflexes {
 	private headActive = false;
 	private bellyActive = false;
 
-	/** Head + belly: 5s = eyes re-init, 30s = network heal script (long to avoid accidental trigger). */
+	/**
+	 * Holds:
+	 * - Head + belly: 5s = eyes re-init
+	 * - Belly only: 15s = network heal
+	 * - Head + belly: 60s = system halt (immediate)
+	 */
 	private readonly HEAD_BELLY_HOLD_MS = 5000;
-	private readonly NETWORK_HEAL_HOLD_MS = 30000;
+	private readonly BELLY_HEAL_HOLD_MS = 15000;
+	private readonly HEAD_BELLY_SHUTDOWN_HOLD_MS = 60000;
 	private headBellyHoldTimer: ReturnType<typeof setTimeout> | null = null;
-	private networkHealTimer: ReturnType<typeof setTimeout> | null = null;
+	private headBellyShutdownTimer: ReturnType<typeof setTimeout> | null = null;
+	private bellyHealTimer: ReturnType<typeof setTimeout> | null = null;
 	private headBellyHoldCooldown = false;
+	private bellyHealCooldown = false;
 
 	// Motion state
 	private motionSleepTimer: ReturnType<typeof setTimeout> | null = null;
@@ -116,9 +122,13 @@ export class Reflexes {
 			clearTimeout(this.headBellyHoldTimer);
 			this.headBellyHoldTimer = null;
 		}
-		if (this.networkHealTimer !== null) {
-			clearTimeout(this.networkHealTimer);
-			this.networkHealTimer = null;
+		if (this.headBellyShutdownTimer !== null) {
+			clearTimeout(this.headBellyShutdownTimer);
+			this.headBellyShutdownTimer = null;
+		}
+		if (this.bellyHealTimer !== null) {
+			clearTimeout(this.bellyHealTimer);
+			this.bellyHealTimer = null;
 		}
 		if (this.motionClearDebounceTimer !== null) {
 			clearTimeout(this.motionClearDebounceTimer);
@@ -173,7 +183,7 @@ export class Reflexes {
 	private handleBellyTouch(): void {
 		console.log(msg.nervous_system.belly_cycling);
 		console.log(msg.audio.giggle_playing);
-		playGiggle();
+		playWav("giggle.wav", 2);
 		this.eyes.cycleEyeType();
 		this.eyes.sendCommand("look", { x: 0, y: 0, pupil_mode: "wide" });
 		this.chipToolOn();
@@ -185,16 +195,47 @@ export class Reflexes {
 
 		this.matter?.notifyTouch(sensor, active);
 
-		// Head + belly: 5s → eyes re-init; 30s → network heal script
+		// Holds: head+belly combos and belly-only heal
 		if (sensor === "head" || sensor === "belly") {
+			// Belly-only: 15s → network heal
+			if (!this.headActive && this.bellyActive) {
+				if (this.bellyHealTimer === null && !this.bellyHealCooldown) {
+					this.bellyHealTimer = setTimeout(() => {
+						this.bellyHealTimer = null;
+						this.bellyHealCooldown = true;
+						console.log(msg.nervous_system.network_heal_trigger);
+						playWav("nggyu.wav", 18);
+						this.eyes.sendCommand("set_eye_type", { type: "demon" });
+						const scriptPath = path.join(
+							process.cwd(),
+							".scripts",
+							"diagnostics",
+							"heal-network.sh",
+						);
+						const child = spawn("bash", [scriptPath], {
+							detached: true,
+							stdio: "ignore",
+						});
+						child.unref();
+					}, this.BELLY_HEAL_HOLD_MS);
+				}
+			} else {
+				if (this.bellyHealTimer !== null) {
+					clearTimeout(this.bellyHealTimer);
+					this.bellyHealTimer = null;
+				}
+				if (!this.bellyActive) this.bellyHealCooldown = false;
+			}
+
+			// Head + belly: 5s → eyes re-init; 60s → halt
 			if (!this.headActive || !this.bellyActive) {
 				if (this.headBellyHoldTimer !== null) {
 					clearTimeout(this.headBellyHoldTimer);
 					this.headBellyHoldTimer = null;
 				}
-				if (this.networkHealTimer !== null) {
-					clearTimeout(this.networkHealTimer);
-					this.networkHealTimer = null;
+				if (this.headBellyShutdownTimer !== null) {
+					clearTimeout(this.headBellyShutdownTimer);
+					this.headBellyShutdownTimer = null;
 				}
 				if (!this.headActive && !this.bellyActive)
 					this.headBellyHoldCooldown = false;
@@ -206,22 +247,15 @@ export class Reflexes {
 					this.eyes.sendCommand("restart_both", {});
 					this.eyes.playAnimation("nervous_look", { replace: true });
 				}, this.HEAD_BELLY_HOLD_MS);
-				this.networkHealTimer = setTimeout(() => {
-					this.networkHealTimer = null;
-					console.log(msg.nervous_system.network_heal_trigger);
-					this.eyes.sendCommand("set_eye_type", { type: "demon" });
-					const scriptPath = path.join(
-						process.cwd(),
-						".scripts",
-						"diagnostics",
-						"heal-network.sh",
-					);
-					const child = spawn("bash", [scriptPath], {
+				this.headBellyShutdownTimer = setTimeout(() => {
+					this.headBellyShutdownTimer = null;
+					console.log(msg.nervous_system.halt_trigger);
+					const child = spawn("sudo", ["shutdown", "--halt", "now"], {
 						detached: true,
 						stdio: "ignore",
 					});
 					child.unref();
-				}, this.NETWORK_HEAL_HOLD_MS);
+				}, this.HEAD_BELLY_SHUTDOWN_HOLD_MS);
 			}
 		}
 
@@ -231,7 +265,7 @@ export class Reflexes {
 			this.eyes.blink();
 			this.eyes.playAnimation("nervous_look", { replace: true });
 			console.log(msg.audio.purr_playing);
-			playPurr();
+			playWav("pet.wav", 3);
 		} else if (sensor === "belly") {
 			this.handleBellyTouch();
 		} else if (sensor === "shiver") {
@@ -286,4 +320,3 @@ export class Reflexes {
 		}
 	}
 }
-

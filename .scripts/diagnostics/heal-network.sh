@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # .scripts/diagnostics/heal-network.sh — Emergency network repair after brownout.
 # Restarts network stack and optionally restores Wi‑Fi config from /boot backups.
-# Trigger: Head + Belly held 30s (nervous_system.ts).
+# Trigger: Belly held 15s (nervous_system.ts).
 
 set -euo pipefail
 

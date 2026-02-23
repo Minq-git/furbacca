@@ -271,7 +271,7 @@ if [[ "$UNAME_S" == "Linux" ]]; then
     fi
   fi
 
-  # 7b. Wi‑Fi config backup for network heal (head+belly 30s after brownout)
+  # 7b. Wi‑Fi config backup for network heal (belly 15s after brownout)
   # Bookworm/Trixie often use NetworkManager; config is in /etc/NetworkManager/system-connections/*.nmconnection
   BOOT_PARTITION=""
   for b in /boot/firmware /boot; do [[ -d "$b" ]] && BOOT_PARTITION="$b" && break; done
@@ -290,7 +290,7 @@ if [[ "$UNAME_S" == "Linux" ]]; then
     FIRST_NM="${NM_FILES[0]:-}"
     if [[ -n "$FIRST_NM" && -n "$BOOT_PARTITION" ]]; then
       sudo cp "$FIRST_NM" "$BOOT_PARTITION/NetworkManager-connection.nmconnection" 2>/dev/null && \
-        echo "Backed up NetworkManager Wi‑Fi to $BOOT_PARTITION/NetworkManager-connection.nmconnection (heal-network will restore on head+belly 30s)." || \
+        echo "Backed up NetworkManager Wi‑Fi to $BOOT_PARTITION/NetworkManager-connection.nmconnection (heal-network will restore on belly 15s)." || \
         echo "⚠ Could not write to $BOOT_PARTITION. To backup Wi‑Fi manually: sudo cp $FIRST_NM $BOOT_PARTITION/NetworkManager-connection.nmconnection"
     else
       echo "Wi‑Fi looks NetworkManager-managed, but no *.nmconnection file was found in /etc/NetworkManager/system-connections."
