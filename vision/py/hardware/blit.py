@@ -26,7 +26,7 @@ except ImportError:
     np = None  # type: ignore[assignment]
     _HAS_NUMPY = False
 
-from assets import config
+from vision.py.assets import config
 
 EYE_SIZE = config.EYE_SIZE
 

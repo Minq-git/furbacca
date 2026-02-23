@@ -19,9 +19,8 @@ except ImportError:
     HAS_PIL = False
     Image = None  # type: ignore[misc, assignment]
 
-from assets import config, loaders
-
-from engine import shapes
+from vision.py.assets import config, loaders
+from vision.py.engine import shapes
 
 # Internal caches (uint8 RGB arrays)
 _texture_arrays: dict[str, dict[str, NDArray[np.uint8] | None]] = {}

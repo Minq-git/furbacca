@@ -1,11 +1,12 @@
-"""Print warmup config as JSON so nervous_system (Node) can read config.py values. Run from repo root: python3 vision/py/export_warmup_config.py"""
+"""Print warmup config as JSON so nervous_system (Node) can read config.py values.
+
+Run from repo root:
+  python3 -m vision.py.export_warmup_config
+"""
 
 import json
-import os
-import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from assets import config
+from vision.py.assets import config
 
 print(
     json.dumps(

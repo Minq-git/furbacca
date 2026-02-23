@@ -46,7 +46,7 @@ s.sendto(os.environ.get("EYE_CMD", "{}").encode(), (os.environ["EYE_HOST"], int(
 ' 2>/dev/null || true
     sleep 0.25
   fi
-  python3 vision/py/blank_displays.py 2>/dev/null || true
+  python3 -m vision.py.blank_displays 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
@@ -79,7 +79,7 @@ fi
 # Start eye-tracking by default on the Pi (AI camera → eyes follow). Disable with --no-eye-track or FURBACCA_EYE_TRACK=0
 if [[ "$(uname -s)" == "Linux" && "${FURBACCA_EYE_TRACK:-1}" != "0" ]]; then
   if [[ -f vision/py/camera/camera_track.py ]]; then
-    if ! pgrep -f "vision/py/camera/camera_track.py" >/dev/null 2>&1; then
+    if ! pgrep -f "vision/py/camera/camera_track.py|vision\\.py\\.camera\\.camera_track" >/dev/null 2>&1; then
       if "$REPO_DIR/scripts/vision/eye-track.sh" on; then
         EYE_TRACK_STARTED_BY_US=1
       fi

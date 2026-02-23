@@ -1,3 +1,3 @@
-from .vision_messages import EyeTrackingEvent, LookCommand
+from .vision_messages import EyesCommand, EyeTrackingEvent, LookCommand
 
-__all__ = ["LookCommand", "EyeTrackingEvent"]
+__all__ = ["LookCommand", "EyesCommand", "EyeTrackingEvent"]

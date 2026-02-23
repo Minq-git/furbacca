@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import random
 
-from assets import config
+from vision.py.assets import config
 
 
 def _blink_debounce_s() -> float:

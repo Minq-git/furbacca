@@ -32,13 +32,9 @@ function ansiRgb(r: number, g: number, b: number): string {
 
 function loadWarmupConfig(): WarmupConfig {
 	const repoRoot = process.cwd();
-	const scriptPath = path.join(
-		repoRoot,
-		"vision",
-		"py",
-		"export_warmup_config.py",
-	);
-	const out = execSync(`python3 "${scriptPath}"`, {
+	const venvPython = path.join(repoRoot, "env", "bin", "python3");
+	const pythonPath = fs.existsSync(venvPython) ? venvPython : "python3";
+	const out = execSync(`${pythonPath} -m vision.py.export_warmup_config`, {
 		encoding: "utf-8",
 		cwd: repoRoot,
 	});
@@ -205,10 +201,9 @@ export class Brainstem {
 
 	private startEyesProcess(): void {
 		const repoRoot = process.cwd();
-		const scriptPath = path.join(repoRoot, "vision", "py", "main_eyes.py");
 		const venvPython = path.join(repoRoot, "env", "bin", "python3");
 		const pythonPath = fs.existsSync(venvPython) ? venvPython : "python3";
-		this.eyesChild = spawn(pythonPath, [scriptPath], {
+		this.eyesChild = spawn(pythonPath, ["-m", "vision.py.main_eyes"], {
 			cwd: repoRoot,
 			env: { ...process.env, PYTHONUNBUFFERED: "1", UDP_BIND: "0.0.0.0" },
 			stdio: ["ignore", "pipe", "pipe"],

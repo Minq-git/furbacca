@@ -34,12 +34,10 @@ venv = "env"
 # Exclude reference/vendor code (e.g. picamera2) from type checking
 exclude = ["reference"]
 
-# Vision/py is run as a script (python vision/py/main_eyes.py) with vision/py on sys.path;
-# flat imports (messages, assets, engine, hardware) are intentional. Disable implicit-relative check.
+# Eyes are run as a module (`python -m vision.py.main_eyes`) from repo root.
 reportImplicitRelativeImport = "none"
 
-# Resolve flat imports under vision/py (e.g. from assets import config in engine/)
-# and synapses/py for camera_track's vision_messages import
+# Keep extraPaths so tools can resolve modules even when invoked outside repo root.
 extraPaths = ["vision/py", "synapses/py"]
 
 # Pi-only or optional deps (picamera2, gc9a01py, spidev, vision_messages) may be missing on Mac

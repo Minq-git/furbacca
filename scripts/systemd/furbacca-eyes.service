@@ -1,7 +1,7 @@
 # Furbacca eyes only (UDP 5005). Install: sudo cp scripts/systemd/furbacca-eyes.service /etc/systemd/system/ && sudo systemctl daemon-reload
 # For eyes + nervous system (touch, fe from Mac), use wake-furbacca instead.
 [Unit]
-Description=Furbacca eyes (vision/py/main_eyes.py, UDP 5005)
+Description=Furbacca eyes (vision.py.main_eyes, UDP 5005)
 After=network.target
 
 [Service]
@@ -9,7 +9,7 @@ Type=simple
 User=minqz
 WorkingDirectory=/home/minqz/furbacca
 Environment=UDP_BIND=0.0.0.0
-ExecStart=/home/minqz/furbacca/env/bin/python3 vision/py/main_eyes.py
+ExecStart=/home/minqz/furbacca/env/bin/python3 -m vision.py.main_eyes
 Restart=on-failure
 StandardOutput=journal
 StandardError=journal

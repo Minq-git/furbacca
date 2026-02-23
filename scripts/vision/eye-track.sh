@@ -46,7 +46,8 @@ case "$ACTION" in
       echo "  $0 furbacca.local on"
       exit 0
     fi
-    if pgrep -f "vision/py/camera/camera_track.py" >/dev/null 2>&1; then
+    TRACK_PATTERN="vision/py/camera/camera_track.py|vision\\.py\\.camera\\.camera_track"
+    if pgrep -f "$TRACK_PATTERN" >/dev/null 2>&1; then
       echo "Eye tracking already running."
     else
       PYTHON3="$(find_picamera2_python)"
@@ -56,7 +57,7 @@ case "$ACTION" in
         exit 1
       fi
       # Clear PYTHONPATH so reference/picamera2 doesn't shadow system python3-picamera2
-      ( cd "$REPO_DIR" && env -u PYTHONPATH nohup "$PYTHON3" vision/py/camera/camera_track.py >> /tmp/eye-track.log 2>&1 ) &
+      ( cd "$REPO_DIR" && env -u PYTHONPATH nohup "$PYTHON3" -m vision.py.camera.camera_track >> /tmp/eye-track.log 2>&1 ) &
       PID=$!
       echo "Eye tracking starting (PID $PID). Log: /tmp/eye-track.log"
       # Give camera/model time to load; if process exits (e.g. camera not found), report it
@@ -76,7 +77,8 @@ case "$ACTION" in
     fi
     ;;
   off)
-    if pkill -f "vision/py/camera/camera_track.py" 2>/dev/null; then
+    TRACK_PATTERN="vision/py/camera/camera_track.py|vision\\.py\\.camera\\.camera_track"
+    if pkill -f "$TRACK_PATTERN" 2>/dev/null; then
       echo "Eye tracking stopped."
       python3 -c "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.sendto(b'{\"event\":\"eye_tracking_stopped\"}', ('127.0.0.1', 5006)); s.close()" 2>/dev/null || true
     else
@@ -84,9 +86,10 @@ case "$ACTION" in
     fi
     ;;
   status)
-    if pgrep -f "vision/py/camera/camera_track.py" >/dev/null 2>&1; then
+    TRACK_PATTERN="vision/py/camera/camera_track.py|vision\\.py\\.camera\\.camera_track"
+    if pgrep -f "$TRACK_PATTERN" >/dev/null 2>&1; then
       echo "Eye tracking: running"
-      pgrep -af "vision/py/camera/camera_track.py" 2>/dev/null || true
+      pgrep -af "$TRACK_PATTERN" 2>/dev/null || true
     else
       echo "Eye tracking: stopped"
       if [[ -f /tmp/eye-track.log ]]; then
@@ -100,10 +103,10 @@ case "$ACTION" in
       PYTHON3="$(find_picamera2_python)"
       [[ -z "$PYTHON3" ]] && { echo "No Python with picamera2. Install: sudo apt install -y python3-picamera2"; exit 1; }
       # Run from repo root
-      cd "$REPO_DIR" && exec env -u PYTHONPATH "$PYTHON3" vision/py/camera/camera_track.py "$@"
+      cd "$REPO_DIR" && exec env -u PYTHONPATH "$PYTHON3" -m vision.py.camera.camera_track "$@"
     else
       PYTHON3="${FURBACCA_CAMERA_PYTHON:-python3}"
-      cd "$REPO_DIR" && exec env -u PYTHONPATH "$PYTHON3" vision/py/camera/camera_track.py "$@"
+      cd "$REPO_DIR" && exec env -u PYTHONPATH "$PYTHON3" -m vision.py.camera.camera_track "$@"
     fi
     ;;
   *)

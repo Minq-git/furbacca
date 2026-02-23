@@ -8,7 +8,6 @@ from __future__ import annotations
 # ruff: noqa: I001
 
 import argparse
-import os
 import socket
 import sys
 import time
@@ -16,10 +15,7 @@ from collections.abc import Mapping, Sequence
 from typing import Protocol, cast
 
 # Synapses shared contract (UDP message shapes)
-_synapses_py = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "synapses", "py"))
-if _synapses_py not in sys.path:
-    sys.path.insert(0, _synapses_py)
-from vision_messages import EyeTrackingEvent, LookCommand  # noqa: E402
+from synapses.py.vision_messages import EyeTrackingEvent, LookCommand  # noqa: E402
 
 # Picamera2 + OpenCV are system-installed on the Pi
 try:

@@ -5,13 +5,10 @@ Test patterns for displays: XY gradient, circular rainbow. No image file; same b
 from __future__ import annotations
 
 import math
-import os
-import sys
 from typing import Protocol
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from assets import config
-from hardware import blit
+from vision.py.assets import config
+from vision.py.hardware import blit
 
 EYE_SIZE = config.EYE_SIZE
 
