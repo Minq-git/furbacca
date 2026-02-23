@@ -234,21 +234,39 @@ if [[ "$UNAME_S" == "Linux" ]]; then
   [[ -f ~/.zshrc ]] && RC=~/.zshrc
   [[ -z "$RC" && -f ~/.bashrc ]] && RC=~/.bashrc
   if [[ -n "$RC" ]]; then
-    if ! grep -q "wake-furbacca" "$RC" 2>/dev/null; then
-      LINE="alias wake-furbacca='$REPO_DIR/.scripts/wake-furbacca.sh'"
-      { echo ""; echo "# Furbacca"; echo "$LINE"; } >> "$RC"
-      echo "Added to $RC: $LINE"
+    WAKE_LINE="alias wake-furbacca='$REPO_DIR/.scripts/wake-furbacca.sh'"
+    if grep -q "^alias wake-furbacca=" "$RC" 2>/dev/null; then
+      if ! grep -q "\.scripts/wake-furbacca\.sh" "$RC" 2>/dev/null; then
+        { echo ""; echo "# Furbacca (updated scripts path)"; echo "$WAKE_LINE"; } >> "$RC"
+        echo "Updated in $RC: $WAKE_LINE"
+      fi
+    else
+      { echo ""; echo "# Furbacca"; echo "$WAKE_LINE"; } >> "$RC"
+      echo "Added to $RC: $WAKE_LINE"
     fi
     if ! grep -q "sleep-furbacca" "$RC" 2>/dev/null; then
       echo "alias sleep-furbacca='sudo halt'" >> "$RC"
       echo "Added to $RC: alias sleep-furbacca='sudo halt'"
     fi
-    if ! grep -q "setup-furbacca" "$RC" 2>/dev/null; then
-      echo "alias setup-furbacca='bash $REPO_DIR/.scripts/setup/setup-fresh.sh'" >> "$RC"
+    SETUP_LINE="alias setup-furbacca='bash $REPO_DIR/.scripts/setup/setup-fresh.sh'"
+    if grep -q "^alias setup-furbacca=" "$RC" 2>/dev/null; then
+      if ! grep -q "\.scripts/setup/setup-fresh\.sh" "$RC" 2>/dev/null; then
+        { echo ""; echo "# Furbacca (updated scripts path)"; echo "$SETUP_LINE"; } >> "$RC"
+        echo "Updated in $RC: $SETUP_LINE"
+      fi
+    else
+      echo "$SETUP_LINE" >> "$RC"
       echo "Added to $RC: alias setup-furbacca='...'"
     fi
-    if ! grep -q "eye-track" "$RC" 2>/dev/null; then
-      echo "alias eye-track='$REPO_DIR/.scripts/vision/eye-track.sh'" >> "$RC"
+
+    EYE_TRACK_LINE="alias eye-track='$REPO_DIR/.scripts/vision/eye-track.sh'"
+    if grep -q "^alias eye-track=" "$RC" 2>/dev/null; then
+      if ! grep -q "\.scripts/vision/eye-track\.sh" "$RC" 2>/dev/null; then
+        { echo ""; echo "# Furbacca (updated scripts path)"; echo "$EYE_TRACK_LINE"; } >> "$RC"
+        echo "Updated in $RC: $EYE_TRACK_LINE"
+      fi
+    else
+      echo "$EYE_TRACK_LINE" >> "$RC"
       echo "Added to $RC: alias eye-track='...'"
     fi
   fi
@@ -275,7 +293,10 @@ if [[ "$UNAME_S" == "Linux" ]]; then
         echo "Backed up NetworkManager Wi‑Fi to $BOOT_PARTITION/NetworkManager-connection.nmconnection (heal-network will restore on head+belly 30s)." || \
         echo "⚠ Could not write to $BOOT_PARTITION. To backup Wi‑Fi manually: sudo cp $FIRST_NM $BOOT_PARTITION/NetworkManager-connection.nmconnection"
     else
-      echo "Wi‑Fi is in NetworkManager (no wpa_supplicant.conf). To backup for heal: sudo cp /etc/NetworkManager/system-connections/*.nmconnection /boot/NetworkManager-connection.nmconnection"
+      echo "Wi‑Fi looks NetworkManager-managed, but no *.nmconnection file was found in /etc/NetworkManager/system-connections."
+      echo "To identify the active profile: sudo nmcli -f NAME,TYPE,DEVICE connection show --active"
+      echo "Then either export it (preferred): sudo nmcli connection export \"<NAME>\" $BOOT_PARTITION/NetworkManager-connection.nmconnection"
+      echo "Or copy its backing file: sudo nmcli -g connection.filename connection show \"<NAME>\"  (then sudo cp that path to $BOOT_PARTITION/NetworkManager-connection.nmconnection)"
     fi
   else
     echo "Skipping Wi‑Fi backup (no wpa_supplicant.conf or NetworkManager connections). When Wi‑Fi is configured, backup with: sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /boot/   or (NetworkManager): sudo cp /etc/NetworkManager/system-connections/*.nmconnection /boot/NetworkManager-connection.nmconnection"
