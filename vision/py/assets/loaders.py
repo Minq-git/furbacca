@@ -1,28 +1,32 @@
 """
 Load eye assets from vision/py/assets/graphics (PIL): iris, sclera, single-eye image. Cached per type.
 """
+
+from __future__ import annotations
+
 import os
 
 try:
     from PIL import Image
+
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
-    Image = None
+    Image = None  # type: ignore[misc, assignment]
 
 from . import config
 
 _vision_dir = os.path.dirname(os.path.abspath(__file__))
-_eye_image_pil = None
-_sclera_by_type = {}
-_iris_by_type = {}
+_eye_image_pil: object | None = None
+_sclera_by_type: dict[str, object] = {}
+_iris_by_type: dict[str, object] = {}
 
 
-def graphics_dir():
+def graphics_dir() -> str:
     return os.path.join(_vision_dir, "graphics")
 
 
-def load_eye_image():
+def load_eye_image() -> object | None:
     """Load 240x240 image from vision/py/assets/graphics/ (PIL). Fallback for static/non-animated mode."""
     global _eye_image_pil
     if _eye_image_pil is not None:
@@ -35,7 +39,8 @@ def load_eye_image():
         if os.path.isfile(path):
             try:
                 img = Image.open(path).convert("RGB")
-                resample = getattr(Image, "Resampling", Image).LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+                resampling = getattr(Image, "Resampling", Image)
+                resample = getattr(resampling, "LANCZOS", 1)
                 img = img.resize((config.EYE_SIZE, config.EYE_SIZE), resample)
                 _eye_image_pil = img
                 return _eye_image_pil
@@ -44,7 +49,7 @@ def load_eye_image():
     return None
 
 
-def load_sclera_image(eye_type=None):
+def load_sclera_image(eye_type: str | None = None) -> object | None:
     """Load sclera texture (background / white of eye). Cached per type."""
     global _sclera_by_type
     if eye_type is None:
@@ -60,7 +65,8 @@ def load_sclera_image(eye_type=None):
         if os.path.isfile(path):
             try:
                 img = Image.open(path).convert("RGB")
-                resample = getattr(Image, "Resampling", Image).LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+                resampling = getattr(Image, "Resampling", Image)
+                resample = getattr(resampling, "LANCZOS", 1)
                 img = img.resize((config.EYE_SIZE, config.EYE_SIZE), resample)
                 _sclera_by_type[eye_type] = img
                 return img
@@ -69,7 +75,7 @@ def load_sclera_image(eye_type=None):
     return None
 
 
-def load_iris_image(eye_type=None):
+def load_iris_image(eye_type: str | None = None) -> object | None:
     """Load iris texture (colored ring). Cached per type."""
     global _iris_by_type
     if eye_type is None:
@@ -85,7 +91,8 @@ def load_iris_image(eye_type=None):
         if os.path.isfile(path):
             try:
                 img = Image.open(path).convert("RGB")
-                resample = getattr(Image, "Resampling", Image).LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+                resampling = getattr(Image, "Resampling", Image)
+                resample = getattr(resampling, "LANCZOS", 1)
                 img = img.resize((config.EYE_SIZE, config.EYE_SIZE), resample)
                 _iris_by_type[eye_type] = img
                 return img

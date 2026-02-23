@@ -1,6 +1,9 @@
 """
 Vision constants and eye-type configuration (env flags, get/set eye type, scales, pupil radii).
 """
+
+from __future__ import annotations
+
 import os
 
 EYE_SIZE = 240
@@ -17,7 +20,7 @@ EYES_RAINBOW = os.environ.get("EYES_RAINBOW", "").strip().lower() in ("1", "true
 EYES_ANIMATED = os.environ.get("EYES_ANIMATED", "1").strip().lower() not in ("0", "false", "no")
 
 _eye_type_raw = os.environ.get("EYE_TYPE", "").strip().lower()
-_current_eye_type = None  # None = use env default; set via set_eye_type() for runtime changes
+_current_eye_type: str | None = None  # None = use env default; set via set_eye_type() for runtime changes
 
 EYE_TYPE_CYCLE = ("default", "human", "dragon", "demon")
 
@@ -64,14 +67,14 @@ BLINK_AFTER_CLOSE_RANDOM_S = 4.0
 # Sleep close (drowsy close then hold); nervous_system reads via export_warmup_config
 SLEEP_CLOSE_DURATION_S = 1.0
 SLEEP_CLOSE_MIN_S = 0.2
-OPEN_THEN_LOOK_MS = 1500   # Delay nervous_look after eyes_open (double-blink finishes)
-MOTION_SLEEP_MS = 120000   # No motion for this long → sleep close (2 min)
+OPEN_THEN_LOOK_MS = 1500  # Delay nervous_look after eyes_open (double-blink finishes)
+MOTION_SLEEP_MS = 120000  # No motion for this long → sleep close (2 min)
 MOTION_RESPONSE_COOLDOWN_MS = 5000  # Ignore repeat motion events for this long (one response per movement)
-MOTION_CLEAR_DEBOUNCE_MS = 10000   # Only treat as "area clear" after no motion for this long (reduces PIR noise)
+MOTION_CLEAR_DEBOUNCE_MS = 10000  # Only treat as "area clear" after no motion for this long (reduces PIR noise)
 
 # Eye shape mask — layer above sclera/iris/pupil
 _eye_shape_raw = os.environ.get("EYE_SHAPE", "round").strip().lower()
-_current_eye_shape = None
+_current_eye_shape: str | None = None
 EYE_SHAPES = (
     "anime",
     "bean",
@@ -91,7 +94,8 @@ EYE_SHAPES = (
     "tilted",
 )
 
-def get_eye_type():
+
+def get_eye_type() -> str:
     """Return current eye type (default, human, dragon, demon). Use set_eye_type() to change at runtime."""
     if _current_eye_type is not None:
         return _current_eye_type
@@ -100,7 +104,7 @@ def get_eye_type():
     return "default"
 
 
-def set_eye_type(eye_type):
+def set_eye_type(eye_type: str | None) -> None:
     """Set eye type at runtime. Pass 'default', 'human', 'dragon', or 'demon'; or None to reset to env default."""
     global _current_eye_type
     if eye_type is None:
@@ -113,7 +117,7 @@ def set_eye_type(eye_type):
         _current_eye_type = "default"
 
 
-def cycle_eye_type():
+def cycle_eye_type() -> str:
     """Cycle to next eye type (default -> human -> dragon -> demon -> default). Returns new type."""
     current = get_eye_type()
     idx = EYE_TYPE_CYCLE.index(current) if current in EYE_TYPE_CYCLE else 0
@@ -122,7 +126,7 @@ def cycle_eye_type():
     return next_type
 
 
-def eye_type_scales(eye_type):
+def eye_type_scales(eye_type: str) -> tuple[bool, float, float]:
     """Return (invert_v, iris_scale, sclera_scale) for the given eye type."""
     invert_v = eye_type in ("human", "dragon")
     iris_scale = 0.8 if eye_type in ("human", "dragon") else 1.0
@@ -130,14 +134,14 @@ def eye_type_scales(eye_type):
     return (invert_v, iris_scale, sclera_scale)
 
 
-def eye_type_pupil_radii(eye_type):
+def eye_type_pupil_radii(eye_type: str) -> tuple[int, int, int]:
     """Return (relaxed, focused, wide) pupil radius for the given eye type."""
     if eye_type in ("default", "dragon"):
         return (40, 12, 60)
     return (22, 12, 40)
 
 
-def get_eye_shape():
+def get_eye_shape() -> str:
     """Return current eye shape (see EYE_SHAPES). Layer above eye content; outside shape is black."""
     if _current_eye_shape is not None:
         return _current_eye_shape
@@ -146,7 +150,7 @@ def get_eye_shape():
     return "round"
 
 
-def set_eye_shape(shape_name):
+def set_eye_shape(shape_name: str | None) -> None:
     """Set eye shape at runtime. Pass 'round', 'oval', 'pill', etc.; or None to reset to env default."""
     global _current_eye_shape
     if shape_name is None:
@@ -156,7 +160,7 @@ def set_eye_shape(shape_name):
     _current_eye_shape = shape_name if shape_name in EYE_SHAPES else "round"
 
 
-def cycle_eye_shape():
+def cycle_eye_shape() -> str:
     """Cycle to next eye shape. Returns new shape."""
     current = get_eye_shape()
     idx = EYE_SHAPES.index(current) if current in EYE_SHAPES else 0

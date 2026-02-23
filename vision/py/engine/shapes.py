@@ -3,14 +3,18 @@ Optimized Eye Shapes: NumPy-native masking without PIL.
 Vectorized implementations for Heart, Gemini, Stern, Sus, and more.
 Orientation corrected for 180-degree display flip.
 """
+
+from __future__ import annotations
+
 import math
 
 import numpy as np
 
 # Cache for NumPy boolean masks: (shape_name, size, mirror) -> bool array
-_mask_cache_np = {}
+_mask_cache_np: dict[tuple[str, int, bool], np.ndarray] = {}
 
-def get_shape_mask_numpy(shape_name, size, mirror=False):
+
+def get_shape_mask_numpy(shape_name: str | None, size: int, mirror: bool = False) -> np.ndarray:
     """
     Returns a boolean NumPy mask: True inside the shape, False outside.
     Algebraic vectorized implementation for high-speed masking.
@@ -28,37 +32,37 @@ def get_shape_mask_numpy(shape_name, size, mirror=False):
 
     # --- Standard Shapes ---
     if shape_name == "round":
-        mask = (x_idx - cx)**2 + (y_idx - cy)**2 <= (size/2.0)**2
+        mask = (x_idx - cx) ** 2 + (y_idx - cy) ** 2 <= (size / 2.0) ** 2
 
     elif shape_name == "bean":
         w, h = size * 0.45, size * 0.25
         bend = size * 0.20
         x_off = x_idx - cx
-        y_off = y_idx - cy + bend * (x_off / w)**2
-        mask = (x_off / w)**2 + (y_off / h)**2 <= 1.0
+        y_off = y_idx - cy + bend * (x_off / w) ** 2
+        mask = (x_off / w) ** 2 + (y_off / h) ** 2 <= 1.0
 
     elif shape_name == "dome":
         # Array bottom is display top -> display-arched top = y_idx >= cy
-        dist = (x_idx - cx)**2 + (y_idx - cy)**2 <= (size/2.0)**2
+        dist = (x_idx - cx) ** 2 + (y_idx - cy) ** 2 <= (size / 2.0) ** 2
         mask = dist & (y_idx >= cy)
 
     elif shape_name == "half_moon":
         # Array top is display bottom -> display-rounded bottom = y_idx <= cy
-        dist = (x_idx - cx)**2 + (y_idx - cy)**2 <= (size/2.0)**2
+        dist = (x_idx - cx) ** 2 + (y_idx - cy) ** 2 <= (size / 2.0) ** 2
         mask = dist & (y_idx <= cy)
 
     elif shape_name == "oval":
         ry = (size / 2.0) * 0.84
-        mask = (x_idx - cx)**2 / (size/2.0)**2 + (y_idx - cy)**2 / ry**2 <= 1.0
+        mask = (x_idx - cx) ** 2 / (size / 2.0) ** 2 + (y_idx - cy) ** 2 / ry**2 <= 1.0
 
     elif shape_name == "pill":
-        rx, ry = (size/2.0) * 0.64, (size/2.0) * 0.90
-        mask = (x_idx - cx)**2 / rx**2 + (y_idx - cy)**2 / ry**2 <= 1.0
+        rx, ry = (size / 2.0) * 0.64, (size / 2.0) * 0.90
+        mask = (x_idx - cx) ** 2 / rx**2 + (y_idx - cy) ** 2 / ry**2 <= 1.0
 
     elif shape_name == "tilted":
         angle = math.radians(-18)
         cos_a, sin_a = math.cos(angle), math.sin(angle)
-        rx, ry = size/2.0, (size/2.0) * 0.84
+        rx, ry = size / 2.0, (size / 2.0) * 0.84
         xr = (x_idx - cx) * cos_a - (y_idx - cy) * sin_a
         yr = (x_idx - cx) * sin_a + (y_idx - cy) * cos_a
         mask = (xr**2 / rx**2) + (yr**2 / ry**2) <= 1.0
@@ -72,7 +76,7 @@ def get_shape_mask_numpy(shape_name, size, mirror=False):
 
     elif shape_name == "glare":
         # Flat display-top, deep rounded bottom (180 flip: flat at high y in array = display top)
-        dist = (x_idx - cx)**2 / (size*0.5)**2 + (y_idx - cy)**2 / (size*0.35)**2 <= 1.0
+        dist = (x_idx - cx) ** 2 / (size * 0.5) ** 2 + (y_idx - cy) ** 2 / (size * 0.35) ** 2 <= 1.0
         mask = dist & (y_idx <= cy * 1.3)
 
     elif shape_name == "gemini":
@@ -86,8 +90,8 @@ def get_shape_mask_numpy(shape_name, size, mirror=False):
         # Generic heart shape, fit within safe-zone
         scale = size * 0.35
         x = (x_idx - cx) / scale
-        y = (y_idx - cy) / scale + 0.25 # Point-down correction for 180 flip
-        mask = (x**2 + y**2 - 1)**3 - x**2 * y**3 <= 0
+        y = (y_idx - cy) / scale + 0.25  # Point-down correction for 180 flip
+        mask = (x**2 + y**2 - 1) ** 3 - x**2 * y**3 <= 0
 
     elif shape_name == "sharp":
         # Cat-eye shape
@@ -97,8 +101,8 @@ def get_shape_mask_numpy(shape_name, size, mirror=False):
         by = 1.05 * size
         within_x = (x_idx >= lx) & (x_idx <= rx)
         t = np.clip((x_idx - lx) / (rx - lx), 0, 1)
-        y_top = (1-t)**2 * ly + 2*(1-t)*t * ty + t**2 * ry
-        y_bottom = (1-t)**2 * ly + 2*(1-t)*t * by + t**2 * ry
+        y_top = (1 - t) ** 2 * ly + 2 * (1 - t) * t * ty + t**2 * ry
+        y_bottom = (1 - t) ** 2 * ly + 2 * (1 - t) * t * by + t**2 * ry
         mask = within_x & (y_idx >= y_top) & (y_idx <= y_bottom)
 
     elif shape_name == "sus":
@@ -107,23 +111,23 @@ def get_shape_mask_numpy(shape_name, size, mirror=False):
         cos_a, sin_a = math.cos(angle), math.sin(angle)
         xr = (x_idx - cx) * cos_a - (y_idx - cy) * sin_a
         yr = (x_idx - cx) * sin_a + (y_idx - cy) * cos_a
-        mask = (xr**2 / (size*0.45)**2) + (yr**2 / (size*0.18)**2) <= 1.0
+        mask = (xr**2 / (size * 0.45) ** 2) + (yr**2 / (size * 0.18) ** 2) <= 1.0
 
     elif shape_name == "stern":
         # Heavy inner-brow tilt (180 flip + left-right flip)
         x_off = cx - x_idx  # mirror x
-        dist = x_off**2 / (size*0.45)**2 + (y_idx - cy)**2 / (size*0.35)**2 <= 1.0
+        dist = x_off**2 / (size * 0.45) ** 2 + (y_idx - cy) ** 2 / (size * 0.35) ** 2 <= 1.0
         mask = dist & (x_off - (y_idx - cy) * 1.5 >= -size * 0.2)
 
     elif shape_name == "concern":
         # Same as stern but inverse x (brow on other side)
         x_off = x_idx - cx
-        dist = x_off**2 / (size*0.45)**2 + (y_idx - cy)**2 / (size*0.35)**2 <= 1.0
+        dist = x_off**2 / (size * 0.45) ** 2 + (y_idx - cy) ** 2 / (size * 0.35) ** 2 <= 1.0
         mask = dist & (x_off - (y_idx - cy) * 1.5 >= -size * 0.2)
 
     elif shape_name == "kawaii":
         # Tall rounded display-top, flat display-bottom (180 flip: flat at low y in array)
-        dist = (x_idx - cx)**2 / (size*0.38)**2 + (y_idx - cy)**2 / (size*0.45)**2 <= 1.0
+        dist = (x_idx - cx) ** 2 / (size * 0.38) ** 2 + (y_idx - cy) ** 2 / (size * 0.45) ** 2 <= 1.0
         mask = dist & (y_idx >= cy * 0.7)
 
     else:
@@ -136,7 +140,10 @@ def get_shape_mask_numpy(shape_name, size, mirror=False):
     _mask_cache_np[key] = mask
     return mask
 
-def apply_shape_mask_numpy(frame_arr, shape_name=None, mirror=False):
+
+def apply_shape_mask_numpy(
+    frame_arr: np.ndarray | None, shape_name: str | None = None, mirror: bool = False
+) -> np.ndarray | None:
     if frame_arr is None:
         return None
     size = frame_arr.shape[0]
@@ -144,7 +151,8 @@ def apply_shape_mask_numpy(frame_arr, shape_name=None, mirror=False):
     frame_arr[~mask] = 0
     return frame_arr
 
-def get_blink_line(shape_name, size):
+
+def get_blink_line(shape_name: str | None, size: int) -> tuple[tuple[int, int], tuple[int, int]]:
     """
     Return ((x0, y0), (x1, y1)) for the closed-eye blink line.
     Coordinates match display-orientation (corrected for 180 flip).
@@ -153,7 +161,19 @@ def get_blink_line(shape_name, size):
     cy = size // 2
 
     # Standard horizontal blink
-    if shape_name in ("round", "oval", "pill", "half_moon", "bean", "dome", "heart", "gemini", "kawaii", "glare", "anime"):
+    if shape_name in (
+        "round",
+        "oval",
+        "pill",
+        "half_moon",
+        "bean",
+        "dome",
+        "heart",
+        "gemini",
+        "kawaii",
+        "glare",
+        "anime",
+    ):
         return ((0, cy), (size, cy))
 
     if shape_name == "sharp":

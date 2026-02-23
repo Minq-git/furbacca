@@ -98,7 +98,11 @@ def center_to_normalized(cx, cy, width, height):
 
 def main():
     ap = argparse.ArgumentParser(description="Furbacca camera tracking: IMX500 → UDP look to eyes")
-    ap.add_argument("--model", default="/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk", help="IMX500 model (.rpk)")
+    ap.add_argument(
+        "--model",
+        default="/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk",
+        help="IMX500 model (.rpk)",
+    )
     ap.add_argument("--host", default="127.0.0.1", help="UDP host for eyes (default 127.0.0.1)")
     ap.add_argument("--port", type=int, default=UDP_PORT, help=f"UDP port (default {UDP_PORT})")
     ap.add_argument("--threshold", type=float, default=0.5, help="Detection confidence threshold")
@@ -143,7 +147,10 @@ def main():
     frame = 0
     was_looking = False
     last_looking_at_sent = 0.0  # throttle "looking_at" events to NS (~every 2s)
-    print(f"Camera tracking → UDP {args.host}:{args.port} (smooth={args.smooth}, threshold={args.threshold})", file=sys.stderr)
+    print(
+        f"Camera tracking → UDP {args.host}:{args.port} (smooth={args.smooth}, threshold={args.threshold})",
+        file=sys.stderr,
+    )
     print("Ctrl+C to stop.", file=sys.stderr)
 
     try:
@@ -214,5 +221,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Eye tracking exited due to: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc(file=sys.stderr)
         sys.exit(1)

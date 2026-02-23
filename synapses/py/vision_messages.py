@@ -42,7 +42,7 @@ class EyeTrackingEvent:
     y: float | None = None
 
     def to_json(self) -> str:
-        d = {"event": self.event}
+        d: dict[str, Any] = {"event": self.event}
         if self.label is not None:
             d["label"] = self.label
         if self.confidence is not None:

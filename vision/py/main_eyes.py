@@ -2,6 +2,9 @@
 Furbacca vision: dual GC9A01 eyes using russhughes/gc9a01py (CPython compat layer).
 Restored version with original state logic + NumPy performance optimizations.
 """
+
+from __future__ import annotations
+
 import json
 import os
 import random
@@ -10,12 +13,15 @@ import socket
 import sys
 import threading
 import time
+from types import FrameType
 
 _shutdown_requested = False
 
-def _handle_shutdown(signum, frame):
+
+def _handle_shutdown(signum: int | signal.Signals | None, frame: FrameType | None) -> None:
     global _shutdown_requested
     _shutdown_requested = True
+
 
 _vision_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _vision_dir)
@@ -35,7 +41,8 @@ get_eye_type = config.get_eye_type
 set_eye_type = config.set_eye_type
 
 # Display handles
-left_eye, right_eye = None, None
+left_eye: object | None = None
+right_eye: object | None = None
 try:
     left_eye, right_eye = display.init_displays(swap_left_right=config.SWAP_LEFT_RIGHT_SPI)
 except Exception as e:
@@ -50,7 +57,8 @@ sock.bind((UDP_BIND, UDP_PORT))
 sock.setblocking(False)
 print(messages.get("eyes", "udp_bind", bind=UDP_BIND, port=UDP_PORT))
 
-def _apply_eye_shape_left(frame):
+
+def _apply_eye_shape_left(frame: object | None) -> object | None:
     if frame is None:
         return frame
     assert np is not None  # NumPy required for shape masking
@@ -60,9 +68,11 @@ def _apply_eye_shape_left(frame):
     assert masked_arr is not None  # we pass non-None arr
     # Copy so the PIL Image owns its data (avoids async blit seeing reused buffer → one eye blackout)
     from PIL import Image
+
     return Image.fromarray(masked_arr.copy())
 
-def _apply_eye_shape_right(frame):
+
+def _apply_eye_shape_right(frame: object | None) -> object | None:
     if frame is None:
         return frame
     assert np is not None  # NumPy required for shape masking
@@ -70,9 +80,11 @@ def _apply_eye_shape_right(frame):
     masked_arr = shapes.apply_shape_mask_numpy(arr, config.get_eye_shape(), mirror=True)
     assert masked_arr is not None  # we pass non-None arr
     from PIL import Image
+
     return Image.fromarray(masked_arr.copy())
 
-def run_eyes():
+
+def run_eyes() -> None:
     global left_eye, right_eye
     if left_eye is None and right_eye is None:
         return
@@ -85,10 +97,7 @@ def run_eyes():
     )
     _preload_thread.start()
 
-    use_animated = (
-        config.EYES_ANIMATED and not config.EYES_GRADIENT and not config.EYES_RAINBOW
-        and loaders.HAS_PIL
-    )
+    use_animated = config.EYES_ANIMATED and not config.EYES_GRADIENT and not config.EYES_RAINBOW and loaders.HAS_PIL
 
     if use_animated:
         frame_dt = 1.0 / config.ANIM_FPS
@@ -129,11 +138,38 @@ def run_eyes():
                 spin_l = render.render_spinner(-_t * 3.2, mirror=False, color_phase=color_phase)
                 spin_r = render.render_spinner(-_t * 3.2, mirror=True, color_phase=color_phase)
                 if spin_l and spin_r:
-                    blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(spin_l), _apply_eye_shape_right(spin_r), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+                    blit.blit_pil_to_both(
+                        left_eye,
+                        right_eye,
+                        _apply_eye_shape_left(spin_l),
+                        _apply_eye_shape_right(spin_r),
+                        reverse_rows=False,
+                        outside_in=False,
+                        inside_out=False,
+                        partial_rows=None,
+                    )
                 else:
-                    blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(first_frame), _apply_eye_shape_right(first_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+                    blit.blit_pil_to_both(
+                        left_eye,
+                        right_eye,
+                        _apply_eye_shape_left(first_frame),
+                        _apply_eye_shape_right(first_frame),
+                        reverse_rows=False,
+                        outside_in=False,
+                        inside_out=False,
+                        partial_rows=None,
+                    )
             else:
-                blit.blit_pil_to_both(left_eye, right_eye, _apply_eye_shape_left(first_frame), _apply_eye_shape_right(first_frame), reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None)
+                blit.blit_pil_to_both(
+                    left_eye,
+                    right_eye,
+                    _apply_eye_shape_left(first_frame),
+                    _apply_eye_shape_right(first_frame),
+                    reverse_rows=False,
+                    outside_in=False,
+                    inside_out=False,
+                    partial_rows=None,
+                )
         focus_until = 0.0
         wide_until = 0.0
         pupil_radius_current = float(relaxed)
@@ -257,7 +293,12 @@ def run_eyes():
 
             # --- 1. Auto-blink Trigger ---
             # Trigger ONLY if the timer is up and we aren't already blinking (disabled while lids held closed at startup)
-            if not lids_held_closed and not animation_segments and not animated_blink.is_closed and now >= next_auto_blink:
+            if (
+                not lids_held_closed
+                and not animation_segments
+                and not animated_blink.is_closed
+                and now >= next_auto_blink
+            ):
                 animated_blink.trigger(now)
                 # Important: DO NOT update next_auto_blink here.
                 # Let the advance() function decide the next time.
@@ -283,7 +324,11 @@ def run_eyes():
             if animation_segments:
                 seg = animation_segments[animation_index]
                 # Programmed blink: segment can request a blink even during animation (no blocker)
-                if getattr(seg, "trigger_blink", False) and animation_index != last_blink_triggered_segment_index and animated_blink.can_trigger(now):
+                if (
+                    getattr(seg, "trigger_blink", False)
+                    and animation_index != last_blink_triggered_segment_index
+                    and animated_blink.can_trigger(now)
+                ):
                     animated_blink.trigger(now)
                     last_blink_triggered_segment_index = animation_index
                 elapsed = now - animation_start_time
@@ -325,8 +370,14 @@ def run_eyes():
                             eye_hold_until = now + random.uniform(0.0, config.HOLD_DURATION_MAX_S)
                     elif now >= eye_hold_until:
                         eye_old_x, eye_old_y = pupil_x, pupil_y
-                        eye_new_x, eye_new_y = random.uniform(config.IDLE_WANDER_MIN, config.IDLE_WANDER_MAX), random.uniform(config.IDLE_WANDER_MIN, config.IDLE_WANDER_MAX)
-                        eye_move_start, eye_move_duration = now, random.uniform(config.MOVE_DURATION_MIN_S, config.MOVE_DURATION_MAX_S)
+                        eye_new_x, eye_new_y = (
+                            random.uniform(config.IDLE_WANDER_MIN, config.IDLE_WANDER_MAX),
+                            random.uniform(config.IDLE_WANDER_MIN, config.IDLE_WANDER_MAX),
+                        )
+                        eye_move_start, eye_move_duration = (
+                            now,
+                            random.uniform(config.MOVE_DURATION_MIN_S, config.MOVE_DURATION_MAX_S),
+                        )
                         eye_in_motion = True
 
             # --- Pupil Radius: Logic with Animation Overrides ---
@@ -373,10 +424,18 @@ def run_eyes():
                 pupil_radius_current = radius_transition_from + (radius_transition_to - radius_transition_from) * e_r
 
             # --- Rendering & Async Blitting ---
-            eye_frame = render.render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, "open", pupil_radius=pupil_radius_current)
+            eye_frame = render.render_animated_frame(
+                cached_eye_base_240, pupil_x, pupil_y, "open", pupil_radius=pupil_radius_current
+            )
 
             if blit_open_bottom_to_top:
-                blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame), inside_out=True)
+                blit.blit_pil_to_both_async(
+                    left_eye,
+                    right_eye,
+                    _apply_eye_shape_left(eye_frame),
+                    _apply_eye_shape_right(eye_frame),
+                    inside_out=True,
+                )
                 blit_open_bottom_to_top = False
             elif lids_held_closed:
                 if not has_opened_once:
@@ -385,52 +444,89 @@ def run_eyes():
                     spin_l = render.render_spinner(-now * 3.2, mirror=False, color_phase=color_phase)
                     spin_r = render.render_spinner(-now * 3.2, mirror=True, color_phase=color_phase)
                     if spin_l and spin_r:
-                        blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(spin_l), _apply_eye_shape_right(spin_r))
+                        blit.blit_pil_to_both_async(
+                            left_eye, right_eye, _apply_eye_shape_left(spin_l), _apply_eye_shape_right(spin_r)
+                        )
                 else:
                     # Sleep (eyes_close after having opened): show closed lids like blink overlay
                     overlay_l = render.render_blink_overlay(mirror=False)
                     overlay_r = render.render_blink_overlay(mirror=True)
                     if overlay_l and overlay_r and np is not None:
+
                         def _composite_overlay(frame, overlay_pil):
                             assert np is not None
                             ov = np.array(overlay_pil, dtype=np.uint8)
                             from PIL import Image
+
                             return Image.fromarray(ov.copy())
+
                         comp_l = _composite_overlay(eye_frame, overlay_l)
                         comp_r = _composite_overlay(eye_frame, overlay_r)
-                        blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(comp_l), _apply_eye_shape_right(comp_r))
+                        blit.blit_pil_to_both_async(
+                            left_eye, right_eye, _apply_eye_shape_left(comp_l), _apply_eye_shape_right(comp_r)
+                        )
                     elif overlay_l and overlay_r:
                         from PIL import Image
-                        pil_frame = Image.fromarray(eye_frame) if (np is not None and isinstance(eye_frame, np.ndarray)) else eye_frame
+
+                        pil_frame = (
+                            Image.fromarray(eye_frame)
+                            if (np is not None and isinstance(eye_frame, np.ndarray))
+                            else eye_frame
+                        )
                         comp_l = pil_frame.copy()
-                        comp_l.paste(overlay_l, (0, 0))
+                        comp_l.paste(overlay_l, (0, 0))  # pyright: ignore[reportArgumentType]
                         comp_r = pil_frame.copy()
-                        comp_r.paste(overlay_r, (0, 0))
-                        blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(comp_l), _apply_eye_shape_right(comp_r))
+                        comp_r.paste(overlay_r, (0, 0))  # pyright: ignore[reportArgumentType]
+                        blit.blit_pil_to_both_async(
+                            left_eye, right_eye, _apply_eye_shape_left(comp_l), _apply_eye_shape_right(comp_r)
+                        )
             elif animated_blink.is_closed:
                 overlay_l = render.render_blink_overlay(mirror=False)
                 overlay_r = render.render_blink_overlay(mirror=True)
                 if overlay_l and overlay_r and np is not None:
+
                     def _composite_overlay(frame, overlay_pil):
                         assert np is not None
                         ov = np.array(overlay_pil, dtype=np.uint8)
                         from PIL import Image
+
                         return Image.fromarray(ov.copy())
+
                     comp_l = _composite_overlay(eye_frame, overlay_l)
                     comp_r = _composite_overlay(eye_frame, overlay_r)
-                    blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(comp_l), _apply_eye_shape_right(comp_r), outside_in=True)
+                    blit.blit_pil_to_both_async(
+                        left_eye,
+                        right_eye,
+                        _apply_eye_shape_left(comp_l),
+                        _apply_eye_shape_right(comp_r),
+                        outside_in=True,
+                    )
                 elif overlay_l and overlay_r:
                     from PIL import Image
-                    pil_frame = Image.fromarray(eye_frame) if (np is not None and isinstance(eye_frame, np.ndarray)) else eye_frame
+
+                    pil_frame = (
+                        Image.fromarray(eye_frame)
+                        if (np is not None and isinstance(eye_frame, np.ndarray))
+                        else eye_frame
+                    )
                     comp_l = pil_frame.copy()
-                    comp_l.paste(overlay_l, (0, 0))
+                    comp_l.paste(overlay_l, (0, 0))  # pyright: ignore[reportArgumentType]
                     comp_r = pil_frame.copy()
-                    comp_r.paste(overlay_r, (0, 0))
-                    blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(comp_l), _apply_eye_shape_right(comp_r), outside_in=True)
+                    comp_r.paste(overlay_r, (0, 0))  # pyright: ignore[reportArgumentType]
+                    blit.blit_pil_to_both_async(
+                        left_eye,
+                        right_eye,
+                        _apply_eye_shape_left(comp_l),
+                        _apply_eye_shape_right(comp_r),
+                        outside_in=True,
+                    )
             else:
-                blit.blit_pil_to_both_async(left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame))
+                blit.blit_pil_to_both_async(
+                    left_eye, right_eye, _apply_eye_shape_left(eye_frame), _apply_eye_shape_right(eye_frame)
+                )
 
             time.sleep(max(0.0, frame_dt - (time.monotonic() - now)))
+
 
 if __name__ == "__main__":
     try:
@@ -444,9 +540,14 @@ if __name__ == "__main__":
                 overlay_r = render.render_blink_overlay(mirror=True)
                 if overlay_l and overlay_r:
                     blit.blit_pil_to_both(
-                        left_eye, right_eye,
-                        _apply_eye_shape_left(overlay_l), _apply_eye_shape_right(overlay_r),
-                        reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None,
+                        left_eye,
+                        right_eye,
+                        _apply_eye_shape_left(overlay_l),
+                        _apply_eye_shape_right(overlay_r),
+                        reverse_rows=False,
+                        outside_in=False,
+                        inside_out=False,
+                        partial_rows=None,
                     )
             except Exception:
                 pass

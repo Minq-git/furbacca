@@ -1,9 +1,13 @@
 """
 Test patterns for displays: XY gradient, circular rainbow. No image file; same blit path as eye image.
 """
+
+from __future__ import annotations
+
 import math
 import os
 import sys
+from typing import Protocol
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from assets import config
@@ -12,7 +16,20 @@ from hardware import blit
 EYE_SIZE = config.EYE_SIZE
 
 
-def _hsv_to_rgb(h, s, v):
+class DisplayProtocol(Protocol):
+    """Minimal display interface: blit_buffer for row-by-row RGB565."""
+
+    def blit_buffer(
+        self,
+        buf: bytes | bytearray,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+    ) -> None: ...
+
+
+def _hsv_to_rgb(h: float, s: float, v: float) -> tuple[int, int, int]:
     """H,S,V in [0,1] -> (r,g,b) 0-255."""
     if s <= 0:
         return (int(v * 255), int(v * 255), int(v * 255))
@@ -38,7 +55,7 @@ def _hsv_to_rgb(h, s, v):
     return (int(r * 255), int(g * 255), int(b * 255))
 
 
-def show_gradient(display):
+def show_gradient(display: DisplayProtocol | None) -> None:
     """Draw XY gradient (red/green sweep) to display."""
     if display is None:
         return
@@ -55,7 +72,7 @@ def show_gradient(display):
         print(f"⚠ Gradient error: {e}")
 
 
-def show_rainbow(display):
+def show_rainbow(display: DisplayProtocol | None) -> None:
     """Draw circular rainbow (hue by angle from center) to display."""
     if display is None:
         return

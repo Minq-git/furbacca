@@ -3,6 +3,9 @@ RGB565 packing and blit to one or both GC9A01 displays. One byte order for all (
 NumPy path is much faster (15–30 FPS). If you see a blue tint with NumPy, set EYES_NUMPY_SWAP_RB=1.
 Double-buffer: async worker thread does blocking SPI so the main loop can render the next frame.
 """
+
+from __future__ import annotations
+
 import os
 import queue
 import struct
@@ -11,18 +14,26 @@ import threading
 try:
     from PIL import Image as PILImage
 except ImportError:
-    PILImage = None
+    PILImage = None  # type: ignore[misc, assignment]
 
 try:
     import numpy as np
+
     _HAS_NUMPY = True
 except ImportError:
-    np = None
+    np = None  # type: ignore[assignment]
     _HAS_NUMPY = False
 
-from ..assets import config
+from assets import config
 
 EYE_SIZE = config.EYE_SIZE
+
+
+def rgb565(r: int, g: int, b: int) -> bytes:
+    """Pack one pixel as big-endian RGB565 (2 bytes). Used by test_patterns."""
+    c = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+    return struct.pack(">H", c)
+
 
 # On some Pi/PIL setups np.array(img) is BGR; swap so we pack correct RGB565 (fixes blue tint).
 _NUMPY_SWAP_RB = os.environ.get("EYES_NUMPY_SWAP_RB", "").strip().lower() in ("1", "true", "yes")
@@ -31,7 +42,8 @@ _USE_NUMPY_BLIT = os.environ.get("EYES_USE_NUMPY_BLIT", "1").strip().lower() not
 # Async blit: depth 1 so we only care about the most recent frame; drops older pending frame if full.
 _blit_queue = queue.Queue(maxsize=1)
 
-def _blit_worker():
+
+def _blit_worker() -> None:
     """Background thread: processes both eyes as a single atomic task."""
     while True:
         task = _blit_queue.get()
@@ -55,10 +67,21 @@ def _blit_worker():
         finally:
             _blit_queue.task_done()
 
+
 _worker_thread = threading.Thread(target=_blit_worker, daemon=True)
 _worker_thread.start()
 
-def blit_pil_to_both_async(left_eye, right_eye, left_img, right_img=None, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
+
+def blit_pil_to_both_async(
+    left_eye: object,
+    right_eye: object,
+    left_img: object,
+    right_img: object | None = None,
+    reverse_rows: bool = False,
+    outside_in: bool = False,
+    inside_out: bool = False,
+    partial_rows: list[int] | None = None,
+) -> None:
     """Atomic async handoff of both eyes to the worker thread."""
     if left_img is None:
         return
@@ -89,8 +112,10 @@ def blit_pil_to_both_async(left_eye, right_eye, left_img, right_img=None, revers
     except queue.Full:
         pass
 
-def _pil_to_rgb565_numpy(img):
+
+def _pil_to_rgb565_numpy(img: object) -> bytes:
     """Fast path: whole-image RGB565 via NumPy without redundant copies."""
+    assert np is not None  # only called when _HAS_NUMPY and _USE_NUMPY_BLIT
     arr = np.array(img, dtype=np.uint8)
     flipped_view = np.flip(arr, axis=(0, 1))
 
@@ -106,21 +131,24 @@ def _pil_to_rgb565_numpy(img):
     rgb565_u16 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
     return rgb565_u16.astype(">u2").tobytes()
 
-def pil_to_rgb565_buffer(img):
+
+def pil_to_rgb565_buffer(img: object | None) -> bytearray | bytes | None:
     """Convert PIL RGB to RGB565 buffer."""
     if img is None or PILImage is None:
         return None
     if img.mode != "RGB":
         img = img.convert("RGB")
     if img.size != (EYE_SIZE, EYE_SIZE):
-        resample = getattr(PILImage, "Resampling", PILImage).LANCZOS if hasattr(PILImage, "Resampling") else PILImage.LANCZOS
+        resampling = getattr(PILImage, "Resampling", PILImage)
+        resample = getattr(resampling, "LANCZOS", 1)
         img = img.resize((EYE_SIZE, EYE_SIZE), resample)
 
     if _HAS_NUMPY and _USE_NUMPY_BLIT:
         return _pil_to_rgb565_numpy(img)
     return _pil_to_rgb565_fallback(img)
 
-def _pil_to_rgb565_fallback(img):
+
+def _pil_to_rgb565_fallback(img: object) -> bytearray:
     """Slow fallback without NumPy."""
     img = img.rotate(180)
     pix = img.load()
@@ -133,7 +161,17 @@ def _pil_to_rgb565_fallback(img):
             buf[offset : offset + 2] = struct.pack(">H", c565)
     return buf
 
-def blit_pil_to_both(left_eye, right_eye, left_img, right_img=None, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
+
+def blit_pil_to_both(
+    left_eye: object | None,
+    right_eye: object | None,
+    left_img: object,
+    right_img: object | None = None,
+    reverse_rows: bool = False,
+    outside_in: bool = False,
+    inside_out: bool = False,
+    partial_rows: list[int] | None = None,
+) -> None:
     """Synchronous blit for special animations or initialization."""
     if left_img is None:
         return
@@ -151,9 +189,12 @@ def blit_pil_to_both(left_eye, right_eye, left_img, right_img=None, reverse_rows
         if right_eye is not None:
             right_eye.blit_buffer(buf_right, 0, 0, EYE_SIZE, EYE_SIZE)
     else:
-        blit_buffer_row_by_row_both(left_eye, right_eye, buf_left, buf_right, reverse_rows, outside_in, inside_out, partial_rows)
+        blit_buffer_row_by_row_both(
+            left_eye, right_eye, buf_left, buf_right, reverse_rows, outside_in, inside_out, partial_rows
+        )
 
-def _row_order_outside_in():
+
+def _row_order_outside_in() -> list[int]:
     """Row indices top→bottom then bottom→top so lids appear to close from edges toward center."""
     order = []
     for i in range((EYE_SIZE + 1) // 2):
@@ -163,13 +204,22 @@ def _row_order_outside_in():
     return order
 
 
-def _row_order_inside_out():
+def _row_order_inside_out() -> list[int]:
     """Row indices center outward for opening (reverse of outside_in)."""
     order = _row_order_outside_in()
     return order[::-1]
 
 
-def blit_buffer_row_by_row_both(left_eye, right_eye, buf_left, buf_right, reverse_rows=False, outside_in=False, inside_out=False, partial_rows=None):
+def blit_buffer_row_by_row_both(
+    left_eye: object | None,
+    right_eye: object | None,
+    buf_left: bytes | bytearray,
+    buf_right: bytes | bytearray,
+    reverse_rows: bool = False,
+    outside_in: bool = False,
+    inside_out: bool = False,
+    partial_rows: list[int] | None = None,
+) -> None:
     """Blit buffer row-by-row for organic blink: outside_in = close from edges; inside_out = open from center."""
     row_bytes = EYE_SIZE * 2
     if outside_in:

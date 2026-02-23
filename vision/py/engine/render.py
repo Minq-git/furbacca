@@ -2,37 +2,51 @@
 Optimized Render: NumPy-first pipeline with vectorized spherical sampling.
 Source of truth is NumPy; PIL is only used for asset loading and final output.
 """
+
+from __future__ import annotations
+
 import math
 
 import numpy as np
 
 try:
     from PIL import Image
+
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
-    Image = None
+    Image = None  # type: ignore[misc, assignment]
 
-from ..assets import config, loaders
-from . import shapes
+from assets import config, loaders
+
+from engine import shapes
 
 # Internal caches
-_texture_arrays = {}           # eye_type -> {'sclera': arr, 'iris': arr}
-_gaze_cache_numpy = {}         # (eye_type, qx, qy) -> NumPy array (uint8)
-_blink_overlay_cache = {}      # (shape, mirror) -> PIL image
+_texture_arrays: dict[str, dict[str, np.ndarray | None]] = {}
+_gaze_cache_numpy: dict[tuple[str, int, int], np.ndarray] = {}
+_blink_overlay_cache: dict[tuple[str, bool], object] = {}
 
-def _get_textures_numpy(eye_type):
+
+def _get_textures_numpy(eye_type: str) -> dict[str, np.ndarray | None]:
     """Retrieve or load eye textures as NumPy arrays."""
     if eye_type not in _texture_arrays:
         s_img = loaders.load_sclera_image(eye_type)
         i_img = loaders.load_iris_image(eye_type)
         _texture_arrays[eye_type] = {
-            'sclera': np.array(s_img) if s_img else None,
-            'iris': np.array(i_img) if i_img else None
+            "sclera": np.array(s_img) if s_img else None,
+            "iris": np.array(i_img) if i_img else None,
         }
     return _texture_arrays[eye_type]
 
-def _sample_texture_spherical_numpy(tex_arr, cx, cy, r_max, out_shape, invert_v=False):
+
+def _sample_texture_spherical_numpy(
+    tex_arr: np.ndarray,
+    cx: float,
+    cy: float,
+    r_max: float,
+    out_shape: tuple[int, int],
+    invert_v: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Vectorized spherical sampling using NumPy indexing.
     Returns (sx, sy) index arrays and a validity mask.
@@ -46,7 +60,7 @@ def _sample_texture_spherical_numpy(tex_arr, cx, cy, r_max, out_shape, invert_v=
     # 2. Distance and angle relative to the center of the gaze (pole)
     dx = x_idx - cx
     dy = y_idx - cy
-    r = np.sqrt(dx*dx + dy*dy)
+    r = np.sqrt(dx * dx + dy * dy)
     mask = r <= r_max
 
     # 3. Calculate mapping (atan2 and r/r_max)
@@ -64,14 +78,20 @@ def _sample_texture_spherical_numpy(tex_arr, cx, cy, r_max, out_shape, invert_v=
     sy = np.clip(sy, 0, h_tex - 1)
     return sx, sy, mask
 
-def build_eye_base_sclera_iris_at_center(pole_x, pole_y, eye_type=None, size=None):
+
+def build_eye_base_sclera_iris_at_center(
+    pole_x: float,
+    pole_y: float,
+    eye_type: str | None = None,
+    size: int | None = None,
+) -> np.ndarray:
     """Builds the eyeball (sclera + iris) as a NumPy array."""
     eye_type = eye_type or config.get_eye_type()
     size = size or config.EYE_SIZE
 
     textures = _get_textures_numpy(eye_type)
-    sclera_arr = textures['sclera']
-    iris_arr = textures['iris']
+    sclera_arr = textures["sclera"]
+    iris_arr = textures["iris"]
 
     if sclera_arr is None:
         return np.zeros((size, size, 3), dtype=np.uint8)
@@ -96,7 +116,8 @@ def build_eye_base_sclera_iris_at_center(pole_x, pole_y, eye_type=None, size=Non
 
     return out_arr
 
-def build_eye_base_sclera_iris():
+
+def build_eye_base_sclera_iris() -> object | None:
     """
     Bridge function for initialization checks in main_eyes.py.
     Returns the eyeball at the default center (EYE_SIZE // 2) as a PIL image.
@@ -109,7 +130,8 @@ def build_eye_base_sclera_iris():
     # Convert to PIL so main_eyes.py can validate HAS_PIL and basic rendering
     return Image.fromarray(arr)
 
-def _get_eye_base_cached_numpy(px, py, force_type=None):
+
+def _get_eye_base_cached_numpy(px: int, py: int, force_type: str | None = None) -> np.ndarray:
     """Retrieves quantized gaze base from cache as a NumPy array."""
     cx, cy = config.EYE_SIZE // 2, config.EYE_SIZE // 2
     step = config.EYE_GAZE_CACHE_STEP
@@ -124,21 +146,25 @@ def _get_eye_base_cached_numpy(px, py, force_type=None):
     if key not in _gaze_cache_numpy:
         qpx = int(cx + (qx_idx * step) * 35)
         qpy = int(cy + (qy_idx * step) * 35)
-        _gaze_cache_numpy[key] = build_eye_base_sclera_iris_at_center(qpx, qpy, eye_type=eye_type, size=config.EYE_BUILD_SIZE)
+        _gaze_cache_numpy[key] = build_eye_base_sclera_iris_at_center(
+            qpx, qpy, eye_type=eye_type, size=config.EYE_BUILD_SIZE
+        )
 
     return _gaze_cache_numpy[key].copy()
 
-def _draw_pupil_numpy(base_arr, px, py, r, eye_type):
+
+def _draw_pupil_numpy(base_arr: np.ndarray, px: float, py: float, r: float, eye_type: str) -> None:
     """Vectorized pupil mask."""
     h, w = base_arr.shape[:2]
     y_grid, x_grid = np.ogrid[:h, :w]
     if eye_type == "dragon":
         mask = (np.abs(x_grid - px) / max(2.0, r * 0.35)) + (np.abs(y_grid - py) / r) <= 1.0
     else:
-        mask = (x_grid - px) ** 2 + (y_grid - py) ** 2 <= r ** 2
+        mask = (x_grid - px) ** 2 + (y_grid - py) ** 2 <= r**2
     base_arr[mask] = 0
 
-def render_spinner(angle_rad, mirror=True, color_phase=0.0):
+
+def render_spinner(angle_rad: float, mirror: bool = True, color_phase: float = 0.0) -> object:
     """
     Vectorized NumPy spinner: smooth rotating ring with a gap.
     color_phase in [0, 1]: 0 = beige, 1 = green (one-way transition over startup).
@@ -150,8 +176,8 @@ def render_spinner(angle_rad, mirror=True, color_phase=0.0):
 
     # 2. Ring matches default eye iris/pupil size (same as build_eye_base sclera/iris)
     r_out = config.IRIS_R * config.EYE_LAYER_VIEWPORT_SCALE  # iris outer edge
-    r_in = float(config.eye_type_pupil_radii("default")[0])   # relaxed pupil = inner edge
-    dist_sq = (x_idx - cx)**2 + (y_idx - cy)**2
+    r_in = float(config.eye_type_pupil_radii("default")[0])  # relaxed pupil = inner edge
+    dist_sq = (x_idx - cx) ** 2 + (y_idx - cy) ** 2
     ring_mask = (dist_sq <= r_out**2) & (dist_sq >= r_in**2)
 
     # Softer AA edges: wider falloff so the ring doesn't look stepped
@@ -205,7 +231,7 @@ def render_spinner(angle_rad, mirror=True, color_phase=0.0):
     return Image.fromarray(out_arr)
 
 
-def render_blink_overlay(mirror=False):
+def render_blink_overlay(mirror: bool = False) -> object | None:
     """
     Blink layer: black + eyelid line following the eye shape.
     Cached per (shape, mirror) for performance.
@@ -214,6 +240,7 @@ def render_blink_overlay(mirror=False):
         return None
 
     from PIL import ImageDraw
+
     shape_name = (config.get_eye_shape() or "round").strip().lower()
     size = config.EYE_SIZE
     key = (shape_name, mirror)
@@ -232,12 +259,20 @@ def render_blink_overlay(mirror=False):
         draw.line([(x0, y0), (x1, y1)], fill=(28, 28, 28), width=3)
 
     if mirror:
-        overlay = overlay.transpose(Image.FLIP_LEFT_RIGHT)
+        flip = getattr(Image, "FLIP_LEFT_RIGHT", 0)
+        overlay = overlay.transpose(flip)  # pyright: ignore[reportArgumentType]
 
     _blink_overlay_cache[key] = overlay
     return overlay
 
-def render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, blink_state="open", pupil_radius=None):
+
+def render_animated_frame(
+    cached_eye_base_240: object | None,
+    pupil_x: float,
+    pupil_y: float,
+    blink_state: str = "open",
+    pupil_radius: int | float | None = None,
+) -> object:
     """Final render: Everything is NumPy until the final PIL conversion for the UI/shapes stack."""
     cx, cy = config.EYE_SIZE // 2, config.EYE_SIZE // 2
     eye_type = config.get_eye_type()
@@ -257,12 +292,14 @@ def render_animated_frame(cached_eye_base_240, pupil_x, pupil_y, blink_state="op
     result = Image.fromarray(base_arr)
 
     if config.EYE_BUILD_SIZE != config.EYE_SIZE:
-        resample = getattr(Image, "Resampling", Image).LANCZOS
+        resampling = getattr(Image, "Resampling", Image)
+        resample = getattr(resampling, "LANCZOS", 1)
         result = result.resize((config.EYE_SIZE, config.EYE_SIZE), resample)
 
     return result
 
-def preload_all_types(skip_type=None):
+
+def preload_all_types(skip_type: str | None = None) -> None:
     """
     Pre-loads textures and initial gaze mappings for all eye types.
     Run in background at startup so switching is instantaneous.
