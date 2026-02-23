@@ -5,7 +5,7 @@
 ## Assets used
 
 | File | Use |
-|------|-----|
+| ------ | ----- |
 | **iris.jpg** (or **iris.png**) | Default/human iris texture |
 | **sclera.png** | Default/human sclera (white of eye) |
 | **dragon-iris.jpg** | Iris for `EYE_TYPE=dragon` / `demon` |

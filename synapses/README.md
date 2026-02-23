@@ -5,7 +5,7 @@ Shared JSON message shapes for Furbacca’s Nervous System (Node/TypeScript) and
 ## Ports
 
 | Port | Direction | Purpose |
-|------|-----------|---------|
+| ------ | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | **5005** | Nervous System → Eyes | Look, animation, blink, eye shape/type, warmup, sleep close |
 | **5006** | Camera / eye-track → Nervous System | Eye-tracking events: `looking_started`, `looking_stopped`, `looking_at`, `eye_tracking_started`, `eye_tracking_stopped` |
 
