@@ -14,7 +14,7 @@ import sys
 import threading
 import time
 from types import FrameType
-from typing import Any, cast
+from typing import Protocol, Self, cast
 
 _shutdown_requested = False
 
@@ -29,8 +29,10 @@ sys.path.insert(0, _vision_dir)
 
 try:
     import numpy as np
+    from numpy import ndarray
 except ImportError:
     np = None
+    ndarray = None
 
 import messages  # noqa: E402
 from assets import config, loaders  # noqa: E402
@@ -58,6 +60,14 @@ sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 sock.bind((UDP_BIND, UDP_PORT))
 sock.setblocking(False)
 print(messages.get("eyes", "udp_bind", bind=UDP_BIND, port=UDP_PORT))
+
+
+class _PilImageLike(Protocol):
+    """Minimal PIL Image interface used in overlay composition."""
+
+    def copy(self) -> Self: ...
+
+    def paste(self, im: object, box: object | None = None, mask: object | None = None) -> None: ...
 
 
 def _apply_eye_shape_left(frame: object | None) -> object | None:
@@ -218,9 +228,10 @@ def run_eyes() -> None:
             # --- UDP Command Logic (Original) ---
             while True:
                 try:
-                    data, _ = sock.recvfrom(config.UDP_RECV_SIZE)
-                    raw: dict[str, object] = json.loads(data.decode())
-                    msg = raw
+                    recv = sock.recvfrom(config.UDP_RECV_SIZE)
+                    data = recv[0]
+                    _addr: tuple[str, int] = cast(tuple[str, int], recv[1])
+                    msg = cast(dict[str, object], json.loads(data.decode()))
                     action = str(msg.get("action", "look"))
                     if action == "eyes_open":
                         lids_held_closed = False
@@ -477,15 +488,14 @@ def run_eyes() -> None:
                     elif overlay_l and overlay_r:
                         from PIL import Image
 
-                        pil_frame: Any = (
-                            Image.fromarray(eye_frame)
-                            if (np is not None and isinstance(eye_frame, np.ndarray))
-                            else eye_frame
-                        )
-                        comp_l = cast(Any, pil_frame).copy()
-                        _ = cast(Any, comp_l).paste(overlay_l, (0, 0))  # pyright: ignore[reportArgumentType]
-                        comp_r = cast(Any, pil_frame).copy()
-                        _ = cast(Any, comp_r).paste(overlay_r, (0, 0))  # pyright: ignore[reportArgumentType]
+                        if np is not None and ndarray is not None and isinstance(eye_frame, ndarray):
+                            pil_frame: _PilImageLike = cast(_PilImageLike, Image.fromarray(eye_frame))
+                        else:
+                            pil_frame = cast(_PilImageLike, eye_frame)
+                        comp_l = pil_frame.copy()
+                        _unused_paste_l: None = comp_l.paste(overlay_l, (0, 0))  # pyright: ignore[reportArgumentType]
+                        comp_r = pil_frame.copy()
+                        _unused_paste_r: None = comp_r.paste(overlay_r, (0, 0))  # pyright: ignore[reportArgumentType]
                         blit.blit_pil_to_both_async(
                             left_eye, right_eye, _apply_eye_shape_left(comp_l), _apply_eye_shape_right(comp_r)
                         )
@@ -513,15 +523,14 @@ def run_eyes() -> None:
                 elif overlay_l and overlay_r:
                     from PIL import Image
 
-                    pil_frame = (
-                        Image.fromarray(eye_frame)
-                        if (np is not None and isinstance(eye_frame, np.ndarray))
-                        else eye_frame
-                    )
-                    comp_l = cast(Any, pil_frame).copy()
-                    _ = cast(Any, comp_l).paste(overlay_l, (0, 0))  # pyright: ignore[reportArgumentType]
-                    comp_r = cast(Any, pil_frame).copy()
-                    _ = cast(Any, comp_r).paste(overlay_r, (0, 0))  # pyright: ignore[reportArgumentType]
+                    if np is not None and ndarray is not None and isinstance(eye_frame, ndarray):
+                        pil_frame = cast(_PilImageLike, Image.fromarray(eye_frame))
+                    else:
+                        pil_frame = cast(_PilImageLike, eye_frame)
+                    comp_l = pil_frame.copy()
+                    _unused_paste_l2: None = comp_l.paste(overlay_l, (0, 0))  # pyright: ignore[reportArgumentType]
+                    comp_r = pil_frame.copy()
+                    _unused_paste_r2: None = comp_r.paste(overlay_r, (0, 0))  # pyright: ignore[reportArgumentType]
                     blit.blit_pil_to_both_async(
                         left_eye,
                         right_eye,
