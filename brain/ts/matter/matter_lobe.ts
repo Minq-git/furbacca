@@ -171,8 +171,8 @@ export class MatterLobe {
 				ExtendedColorLightDeviceDefinition,
 				ExtendedColorLightRequirements,
 			} = devices;
-			const { createFurbaccaExtendedColorLight, EyeBridgeForIdentify } =
-				await import("./furbacca_identify_server.js");
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			const { createFurbaccaExtendedColorLight, EyeBridgeForIdentify } = require("./furbacca_identify_server") as typeof import("./furbacca_identify_server.js");
 			const FurbaccaExtendedColorLightDeviceDefinition =
 				createFurbaccaExtendedColorLight(
 					ExtendedColorLightDeviceDefinition as {

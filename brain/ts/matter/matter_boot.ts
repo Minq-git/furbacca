@@ -47,7 +47,9 @@ export async function startMatterIfEnabled(opts: {
 	}
 
 	const matterLogBuffer: string[] = [];
-	const { MatterLobe } = await import("./matter_lobe.js");
+	// Use require() for local module so TS (node16/CJS) resolves without needing a sibling .js file in source.
+	// eslint-disable-next-line @typescript-eslint/no-require-imports
+	const { MatterLobe } = require("./matter_lobe") as typeof import("./matter_lobe.js");
 	const matter = new MatterLobe(eyes, touch);
 
 	try {
