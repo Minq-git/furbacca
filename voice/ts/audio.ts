@@ -154,8 +154,14 @@ export function playWav(filename: string, maxDurationSeconds?: number): void {
 	}
 	const header = parseWavHeader(buffer);
 	if (!header) {
-		// Not 16-bit PCM or invalid WAV — fall back to direct aplay (no software limit)
-		const fallbackChild = spawn("aplay", ["-D", APLAY_DEVICE, filepath], {
+		// Not 16-bit PCM or invalid WAV — fall back to direct aplay (no software limit).
+		// Use aplay's native duration cutoff so we don't play the full file.
+		const args = ["-D", APLAY_DEVICE, "-q"];
+		if (maxDurationSeconds != null && maxDurationSeconds > 0) {
+			args.push("-d", String(Math.round(maxDurationSeconds)));
+		}
+		args.push(filepath);
+		const fallbackChild = spawn("aplay", args, {
 			detached: true,
 			stdio: "ignore",
 		});
