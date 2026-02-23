@@ -1,4 +1,4 @@
-# Furbacca eyes only (UDP 5005). Install: sudo cp scripts/systemd/furbacca-eyes.service /etc/systemd/system/ && sudo systemctl daemon-reload
+# Furbacca eyes only (UDP 5005). Install: sudo cp .scripts/systemd/furbacca-eyes.service /etc/systemd/system/ && sudo systemctl daemon-reload
 # For eyes + nervous system (touch, fe from Mac), use wake-furbacca instead.
 [Unit]
 Description=Furbacca eyes (vision.py.main_eyes, UDP 5005)

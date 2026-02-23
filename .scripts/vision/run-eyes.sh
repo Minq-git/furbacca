@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run vision/py/main_eyes.py and blank both displays on exit (Ctrl+C, kill, or normal exit).
-# Eyes listen on UDP 5005; use scripts/vision/eye-command.sh from another terminal to send
+# Eyes listen on UDP 5005; use .scripts/vision/eye-command.sh from another terminal to send
 # commands (blink, shape sharp, cycle_eye_shape, etc.). For remote commands from your Mac,
 # set UDP_BIND=0.0.0.0 (put it inside your alias if the alias uses && so the eyes process gets it).
 # Run from repo root. Requires venv activated or python in PATH.

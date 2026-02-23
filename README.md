@@ -24,7 +24,7 @@ Furbacca's codebase is structured around physical systems, bridging a Node.js/Ty
 **Main Entry Point:** Start all services (eyes, nervous system, and eye-tracking).
 
 ```bash
-./scripts/wake-furbacca.sh
+./.scripts/wake-furbacca.sh
 # OR use the alias if configured:
 wake-furbacca
 ```
@@ -41,13 +41,13 @@ You can manually send commands to the eyes from the Pi or your local Mac:
 
 ```bash
 # Shapes: round, sharp, half_moon, bean, oval, tilted, dome, pill, anime, concern, glare, gemini, heart, kawaii, stern, sus
-./scripts/vision/eye-command.sh shape sharp
+./.scripts/vision/eye-command.sh shape sharp
 
 # Types: default, human, dragon, demon
-./scripts/vision/eye-command.sh type dragon
+./.scripts/vision/eye-command.sh type dragon
 ```
 
-*(Note: To send from a remote machine, pass the host as the first argument, e.g., `./scripts/vision/eye-command.sh furbacca.local shape sharp`)*
+*(Note: To send from a remote machine, pass the host as the first argument, e.g., `./.scripts/vision/eye-command.sh furbacca.local shape sharp`)*
 
 ---
 
@@ -82,7 +82,7 @@ Enable SPI (`sudo raspi-config nonint do_spi 0`) and reboot. Then, run the maste
 
 ```bash
 cd ~/furbacca
-bash scripts/setup/setup-fresh.sh
+bash .scripts/setup/setup-fresh.sh
 ```
 
 ### 2. Code Synchronization (Mac to Pi)
@@ -116,7 +116,7 @@ Furbacca acts as a native Matter bridge on your network (UDP `5540`).
 Check the logs during startup for the QR code URL and manual pairing code, or run:
 
 ```bash
-./scripts/matter/show-matter-pairing.sh
+./.scripts/matter/show-matter-pairing.sh
 ```
 
 ---
@@ -125,16 +125,16 @@ Check the logs during startup for the QR code URL and manual pairing code, or ru
 
 **Audio/I2S is dead or crackling:**
 
-* Run `./scripts/diagnostics/audio-check.sh`.
+* Run `./.scripts/diagnostics/audio-check.sh`.
 * Ensure `/boot/firmware/config.txt` contains `dtparam=audio=off` and `dtoverlay=max98357a,no-sdmode`.
 
 **One or both displays are black / corrupted:**
 
-* Shared SPI buses can occasionally glitch during high-load startups. Trigger a hardware reset by running `./scripts/fe-restart.sh` or by holding the **Head + Belly** sensors together for 5 seconds.
+* Shared SPI buses can occasionally glitch during high-load startups. Trigger a hardware reset by running `./.scripts/fe-restart.sh` or by holding the **Head + Belly** sensors together for 5 seconds.
 
 **Matter fails to start or crashes:**
 
-* Corrupt pairing states can halt the Node.js process. Factory reset the Matter node by running `./scripts/matter/matter-factory-reset.sh` (or `rm -rf .matter`), then re-pair the device.
+* Corrupt pairing states can halt the Node.js process. Factory reset the Matter node by running `./.scripts/matter/matter-factory-reset.sh` (or `rm -rf .matter`), then re-pair the device.
 
 **Touch sensors are unresponsive (`Device or resource busy`):**
 
@@ -142,4 +142,4 @@ Check the logs during startup for the QR code URL and manual pairing code, or ru
 
 **Network drops under heavy load:**
 
-* Hold **Head + Belly** for 30 seconds. The nervous system will trigger `./scripts/diagnostics/heal-network.sh` to restart the Wi-Fi stack and recover connection.
+* Hold **Head + Belly** for 30 seconds. The nervous system will trigger `./.scripts/diagnostics/heal-network.sh` to restart the Wi-Fi stack and recover connection.

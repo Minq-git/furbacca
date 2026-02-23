@@ -1,4 +1,4 @@
-# Furbacca full stack (eyes + nervous system). Install: sudo cp scripts/systemd/furbacca.service /etc/systemd/system/ && sudo systemctl daemon-reload
+# Furbacca full stack (eyes + nervous system). Install: sudo cp .scripts/systemd/furbacca.service /etc/systemd/system/ && sudo systemctl daemon-reload
 # Edit User and WorkingDirectory (and ExecStart path) to match your Pi user and repo path.
 # Enable at boot: sudo systemctl enable --now furbacca
 [Unit]
@@ -9,7 +9,7 @@ After=network.target
 Type=simple
 User=minqz
 WorkingDirectory=/home/minqz/furbacca
-ExecStart=/home/minqz/furbacca/scripts/wake-furbacca.sh
+ExecStart=/home/minqz/furbacca/.scripts/wake-furbacca.sh
 Restart=on-failure
 RestartSec=10
 StartLimitIntervalSec=300

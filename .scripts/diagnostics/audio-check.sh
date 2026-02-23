@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Check I2S DAC config and list ALSA devices. Run on the Pi.
-# Usage: ./scripts/diagnostics/audio-check.sh
+# Usage: ./.scripts/diagnostics/audio-check.sh
 
 CONFIG="/boot/firmware/config.txt"
 [[ -f "$CONFIG" ]] || CONFIG="/boot/config.txt"

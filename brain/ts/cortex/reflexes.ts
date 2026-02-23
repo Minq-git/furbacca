@@ -212,7 +212,7 @@ export class Reflexes {
 					this.eyes.sendCommand("set_eye_type", { type: "demon" });
 					const scriptPath = path.join(
 						process.cwd(),
-						"scripts",
+						".scripts",
 						"diagnostics",
 						"heal-network.sh",
 					);

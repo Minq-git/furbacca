@@ -4,11 +4,11 @@
 #
 # Steps:
 #  1. Stop Furbacca (Ctrl+C or: sudo systemctl stop furbacca)
-#  2. Run from repo root: ./scripts/matter/matter-factory-reset.sh [-y]
+#  2. Run from repo root: ./.scripts/matter/matter-factory-reset.sh [-y]
 #  3. In Google Home app, remove Furbacca if listed (Settings → Furbacca → Remove device)
 #  4. Start Furbacca (wake-furbacca) and add again with the QR code
 #
-# Usage: ./scripts/matter/matter-factory-reset.sh [-y]
+# Usage: ./.scripts/matter/matter-factory-reset.sh [-y]
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"

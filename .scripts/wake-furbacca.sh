@@ -35,7 +35,7 @@ EYE_TRACK_STARTED_BY_US=0
 cleanup() {
   # Stop eye-tracking if we started it (so Ctrl+C leaves eye-track off when started with --no-eye-track next time)
   if [[ "$EYE_TRACK_STARTED_BY_US" -eq 1 ]]; then
-    "$REPO_DIR/scripts/vision/eye-track.sh" off 2>/dev/null || true
+    "$REPO_DIR/.scripts/vision/eye-track.sh" off 2>/dev/null || true
   fi
   # Close eyelids and blank displays on exit (nervous system kills eyes process; this helps if eyes still respond)
   if command -v python3 >/dev/null 2>&1; then
@@ -80,7 +80,7 @@ fi
 if [[ "$(uname -s)" == "Linux" && "${FURBACCA_EYE_TRACK:-1}" != "0" ]]; then
   if [[ -f vision/py/camera/camera_track.py ]]; then
     if ! pgrep -f "vision/py/camera/camera_track.py|vision\\.py\\.camera\\.camera_track" >/dev/null 2>&1; then
-      if "$REPO_DIR/scripts/vision/eye-track.sh" on; then
+      if "$REPO_DIR/.scripts/vision/eye-track.sh" on; then
         EYE_TRACK_STARTED_BY_US=1
       fi
     fi

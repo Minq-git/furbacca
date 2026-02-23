@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Send a single UDP command to the eyes (e.g. change shape, blink).
-# Use from another terminal while scripts/vision/run-eyes.sh is running (eyes listen on UDP 5005).
+# Use from another terminal while .scripts/vision/run-eyes.sh is running (eyes listen on UDP 5005).
 # Usage:
-#   ./scripts/vision/eye-command.sh anim nervous_look
-#   ./scripts/vision/eye-command.sh anim shiver
-#   ./scripts/vision/eye-command.sh blink
-#   ./scripts/vision/eye-command.sh shape sharp
-#   ./scripts/vision/eye-command.sh type dragon
-#   ./scripts/vision/eye-command.sh furbacca.local anim shiver   # from Mac (fe anim shiver)
+#   ./.scripts/vision/eye-command.sh anim nervous_look
+#   ./.scripts/vision/eye-command.sh anim shiver
+#   ./.scripts/vision/eye-command.sh blink
+#   ./.scripts/vision/eye-command.sh shape sharp
+#   ./.scripts/vision/eye-command.sh type dragon
+#   ./.scripts/vision/eye-command.sh furbacca.local anim shiver   # from Mac (fe anim shiver)
 set -e
 PORT="${EYE_UDP_PORT:-5005}"
 HOST="127.0.0.1"

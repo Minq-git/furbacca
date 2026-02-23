@@ -145,7 +145,7 @@ def init_displays(swap_left_right: bool = False) -> tuple[object | None, object 
 
     gc9a01py_lib = os.path.join(_vision_dir, "gc9a01py", "lib")
     if not os.path.isdir(gc9a01py_lib):
-        print("⚠ vision/py/gc9a01py/lib not found. Run: bash scripts/setup/fetch-gc9a01py.sh")
+        print("⚠ vision/py/gc9a01py/lib not found. Run: bash .scripts/setup/fetch-gc9a01py.sh")
         _write_display_status(False)
         return None, None
 

@@ -139,7 +139,7 @@ So: **build/convert on a powerful machine; package RPK on the Pi.** Pre-built mo
 ### 4.3 Practical steps (after headless verification)
 
 1. **Verify camera headless:** See **§5** below. Once a still (and optionally a detection still) works, the camera and IMX500 pipeline are OK.  
-2. **Eye tracking:** **scripts/vision/eye-track.sh** (alias **eye-track** or **fe-track**) — starts **vision/py/camera/camera_track.py** (Picamera2 + IMX500). When you run **on** or **off**, the script notifies the nervous system (UDP 127.0.0.1:5006) so it can log tracking state. From Mac: **`eye-track furbacca.local on`** (or `off`, `status`). On the Pi: **`eye-track on`** or **`eye-track run --print-every 30`**. Options: **`--host`**, **`--port`** (5005), **`--threshold`** (0.5), **`--smooth`** (EMA 0..1), **`--print-every N`**.  
+2. **Eye tracking:** **`.scripts/vision/eye-track.sh`** (alias **eye-track** or **fe-track**) — starts **`vision/py/camera/camera_track.py`** (Picamera2 + IMX500). When you run **on** or **off**, the script notifies the nervous system (UDP 127.0.0.1:5006) so it can log tracking state. From Mac: **`eye-track furbacca.local on`** (or `off`, `status`). On the Pi: **`eye-track on`** or **`eye-track run --print-every 30`**. Options: **`--host`**, **`--port`** (5005), **`--threshold`** (0.5), **`--smooth`** (EMA 0..1), **`--print-every N`**.  
 3. **Start order:** Run **wake-furbacca** (eyes + nervous system), then **eye-track on** (or `eye-track run` in another terminal). The eyes will follow the chosen target (person if present, else highest-confidence detection).  
 4. **Tune:** Use **`--smooth`** (e.g. 0.2–0.3) to reduce jitter; **`--threshold`** to ignore low-confidence detections.
 
@@ -216,7 +216,7 @@ rpicam-vid -t 5000 -o /tmp/camera-test.264 -n \
 The picamera2 object detection demo with `--no-preview` doesn't show output. To see what it's detecting:
 
 - **Save a still with boxes** (Step 3): copy the image to your Mac and open it.  
-- **Eye tracking:** Run **`eye-track run --print-every 30`** (or `./scripts/vision/eye-track.sh run --print-every 30`) to print detections every N frames (e.g. person 0.92 at 320,240). (e.g. “detections: 2, person 0.95 at …”) and exit after a few seconds.
+- **Eye tracking:** Run **`eye-track run --print-every 30`** (or `./.scripts/vision/eye-track.sh run --print-every 30`) to print detections every N frames (e.g. person 0.92 at 320,240). (e.g. “detections: 2, person 0.95 at …”) and exit after a few seconds.
 
 See **§4.3** and the script's `--help` for options.
 

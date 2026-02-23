@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/diagnostics/heal-network.sh — Emergency network repair after brownout.
+# .scripts/diagnostics/heal-network.sh — Emergency network repair after brownout.
 # Restarts network stack and optionally restores wpa_supplicant from /boot backup.
 # Trigger: Head + Belly held 30s (nervous_system.ts). Prep: sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /boot/wpa_supplicant.conf
 

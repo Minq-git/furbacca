@@ -2,11 +2,11 @@
 /**
  * Test fan on BCM 24: init, soft-start to 100%, hold 5s, then off.
  * Run from repo root on the Pi (after build):
- *   npm run build:pi && node dist/scripts/diagnostics/test-fan.js
- * (Use build:pi on Pi to avoid tsc OOM; if already built, just: node dist/scripts/diagnostics/test-fan.js)
+ *   npm run build:pi && node dist/.scripts/diagnostics/test-fan.js
+ * (Use build:pi on Pi to avoid tsc OOM; if already built, just: node dist/.scripts/diagnostics/test-fan.js)
  *
  * Force fan on for this run (ignore FURBACCA_FAN=0):
- *   FURBACCA_FAN=1 node dist/scripts/diagnostics/test-fan.js
+ *   FURBACCA_FAN=1 node dist/.scripts/diagnostics/test-fan.js
  */
 if (process.env.FURBACCA_FAN !== "1" && process.env.FURBACCA_FAN !== "true") {
 	process.env.FURBACCA_FAN = "1";

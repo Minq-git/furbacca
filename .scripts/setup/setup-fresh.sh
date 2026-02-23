@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Furbacca full setup: Node (Pi only), vision (venv, pip, gc9a01py, eye graphics), npm deps, optional alias.
 # Run from repo root on the Pi after a wipe (or Mac for vision-only). Idempotent (safe to run again).
-# One-shot: push-furbacca from Mac, then on Pi: cd ~/furbacca && bash scripts/setup/setup-fresh.sh
+# One-shot: push-furbacca from Mac, then on Pi: cd ~/furbacca && bash .scripts/setup/setup-fresh.sh
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -160,7 +160,7 @@ ZRAMEOF
   fi
   if [[ "$NEED_REBOOT" == "true" ]]; then
     echo "Reboot now so zram/swap/gpu_mem/audio config apply, then re-run this script to complete setup (npm install + build): sudo reboot"
-    echo "After reboot: cd $REPO_DIR && bash scripts/setup/setup-fresh.sh"
+    echo "After reboot: cd $REPO_DIR && bash .scripts/setup/setup-fresh.sh"
     exit 0
   fi
 fi
@@ -197,11 +197,11 @@ pip install spidev RPi.GPIO Pillow numpy
 
 # 4. Fetch gc9a01py driver (required for vision/py/main_eyes.py)
 echo "Fetching gc9a01py driver..."
-bash scripts/setup/fetch-gc9a01py.sh
+bash .scripts/setup/fetch-gc9a01py.sh
 
 # 5. Fetch eye graphics (iris.jpg, eye.svg, sclera.png, etc. into vision/py/graphics)
 echo "Fetching eye graphics..."
-bash scripts/setup/fetch-eye-graphics.sh
+bash .scripts/setup/fetch-eye-graphics.sh
 
 # 6. Node deps (nervous system)
 echo "Installing npm deps and building..."
@@ -214,8 +214,8 @@ if [[ "$UNAME_S" == "Linux" ]]; then
   if [[ "$UNAME_M" == "aarch64" ]] && ! grep -q '/dev/zram' /proc/swaps 2>/dev/null; then
     echo "⚠ zram is not active (zramctl shows nothing). The TypeScript build will likely OOM."
     echo "  Reboot first so zram starts, then re-run: sudo reboot"
-    echo "  After reboot: cd $REPO_DIR && bash scripts/setup/setup-fresh.sh"
-    echo "  Or build on Mac and push: npm run build && ./scripts/push-furbacca.sh"
+    echo "  After reboot: cd $REPO_DIR && bash .scripts/setup/setup-fresh.sh"
+    echo "  Or build on Mac and push: npm run build && ./.scripts/push-furbacca.sh"
     exit 1
   fi
   echo "Building TypeScript (2–5 min on Pi Zero 2 W, no output until done — please wait)..."
@@ -235,7 +235,7 @@ if [[ "$UNAME_S" == "Linux" ]]; then
   [[ -z "$RC" && -f ~/.bashrc ]] && RC=~/.bashrc
   if [[ -n "$RC" ]]; then
     if ! grep -q "wake-furbacca" "$RC" 2>/dev/null; then
-      LINE="alias wake-furbacca='$REPO_DIR/scripts/wake-furbacca.sh'"
+      LINE="alias wake-furbacca='$REPO_DIR/.scripts/wake-furbacca.sh'"
       { echo ""; echo "# Furbacca"; echo "$LINE"; } >> "$RC"
       echo "Added to $RC: $LINE"
     fi
@@ -244,11 +244,11 @@ if [[ "$UNAME_S" == "Linux" ]]; then
       echo "Added to $RC: alias sleep-furbacca='sudo halt'"
     fi
     if ! grep -q "setup-furbacca" "$RC" 2>/dev/null; then
-      echo "alias setup-furbacca='bash $REPO_DIR/scripts/setup/setup-fresh.sh'" >> "$RC"
+      echo "alias setup-furbacca='bash $REPO_DIR/.scripts/setup/setup-fresh.sh'" >> "$RC"
       echo "Added to $RC: alias setup-furbacca='...'"
     fi
     if ! grep -q "eye-track" "$RC" 2>/dev/null; then
-      echo "alias eye-track='$REPO_DIR/scripts/vision/eye-track.sh'" >> "$RC"
+      echo "alias eye-track='$REPO_DIR/.scripts/vision/eye-track.sh'" >> "$RC"
       echo "Added to $RC: alias eye-track='...'"
     fi
   fi
@@ -260,7 +260,7 @@ if [[ "$UNAME_S" == "Linux" ]]; then
   if [[ -f /etc/wpa_supplicant/wpa_supplicant.conf ]]; then
     if [[ -n "$BOOT_PARTITION" ]]; then
       sudo cp /etc/wpa_supplicant/wpa_supplicant.conf "$BOOT_PARTITION/wpa_supplicant.conf" 2>/dev/null && \
-        echo "Backed up wpa_supplicant.conf to $BOOT_PARTITION (for scripts/diagnostics/heal-network.sh)." || \
+        echo "Backed up wpa_supplicant.conf to $BOOT_PARTITION (for .scripts/diagnostics/heal-network.sh)." || \
         echo "⚠ Could not write $BOOT_PARTITION/wpa_supplicant.conf (e.g. read-only). After first boot, run: sudo cp /etc/wpa_supplicant/wpa_supplicant.conf $BOOT_PARTITION/"
     else
       echo "⚠ Boot partition not writable. When Wi‑Fi is configured, run: sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /boot/"
@@ -299,7 +299,7 @@ After=network.target
 Type=simple
 User=$FURBACCA_USER
 WorkingDirectory=$REPO_DIR
-ExecStart=$REPO_DIR/scripts/wake-furbacca.sh
+ExecStart=$REPO_DIR/.scripts/wake-furbacca.sh
 Restart=on-failure
 RestartSec=10
 StartLimitIntervalSec=300
@@ -322,6 +322,6 @@ fi
 
 echo ""
 echo "=== Setup complete ==="
-echo "Run: ./scripts/wake-furbacca.sh   (or: wake-furbacca   after opening a new shell)"
+echo "Run: ./.scripts/wake-furbacca.sh   (or: wake-furbacca   after opening a new shell)"
 echo "Re-run full setup: setup-furbacca   (alias added to your shell rc)"
 echo "SPI / pinout: instruction.md §3.1."

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Send UDP restart_both to eyes (port 5005) = full hardware re-init (RST + init both panels). Same as head+belly held 5s.
-# Usage: ./scripts/fe-restart.sh [host]
+# Usage: ./.scripts/fe-restart.sh [host]
 #   host defaults to FURBACCA_HOST or furbacca.local (fallback 127.0.0.1).
 set -e
 HOST="${1:-${FURBACCA_HOST:-furbacca.local}}"

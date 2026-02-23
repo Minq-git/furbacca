@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Furbacca zRAM & Swap Monitor
 # Shows compression ratio and SD card swap usage in real-time.
-# On the Pi:  ./scripts/diagnostics/monitor-zram.sh
-# From Mac:   ./scripts/diagnostics/monitor-zram.sh furbacca.local   (SSH to Pi and run there)
+# On the Pi:  ./.scripts/diagnostics/monitor-zram.sh
+# From Mac:   ./.scripts/diagnostics/monitor-zram.sh furbacca.local   (SSH to Pi and run there)
 # SSH user:   FURBACCA_SSH_USER (default: minqz)
 #
 # Press Ctrl+C to stop.
@@ -15,7 +15,7 @@ REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 if [[ -n "$1" && ( "$1" == *.* || "$1" == "furbacca" ) ]]; then
   REMOTE_HOST="$1"
   SSH_USER="${FURBACCA_SSH_USER:-minqz}"
-  exec ssh -t "$SSH_USER@$REMOTE_HOST" 'cd ~/furbacca && ./scripts/diagnostics/monitor-zram.sh'
+  exec ssh -t "$SSH_USER@$REMOTE_HOST" 'cd ~/furbacca && ./.scripts/diagnostics/monitor-zram.sh'
 fi
 
 cd "$REPO_DIR"

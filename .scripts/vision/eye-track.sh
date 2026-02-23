@@ -3,9 +3,9 @@
 # Same host pattern as fe-restart / eye-command: optional host first, then on|off|status|run [args...].
 #
 # Usage:
-#   On Pi:   ./scripts/vision/eye-track.sh on | off | status
-#   On Pi:   ./scripts/vision/eye-track.sh run [--print-every 30 ...]   # foreground, pass args to camera_track.py
-#   From Mac: ./scripts/vision/eye-track.sh furbacca.local on | off | status
+#   On Pi:   ./.scripts/vision/eye-track.sh on | off | status
+#   On Pi:   ./.scripts/vision/eye-track.sh run [--print-every 30 ...]   # foreground, pass args to camera_track.py
+#   From Mac: ./.scripts/vision/eye-track.sh furbacca.local on | off | status
 #
 # SSH user: FURBACCA_SSH_USER (default: minqz)
 
@@ -18,7 +18,7 @@ if [[ -n "$1" && ( "$1" == *.* || "$1" == "furbacca" ) ]]; then
   REMOTE_HOST="$1"
   shift
   SSH_USER="${FURBACCA_SSH_USER:-minqz}"
-  exec ssh "$SSH_USER@$REMOTE_HOST" "cd ~/furbacca && ./scripts/vision/eye-track.sh $*"
+  exec ssh "$SSH_USER@$REMOTE_HOST" "cd ~/furbacca && ./.scripts/vision/eye-track.sh $*"
 fi
 
 ACTION="${1:-status}"
