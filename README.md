@@ -4,12 +4,64 @@ An AI-powered, Matter-enabled animatronic build based on the 2012 Hasbro Furby, 
 **Platform:** Raspberry Pi Zero 2 WH (with headers), Debian Trixie (Testing).
 
 ## 🛠 Architecture
-- **Nervous system** (Node.js/TypeScript): Orchestrates startup, touch, sounds, and Matter; loads **brain** and talks to **vision** over UDP.
+
+- **Nervous system** (Node.js/TypeScript): Orchestrates startup, touch, voice, and Matter; loads **brain** and talks to **vision** over UDP.
 - **Brain** (`brain/ts/`): Matter lobe — Furbacca as a Matter device (Extended Color Light + Generic Switches); custom Identify server for eye effects.
-- **Vision** (`vision/py/`): Python (venv), dual GC9A01 circular LCDs via SPI; **vision/ts/eye_bridge.ts** sends UDP commands to the eyes.
+- **Vision** (`vision/py/`): Python (venv), dual GC9A01 circular LCDs via SPI; **vision/ts/eye_bridge.ts** sends UDP commands to **main_eyes.py**.
 - **Senses** (`senses/touch.ts`): Head touch (BCM 17), belly touch (BCM 22), vibration (BCM 23); event-driven (gpiomon) or polling.
-- **Cooling** (`cooling/fan_control.ts`): Dual-fan harness on BCM 24 via 2N2222 NPN; libgpiod + software PWM (~100 Hz), soft-start 0→100% over 2 s for stable fan control during LCD eye rendering.
-- **Bridge:** UDP port 5005 between nervous system and eyes. Set `VISION_HOST` (e.g. `furbacca.local`) if they run on different hosts.
+- **Homeostasis** (`homeostasis/fan_control.ts`): Dual-fan harness on BCM 24 via 2N2222 NPN; libgpiod + software PWM (~100 Hz), soft-start 0→100% over 2 s for stable fan control during LCD eye rendering.
+- **Synapses** (`synapses/`): Shared UDP message shapes (TS interfaces + Python dataclasses) for port 5005 (NS → eyes) and 5006 (camera → NS). See **synapses/README.md**.
+- **Voice** (`voice/ts/`, `voice/assets/`): Non-blocking WAV playback via aplay (ALSA); test tone generator.
+- **Bridge:** UDP 5005 (nervous system → eyes), 5006 (camera/eye-track → nervous system). Set `VISION_HOST` (e.g. `furbacca.local`) if eyes run on another host.
+
+### File structure
+
+```
+furbacca/
+├── brain/              # Matter node, high-level decision making (TS)
+├── homeostasis/        # Fan control, thermal watchdogs (TS)
+├── senses/             # Touch polling, PIR motion, GPIO (TS)
+├── synapses/           # Shared UDP message schemas (TS + Python)
+│   ├── README.md       # Explains the UDP port mappings (5005, 5006)
+│   ├── ts/
+│   │   ├── index.ts            # Exports all schemas
+│   │   └── vision_messages.ts  # TS interfaces for eye commands and camera events
+│   └── py/
+│       ├── __init__.py
+│       └── vision_messages.py  # Python dataclasses matching the TS interfaces
+├── vision/             # Display system and camera tracking
+│   ├── ts/             # EyeBridge (Node.js UDP client)
+│   └── py/             # Python rendering and hardware loops
+│       ├── main_eyes.py
+│       ├── camera/     # IMX500 / OpenCV tracking logic
+│       ├── engine/     # NumPy matrix math, shapes, blink logic
+│       ├── hardware/   # GC9A01 SPI init, blit, machine_compat
+│       └── assets/     # config.py, image loaders, /graphics
+├── voice/              # Audio playback, ALSA mixing, test tones (TS)
+└── scripts/
+    ├── wake-furbacca.sh        # Main entry point
+    ├── fe-restart.sh           # Quick panic-button reset
+    ├── README.md               # Documentation for all scripts
+    ├── setup/                  # Installation & environment
+    │   ├── setup-fresh.sh
+    │   ├── fetch-eye-graphics.sh
+    │   └── fetch-gc9a01py.sh
+    ├── diagnostics/            # Health checks & hardware tests (the "Vet")
+    │   ├── audio-check.sh
+    │   ├── monitor-zram.sh
+    │   ├── heal-network.sh
+    │   └── test-fan.ts
+    ├── matter/                 # Smart home / ecosystem utilities
+    │   ├── show-matter-pairing.sh
+    │   └── matter-factory-reset.sh
+    ├── vision/                 # Tools for the optical system
+    │   ├── run-eyes.sh
+    │   ├── eye-command.sh
+    │   └── eye-track.sh
+    └── systemd/                # OS-level service definitions
+        ├── furbacca.service
+        └── furbacca-eyes.service
+```
 
 ---
 
@@ -22,15 +74,15 @@ An AI-powered, Matter-enabled animatronic build based on the 2012 Hasbro Furby, 
 ```
 To skip starting eye-tracking: **`./scripts/wake-furbacca.sh --no-eye-track`** or **`FURBACCA_EYE_TRACK=0 ./scripts/wake-furbacca.sh`** (short: **`-n`**).
 
-Or on the Pi, alias once and run from anywhere (alias must run the **script**, not an old `python vision/eyes.py` command):
+Or on the Pi, alias once and run from anywhere (alias must run the **script**, not an old `python vision/py/main_eyes.py` command):
 ```bash
 alias wake-furbacca='~/furbacca/scripts/wake-furbacca.sh'
 wake-furbacca
 ```
-If you see `vision/eyes.py: No such file`, your Pi alias is wrong—run `alias wake-furbacca` and fix it to the line above, or run `~/furbacca/scripts/wake-furbacca.sh` directly.
+If you see `vision/py/main_eyes.py: No such file`, your Pi alias is wrong—run `alias wake-furbacca` and fix it to the line above, or run `~/furbacca/scripts/wake-furbacca.sh` directly.
 This starts the eyes in the background (UDP 5005, `UDP_BIND=0.0.0.0` for remote commands) and the nervous system in the foreground (touch, sounds, eye commands). Both log to the same terminal. Ctrl+C stops both and blanks the displays.
 
-**Optional — separate processes (two terminals):** Only if you need eyes or nervous system alone: `./scripts/run-eyes.sh` for eyes; `npm start` for nervous system (use `sudo npm start` if GPIO needs it).
+**Optional — separate processes (two terminals):** Only if you need eyes or nervous system alone: `./scripts/vision/run-eyes.sh` for eyes; `npm start` for nervous system (use `sudo npm start` if GPIO needs it).
 
 ---
 
@@ -40,16 +92,16 @@ While the eyes are running, you can send UDP commands to port 5005.
 
 **On the Pi (SSH):**
 ```bash
-./scripts/eye-command.sh cycle_eye_shape
-./scripts/eye-command.sh shape sharp
-./scripts/eye-command.sh type dragon
-./scripts/eye-command.sh blink
+./scripts/vision/eye-command.sh cycle_eye_shape
+./scripts/vision/eye-command.sh shape sharp
+./scripts/vision/eye-command.sh type dragon
+./scripts/vision/eye-command.sh blink
 ```
 
-**From your Mac** (eyes started with `UDP_BIND=0.0.0.0`): pass the Pi host as the first argument. If you use an alias, include the host so commands reach the Pi (e.g. `alias fe='./scripts/eye-command.sh furbacca.local'`).
+**From your Mac** (eyes started with `UDP_BIND=0.0.0.0`): pass the Pi host as the first argument. If you use an alias, include the host so commands reach the Pi (e.g. `alias fe='./scripts/vision/eye-command.sh furbacca.local'`).
 ```bash
-./scripts/eye-command.sh furbacca.local shape sharp
-./scripts/eye-command.sh furbacca.local type human
+./scripts/vision/eye-command.sh furbacca.local shape sharp
+./scripts/vision/eye-command.sh furbacca.local type human
 ```
 Shapes: `round`, `sharp`, `half_moon`, `bean`, `oval`, `tilted`, `dome`, `pill`, `anime`, `concern`, `glare`, `gemini`, `heart`, `kawaii`, `stern`, `sus`.  
 Types: `default`, `human`, `dragon`, `demon`.
@@ -68,18 +120,18 @@ Types: `default`, `human`, `dragon`, `demon`.
    - **Enable SPI via SSH:** `sudo raspi-config nonint do_spi 0` then `sudo reboot`. (Or run `setup-fresh.sh` first—it enables SPI when possible and then you reboot.)
    ```bash
    cd ~/furbacca
-   bash scripts/setup-fresh.sh
+   bash scripts/setup/setup-fresh.sh
    ```
    The script installs Node.js v20 (64-bit via NodeSource if missing), **enables SPI**, **memory tuning** (systemd-zram-generator: 100% of RAM, zstd; zram-tools masked to avoid race; 512 MB disk swap as fallback; gpu_mem=32), **gpiod + libgpiod-dev** (for cooling fan on BCM 24), Python venv, pip deps, gc9a01py, eye graphics, `npm install`/`npm run build`, **wake-furbacca** alias, and **furbacca systemd service** (enabled at boot; start with `sudo systemctl start furbacca` when ready). **Reboot** after the script if it changed SPI, swap, or gpu_mem so those take effect.
 3. **Test:** `./scripts/wake-furbacca.sh` (or `wake-furbacca` in a new shell).
 4. **Boot (optional):** See **Systemd (full stack at startup)** below to run Furbacca on boot.
 
 ### Vision (Python / eyes)
-Eyes: **vision/py/eyes.py** (UDP 5005), [gc9a01py](https://github.com/russhughes/gc9a01py). Pinout and SPI: **instruction.md** §3.1.
+Eyes: **vision/py/main_eyes.py** (UDP 5005), [gc9a01py](https://github.com/russhughes/gc9a01py). Pinout and SPI: **instruction.md** §3.1.
 
 ```bash
 cd ~/furbacca
-bash scripts/setup-fresh.sh
+bash scripts/setup/setup-fresh.sh
 source env/bin/activate
 ```
 Or: `python3 -m venv env`, `source env/bin/activate`, `pip install spidev RPi.GPIO Pillow numpy`, `bash scripts/setup/fetch-gc9a01py.sh`, `bash scripts/setup/fetch-eye-graphics.sh`. NumPy gives smooth 15–30 FPS; if the display is tinted blue, set `EYES_NUMPY_SWAP_RB=1`.
@@ -97,13 +149,13 @@ Or: `python3 -m venv env`, `source env/bin/activate`, `pip install spidev RPi.GP
 
 **Test modes** (run with `source env/bin/activate`):
 ```bash
-python vision/py/eyes.py
-EYES_ANIMATED=0 python vision/py/eyes.py
-EYES_GRADIENT=1 python vision/py/eyes.py
-EYE_TYPE=dragon python vision/py/eyes.py
-EYE_SHAPE=sharp python vision/py/eyes.py
+python vision/py/main_eyes.py
+EYES_ANIMATED=0 python vision/py/main_eyes.py
+EYES_GRADIENT=1 python vision/py/main_eyes.py
+EYE_TYPE=dragon python vision/py/main_eyes.py
+EYE_SHAPE=sharp python vision/py/main_eyes.py
 ```
-Eye assets: **vision/py/graphics**. Refresh with `./scripts/setup/fetch-eye-graphics.sh`.
+Eye assets: **vision/py/assets/graphics**. Refresh with `./scripts/setup/fetch-eye-graphics.sh`.
 
 ### Nervous system (Node.js)
 ```bash
@@ -111,7 +163,7 @@ npm install
 npm run build
 npm run sync-sounds
 ```
-**`npm start`** runs only **`tsc`** (no sound copy) so wake-furbacca starts quickly. Sounds are copied once by **setup-fresh.sh** on the Pi; after a fresh clone elsewhere, run **`npm run sync-sounds`** once (or **`npm run build:full`** to build + copy). **4 Ω 2W (two 8 Ω 1W in parallel):** software + ALSA capped at 60% max gain so we stay within 2W and avoid TP4056 overheating. **`npm run generate-test-tone`** generates **sounds/assets/test_tone_1w8ohm.wav** (100 Hz–4 kHz steps) for frequency response checks. Run with `npm start` (or `sudo npm start` for GPIO). See **Starting the services** above.
+**`npm start`** runs only **`tsc`** (no sound copy) so wake-furbacca starts quickly. Voice assets are copied once by **setup-fresh.sh** on the Pi; after a fresh clone elsewhere, run **`npm run sync-sounds`** once (or **`npm run build:full`** to build + copy). **4 Ω 2W (two 8 Ω 1W in parallel):** software + ALSA capped at 60% max gain so we stay within 2W and avoid TP4056 overheating. **`npm run generate-test-tone`** generates **voice/assets/test_tone_1w8ohm.wav** (100 Hz–4 kHz steps) for frequency response checks. Run with `npm start` (or `sudo npm start` for GPIO). See **Starting the services** above.
 
 ### Linting & formatting (Biome)
 The project uses [Biome](https://biomejs.dev/) for formatting and linting TypeScript and Python. Use it for all formatting and safe fixes so style stays consistent.
@@ -145,7 +197,7 @@ Matter is **on by default** when you run `wake-furbacca` (requires **64-bit Node
 - **Endpoint 3 — Generic Switch (head):** Momentary; head touch broadcasts a press.
 - **Endpoint 4 — Generic Switch (shake):** Momentary; vibration sensor (shiver) broadcasts with cooldown.
 
-Add Furbacca to Google Home or Apple Home via the pairing QR in the logs; pairing data is stored in `.matter/`. **If the service runs at boot**, get the pairing code and QR URL anytime: on the Pi run **`./scripts/show-matter-pairing.sh`**, or from your Mac **`./scripts/show-matter-pairing.sh furbacca.local`**. To disable Matter for troubleshooting: **`FURBACCA_MATTER=0 wake-furbacca`**.
+Add Furbacca to Google Home or Apple Home via the pairing QR in the logs; pairing data is stored in `.matter/`. **If the service runs at boot**, get the pairing code and QR URL anytime: on the Pi run **`./scripts/matter/show-matter-pairing.sh`**, or from your Mac **`./scripts/matter/show-matter-pairing.sh furbacca.local`**. To disable Matter for troubleshooting: **`FURBACCA_MATTER=0 wake-furbacca`**.
 
 
 ---
@@ -199,7 +251,7 @@ See **docs/AI_CAMERA.md** for how we leverage the Raspberry Pi AI Camera (IMX500
 
 **Power handling:** Fans are powered from the **5 V rail**; the transistor emitter is connected to **GND**. The transistor switches the low side (fan between 5 V and collector).
 
-**Implementation:** Fan control on BCM 24 uses **libgpiod** (GPIO character device) and **software PWM** (~100 Hz) so the fans run without a daemon. **cooling/fan_control.ts** sets BCM 24 LOW on startup, then ramps PWM 0→100% over 2 s (soft-start) to avoid brownout. Disable with **FURBACCA_FAN=0**. **setup-fresh.sh** installs **gpiod** and **libgpiod-dev**; no daemon required. See **instruction.md** §1 (Cooling fans).
+**Implementation:** Fan control on BCM 24 uses **libgpiod** (GPIO character device) and **software PWM** (~100 Hz) so the fans run without a daemon. **homeostasis/fan_control.ts** sets BCM 24 LOW on startup, then ramps PWM 0→100% over 2 s (soft-start) to avoid brownout. Disable with **FURBACCA_FAN=0**. **setup-fresh.sh** installs **gpiod** and **libgpiod-dev**; no daemon required. See **instruction.md** §1 (Cooling fans).
 
 ### Power / safe shutdown
 
@@ -210,17 +262,17 @@ See **docs/AI_CAMERA.md** for how we leverage the Raspberry Pi AI Camera (IMX500
 ## 🤖 Commands & automation
 - **`wake-furbacca`** — start all services (eyes + nervous system). Use this.
 - **`sleep-furbacca`** — (on the Pi) safe shutdown: runs **`sudo halt`**. **Never yank the power pin while the Pi is on** — that can corrupt the SD card (mid-write) and stress the fan circuit. Run **`sleep-furbacca`**, wait until the green ACT LED stops flickering and stays off (or faint solid), then disconnect power. **setup-fresh.sh** adds this alias to your shell rc.
-- **`eye-track`** — (alias from **setup-fresh.sh** on the Pi) runs **scripts/eye-track.sh**. **wake-furbacca** starts eye-tracking by default on the Pi; disable with **`wake-furbacca --no-eye-track`** or **`FURBACCA_EYE_TRACK=0`**. Manual: **`eye-track on`** | **`eye-track off`** | **`eye-track status`**; foreground: **`eye-track run --print-every 30`**. Alias as **`fe-track`** if you prefer (e.g. **`fe-track furbacca.lan on`** from Mac). Sends UDP to nervous system (127.0.0.1:5006) when tracking on/off. **FURBACCA_SSH_USER** (default `minqz`) for SSH.
+- **`eye-track`** — (alias from **setup-fresh.sh** on the Pi) runs **scripts/vision/eye-track.sh**. **wake-furbacca** starts eye-tracking by default on the Pi; disable with **`wake-furbacca --no-eye-track`** or **`FURBACCA_EYE_TRACK=0`**. Manual: **`eye-track on`** | **`eye-track off`** | **`eye-track status`**; foreground: **`eye-track run --print-every 30`**. Alias as **`fe-track`** if you prefer (e.g. **`fe-track furbacca.lan on`** from Mac). Sends UDP to nervous system (127.0.0.1:5006) when tracking on/off. **FURBACCA_SSH_USER** (default `minqz`) for SSH.
 - **`sudo systemctl status furbacca`** — if you run the full stack as a service (see below); **`furbacca-eyes`** for eyes-only.
 - **`journalctl -u furbacca -f`** — stream the service logs (animations, touch, Matter, etc.) after SSH; `-n 200` for last 200 lines instead of follow.
-- **`./scripts/fe-restart.sh`** — full eyes re-init (RST + init both panels). On the Pi: no args. From Mac: **`./scripts/fe-restart.sh furbacca.local`**. Same effect as holding head + belly for 5 seconds. **Head + belly 30s** (no SSH needed): runs **`./scripts/heal-network.sh`** to restart the network stack and optionally restore Wi‑Fi from `/boot/wpa_supplicant.conf` (see **Network dead after brownout** below).
-- **`./scripts/show-matter-pairing.sh`** — show Matter passcode, manual pairing code, and QR URL. On the Pi: run with no args. **From Mac:** `./scripts/show-matter-pairing.sh furbacca.local` (SSH to Pi and run there). Uses `FURBACCA_SSH_USER` (default `minqz`) for SSH.
-- **`./scripts/monitor-zram.sh`** — live zRAM compression ratio and SD swap usage (Ctrl+C to stop). On the Pi: `./scripts/monitor-zram.sh`. **From Mac:** `./scripts/monitor-zram.sh furbacca.local` (SSH to Pi and run there).
-- **`push-furbacca`** — (Mac) rsync project to the Pi. Use **`--delete`** so the Pi loses old paths (e.g. `vision/eyes.py` after refactor) and matches your Mac layout. Exclude Pi-only dirs so rsync doesn't delete them: `vision/py/gc9a01py` (fetched on the Pi by `scripts/setup/fetch-gc9a01py.sh`; not on the Mac), and optionally `vision/waveshare-lcd-code`, `vision/gc9a01py` (old leftovers). Add to `~/.zshrc`:
+- **`./scripts/fe-restart.sh`** — full eyes re-init (RST + init both panels). On the Pi: no args. From Mac: **`./scripts/fe-restart.sh furbacca.local`**. Same effect as holding head + belly for 5 seconds. **Head + belly 30s** (no SSH needed): runs **`./scripts/diagnostics/heal-network.sh`** to restart the network stack and optionally restore Wi‑Fi from `/boot/wpa_supplicant.conf` (see **Network dead after brownout** below).
+- **`./scripts/matter/show-matter-pairing.sh`** — show Matter passcode, manual pairing code, and QR URL. On the Pi: run with no args. **From Mac:** `./scripts/matter/show-matter-pairing.sh furbacca.local` (SSH to Pi and run there). Uses `FURBACCA_SSH_USER` (default `minqz`) for SSH.
+- **`./scripts/diagnostics/monitor-zram.sh`** — live zRAM compression ratio and SD swap usage (Ctrl+C to stop). On the Pi: `./scripts/diagnostics/monitor-zram.sh`. **From Mac:** `./scripts/diagnostics/monitor-zram.sh furbacca.local` (SSH to Pi and run there).
+- **`push-furbacca`** — (Mac) rsync project to the Pi. Use **`--delete`** so the Pi loses old paths (e.g. old `vision/eyes.py` after refactor) and matches your Mac layout. Exclude Pi-only dirs so rsync doesn't delete them: `vision/py/gc9a01py` (fetched on the Pi by `scripts/setup/fetch-gc9a01py.sh`; not on the Mac), and optionally `vision/waveshare-lcd-code`, `vision/gc9a01py` (old leftovers). Add to `~/.zshrc`:
   ```bash
   alias push-furbacca='rsync -avz --delete --exclude node_modules --exclude .git --exclude env --exclude dist --exclude vision/py/gc9a01py --exclude vision/waveshare-lcd-code --exclude vision/gc9a01py /Users/brent/Documents/Code/Furbacca/ minqz@furbacca.local:~/furbacca/'
   ```
-  Then run `push-furbacca` before testing on the Pi; Pi keeps its own `env`, `dist`, and `vision/py/gc9a01py`. After a refactor, `--delete` removes leftover files on the Pi (e.g. old `vision/eyes.py`) so `wake-furbacca` runs the new code.
+  Then run `push-furbacca` before testing on the Pi; Pi keeps its own `env`, `dist`, and `vision/py/gc9a01py`. After a refactor, `--delete` removes leftover files on the Pi so `wake-furbacca` runs the new code.
 
 **Systemd (full stack):** **setup-fresh.sh** installs the `furbacca` service but does **not** enable it at boot (so it won't start automatically until you're ready). Start manually: `wake-furbacca` or `sudo systemctl start furbacca`. When stable, enable at boot: `sudo systemctl enable furbacca`. Check status: `sudo systemctl status furbacca`. **View event logs** (animations, touch, Matter) after SSH: `journalctl -u furbacca -f` (stream) or `journalctl -u furbacca -n 200` (last 200 lines). To stop auto-start: `sudo systemctl disable furbacca` (service stays installed; start manually).
 
@@ -230,10 +282,10 @@ See **docs/AI_CAMERA.md** for how we leverage the Raspberry Pi AI Camera (IMX500
 
 ## 📝 Troubleshooting
 - **Permission denied:** `sudo chown -R $USER:$USER .`
-- **pip install fails (spidev/RPi.GPIO): "Python.h: No such file or directory"** — Install Python dev headers and build tools: `sudo apt-get install -y python3-dev build-essential`. Or run **`bash scripts/setup-fresh.sh`**; it installs them before pip.
-- **"git: command not found" (fetch-gc9a01py)** — Install git: `sudo apt-get install -y git`, then run **`bash scripts/setup-fresh.sh`** again (or `bash scripts/setup/fetch-gc9a01py.sh`).
+- **pip install fails (spidev/RPi.GPIO): "Python.h: No such file or directory"** — Install Python dev headers and build tools: `sudo apt-get install -y python3-dev build-essential`. Or run **`bash scripts/setup/setup-fresh.sh`**; it installs them before pip.
+- **"git: command not found" (fetch-gc9a01py)** — Install git: `sudo apt-get install -y git`, then run **`bash scripts/setup/setup-fresh.sh`** again (or `bash scripts/setup/fetch-gc9a01py.sh`).
 - **"JavaScript heap out of memory" (npm run build on Pi)** — **`setup-fresh.sh`** sets Node heap limit and memory tuning: **zram** (systemd-zram-generator: 100% of RAM, zstd; zram-tools masked on Trixie to avoid device race) so the Pi uses compressed RAM before disk swap, plus 512 MB disk swap and gpu_mem=32. Reboot after setup so zram/swap/gpu_mem apply. Verify zram: `zramctl`. If still OOM: `NODE_OPTIONS=--max-old-space-size=256 npm run build`, or increase disk swap: in `/etc/dphys-swapfile` set `CONF_SWAPSIZE=1024`, then `sudo dphys-swapfile swapoff && sudo dphys-swapfile setup && sudo dphys-swapfile swapon`.
-- **wake-furbacca says "can't open file ... vision/eyes.py"** — The Pi is still using an old alias or script that runs `vision/eyes.py` instead of the repo script. **Find it:** On the Pi run `type wake-furbacca` (or `which wake-furbacca` if it's a script). If it's an **alias**, edit `~/.bashrc` or `~/.zshrc` and set:
+- **wake-furbacca says "can't open file ... vision/py/main_eyes.py"** — The Pi is still using an old alias or script that runs the wrong path instead of the repo script. **Find it:** On the Pi run `type wake-furbacca` (or `which wake-furbacca` if it's a script). If it's an **alias**, edit `~/.bashrc` or `~/.zshrc` and set:
   ```bash
   alias wake-furbacca='~/furbacca/scripts/wake-furbacca.sh'
   ```
@@ -241,17 +293,17 @@ See **docs/AI_CAMERA.md** for how we leverage the Raspberry Pi AI Camera (IMX500
 - **push-furbacca: cannot delete non-empty directory: vision/py/gc9a01py** — That dir is created on the Pi by `scripts/setup/fetch-gc9a01py.sh` and isn't on the Mac, so `--delete` tries to remove it. Add `--exclude vision/py/gc9a01py` to your alias so rsync leaves it on the Pi.
 - **push-furbacca: Permission denied (13) when deleting** — Some files on the Pi may be owned by root or another user. Use `--exclude` for those Pi-only dirs, or on the Pi run once: `sudo chown -R minqz:minqz ~/furbacca`, then run `push-furbacca` again.
 - **Module not found (Python/eyes):** Run `source env/bin/activate` before Python/eyes.
-- **Cannot find module './sounds/ts/audio.js' (or similar dist path):** The `dist/` tree is missing compiled files (e.g. after a partial or old build). From repo root do a **clean build:** **`rm -rf dist && npm run build`** (on the Pi: **`rm -rf dist && npm run build:pi`**), then run **wake-furbacca** again. Ensure **sounds/ts/** and all source are synced to the Pi before building.
+- **Cannot find module './voice/ts/audio.js' (or similar dist path):** The `dist/` tree is missing compiled files (e.g. after a partial or old build). From repo root do a **clean build:** **`rm -rf dist && npm run build`** (on the Pi: **`rm -rf dist && npm run build:pi`**), then run **wake-furbacca** again. Ensure **voice/ts/** and all source are synced to the Pi before building.
 - **Eyes / SPI:** Enable SPI (`dtparam=spi=on`), see **instruction.md** §3.1.
-- **fe / touch not working, ss shows 127.0.0.1:5005:** (1) Sync from Mac with **`--delete`**: `push-furbacca` (alias must include `--delete` so the Pi loses old `vision/eyes.py` and only has `vision/py/`). (2) On the Pi, stop any old eyes: `sudo systemctl stop furbacca-eyes`. (3) Run `wake-furbacca` from `~/furbacca`; you should see `UDP 0.0.0.0:5005` and then `--- Furbacca Nervous System: Modular Edition ---`. If you see "vision/py/eyes.py not found", run push-furbacca again. If you see "Port 5005 already in use", stop the other process first.
+- **fe / touch not working, ss shows 127.0.0.1:5005:** (1) Sync from Mac with **`--delete`**: `push-furbacca` (alias must include `--delete` so the Pi loses old paths and only has `vision/py/`). (2) On the Pi, stop any old eyes: `sudo systemctl stop furbacca-eyes`. (3) Run `wake-furbacca` from `~/furbacca`; you should see `UDP 0.0.0.0:5005` and then `--- Furbacca Nervous System: Modular Edition ---`. If you see "vision/py/main_eyes.py not found", run push-furbacca again. If you see "Port 5005 already in use", stop the other process first.
 - **Pi unresponsive / can't SSH (furbacca service looping):** If the service is restarting constantly, get to a local console (monitor + keyboard or serial), log in, then: `sudo systemctl stop furbacca` and `sudo systemctl disable furbacca`. After pushing the latest code, re-run setup-fresh or reinstall the service; the unit now has `RestartSec=10` and `StartLimitBurst=5` so a failing service won’t spin forever.
 - **Cooling fan not spinning:** **setup-fresh.sh** installs **gpiod** and **libgpiod-dev**. Ensure your user can access GPIO (e.g. in the `gpio` group: `sudo usermod -aG gpio $USER`, or udev rules). Disable fan: **FURBACCA_FAN=0**. See **instruction.md** §1 (Cooling fans).
 - **Touch dead / "gpioget: unable to request lines: Device or resource busy":** Another process is holding the touch GPIO pins (e.g. a previous `wake-furbacca`, `gpiomon`, or the eyes service). Stop all Furbacca processes (Ctrl+C in the terminal running wake-furbacca; `sudo systemctl stop furbacca-eyes` if eyes run as a service), then start again with a single `wake-furbacca`.
 - **SSH drops or "Network is unreachable" right after wake-furbacca:** The Pi may have rebooted (OOM or power brownout) or Wi‑Fi may have dropped under load (eyes + Matter + eye tracking use a lot of CPU/memory). **Try:** (1) **Power:** Use a solid 5V 2.5A+ supply; Pi Zero 2 W under full load can brown out on weak USB. (2) **Reconnect:** Wait 30–60 seconds and try **`ssh minqz@furbacca.lan`** again (Wi‑Fi might come back). (3) **Network heal (no SSH needed):** If the Pi is still running and eyes are on, hold **head + belly for 30 seconds** — runs **heal-network.sh** to restart Wi‑Fi and restore from boot backup. (4) **Run as service next time:** **`sudo systemctl start furbacca`** so the stack runs in the background; if SSH drops, reconnect and check **`journalctl -u furbacca -n 100`** to see if the Pi crashed or only lost Wi‑Fi. (5) **Local console:** If you have a monitor + keyboard or serial, log in and run **`dmesg -T | tail -50`** or **`journalctl -b -1 -n 50`** (previous boot) to check for OOM or kernel errors.
-- **Network dead after brownout (can't SSH, furbacca.local doesn't resolve):** Brownouts can corrupt Wi‑Fi config or leave the stack hung. **If the Pi is running and eyes are on:** hold **head + belly for 30 seconds** — the nervous system runs **`./scripts/heal-network.sh`** (restarts NetworkManager/dhcpcd, cycles wlan0, and restores Wi‑Fi from a backup if present). **One-time prep** (when you have SSH): **setup-fresh.sh** backs up Wi‑Fi to the boot partition when possible (wpa_supplicant or NetworkManager). If it skipped (e.g. no config yet): **wpa_supplicant:** **`sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /boot/wpa_supplicant.conf`** (or `/boot/firmware/` on some Pi). **NetworkManager (Bookworm/Trixie):** **`sudo cp /etc/NetworkManager/system-connections/*.nmconnection /boot/NetworkManager-connection.nmconnection`**. Log: `~/network_heal.log`. If the Pi is fully offline (no IP), use a monitor + keyboard or re-flash the SD.
+- **Network dead after brownout (can't SSH, furbacca.local doesn't resolve):** Brownouts can corrupt Wi‑Fi config or leave the stack hung. **If the Pi is running and eyes are on:** hold **head + belly for 30 seconds** — the nervous system runs **`./scripts/diagnostics/heal-network.sh`** (restarts NetworkManager/dhcpcd, cycles wlan0, and restores Wi‑Fi from a backup if present). **One-time prep** (when you have SSH): **setup-fresh.sh** backs up Wi‑Fi to the boot partition when possible (wpa_supplicant or NetworkManager). If it skipped (e.g. no config yet): **wpa_supplicant:** **`sudo cp /etc/wpa_supplicant/wpa_supplicant.conf /boot/wpa_supplicant.conf`** (or `/boot/firmware/` on some Pi). **NetworkManager (Bookworm/Trixie):** **`sudo cp /etc/NetworkManager/system-connections/*.nmconnection /boot/NetworkManager-connection.nmconnection`**. Log: `~/network_heal.log`. If the Pi is fully offline (no IP), use a monitor + keyboard or re-flash the SD.
 - **Matter: "Failed to parse storage value" or startup hang:** Stale or incompatible data in `.matter/`. Stop wake-furbacca, then: `rm -rf .matter && wake-furbacca`. Re-pair Furbacca in Google Home / Apple Home using the new QR or code.
 - **Eye tracking fails to start or "picamera2/cv2 not found":** **setup-fresh.sh** installs **python3-picamera2** and **python3-opencv** (picamera2’s IMX500 path uses OpenCV). If the error says **No module named 'cv2'**, run **`sudo apt install -y python3-opencv`**. If it says picamera2 not found, run **`sudo apt install -y python3-picamera2`**. **eye-track.sh** finds a Python that can `import picamera2` and clears **PYTHONPATH** so a local **reference/picamera2** clone doesn’t shadow the system package. If **on** fails, the script prints the last 25 lines of **/tmp/eye-track.log**; if it starts then stops, run **`eye-track`** (no args) to see the last 20 log lines. Foreground: **`eye-track run --print-every 30`**. From Mac: **`eye-track furbacca.lan on`**.
-- **No sound from speakers (aplay or head touch):** If **aplay -D plughw:0,0** runs but no sound (and wiring hasn't changed): (1) **Reboot:** **`sudo reboot`** — the I2S driver can get into a bad state. (2) **Power cycle:** Unplug Pi power 5–10 seconds, then plug back in. (3) **Test tone:** **`speaker-test -D plughw:0,0 -c 1 -t sine -f 440 -l 1`** (one beep). (4) **Config:** Ensure **`dtparam=audio=off`** and **`dtoverlay=max98357a,no-sdmode`** in **/boot/firmware/config.txt**; reboot after any change. (5) Run **`./scripts/audio-check.sh`** for a full checklist.
-- **Audio works after reboot but stops after wake-furbacca until reboot:** This was caused by **BCM 18** being used for both I2S BCLK (MAX98357A) and the display backlight in **vision/py/display.py**. The display code now uses **backlight = None** so BCM 18 is reserved for I2S. If you still have no sound: reboot; ensure **dtparam=audio=off** and **dtoverlay=max98357a,no-sdmode** in **/boot/firmware/config.txt**; run **./scripts/audio-check.sh**. **FURBACCA_SKIP_AMIXER=1** skips the amixer volume step if your DAC has no software volume.
+- **No sound from speakers (aplay or head touch):** If **aplay -D plughw:0,0** runs but no sound (and wiring hasn't changed): (1) **Reboot:** **`sudo reboot`** — the I2S driver can get into a bad state. (2) **Power cycle:** Unplug Pi power 5–10 seconds, then plug back in. (3) **Test tone:** **`speaker-test -D plughw:0,0 -c 1 -t sine -f 440 -l 1`** (one beep). (4) **Config:** Ensure **`dtparam=audio=off`** and **`dtoverlay=max98357a,no-sdmode`** in **/boot/firmware/config.txt**; reboot after any change. (5) Run **`./scripts/diagnostics/audio-check.sh`** for a full checklist.
+- **Audio works after reboot but stops after wake-furbacca until reboot:** This was caused by **BCM 18** being used for both I2S BCLK (MAX98357A) and the display backlight in **vision/py/display.py**. The display code now uses **backlight = None** so BCM 18 is reserved for I2S. If you still have no sound: reboot; ensure **dtparam=audio=off** and **dtoverlay=max98357a,no-sdmode** in **/boot/firmware/config.txt**; run **./scripts/diagnostics/audio-check.sh**. **FURBACCA_SKIP_AMIXER=1** skips the amixer volume step if your DAC has no software volume.
 - **Matter: "Error adding membership for address 224.0.0.251: addMembership ENODEV":** The SDK is trying to join mDNS multicast on an interface that doesn't support it (e.g. down or loopback). Usually **harmless** — Matter still comes online and pairing works. If hubs can't discover Furbacca, pin the interface: **`MATTER_MDNS_NETWORKINTERFACE=wlan0 wake-furbacca`** (or `eth0` if wired).
 - **Matter: device shows as "Matter.js Test Vendor" in Google Home:** Ensure you’re on a build that sets `basicInformation` (vendorName/productName, etc.) in `brain/ts/matter_lobe.ts`; re-pair after updating.

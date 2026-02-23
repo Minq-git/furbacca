@@ -2,17 +2,17 @@ import { execSync, spawn } from "node:child_process";
 import * as dgram from "node:dgram";
 import fs from "node:fs";
 import path from "node:path";
-import { fanControl } from "./cooling/fan_control.js";
+import { fanControl } from "./homeostasis/fan_control.js";
 import { msg, substitute } from "./messages.js";
 import { monitorMotion } from "./senses/motion.js";
 import { TouchSenses, VIBE_BCM } from "./senses/touch";
 
-// Optional: load at runtime so Pi can start even if dist/sounds/ts/audio.js wasn't built (e.g. sounds/ts not synced)
+// Optional: load at runtime so Pi can start even if dist/voice/ts/audio.js wasn't built (e.g. voice/ts not synced)
 let initAudio: () => void = () => {};
 let playPurr: () => void = () => {};
 let playGiggle: () => void = () => {};
 try {
-	const audio = require("./sounds/ts/audio.js");
+	const audio = require("./voice/ts/audio.js");
 	initAudio = audio.initAudio;
 	playPurr = audio.playPurr;
 	playGiggle = audio.playGiggle;
@@ -21,7 +21,8 @@ try {
 	console.warn(msg.audio.module_not_found);
 }
 
-import { EyeBridge } from "./vision/ts/eye_bridge";
+import type { EyeTrackingEvent } from "./synapses/ts/vision_messages.js";
+import { EyeBridge } from "./vision/ts/eye_bridge.js";
 
 // First: prevent fan from floating (BCM 24 LOW) before any other GPIO or heavy work
 fanControl.init();
@@ -260,7 +261,7 @@ function flushEyesBuffer(): void {
 
 function startEyesProcess(): void {
 	const repoRoot = process.cwd();
-	const scriptPath = path.join(repoRoot, "vision", "py", "eyes.py");
+	const scriptPath = path.join(repoRoot, "vision", "py", "main_eyes.py");
 	const venvPython = path.join(repoRoot, "env", "bin", "python3");
 	const pythonPath = fs.existsSync(venvPython) ? venvPython : "python3";
 	eyesChild = spawn(pythonPath, [scriptPath], {
@@ -408,7 +409,7 @@ const nsEventsSocket = dgram.createSocket("udp4");
 nsEventsSocket.bind(NS_EVENTS_PORT, "127.0.0.1", () => {
 	nsEventsSocket.on("message", (buf: Buffer) => {
 		try {
-			const payload = JSON.parse(buf.toString()) as { event?: string };
+			const payload = JSON.parse(buf.toString()) as EyeTrackingEvent;
 			if (payload.event === "eye_tracking_started")
 				console.log(msg.nervous_system.eye_tracking_started);
 			else if (payload.event === "eye_tracking_stopped")
@@ -426,13 +427,7 @@ nsEventsSocket.bind(NS_EVENTS_PORT, "127.0.0.1", () => {
 					console.log(msg.nervous_system.looking_stopped);
 				}
 			} else if (payload.event === "looking_at") {
-				const p = payload as {
-					event: string;
-					label?: string;
-					confidence?: number;
-					x?: number;
-					y?: number;
-				};
+				const p = payload;
 				if (
 					p.label != null &&
 					p.confidence != null &&
@@ -550,6 +545,7 @@ function onTouch(sensor: "head" | "belly" | "shiver", active: boolean): void {
 				const scriptPath = path.join(
 					process.cwd(),
 					"scripts",
+					"diagnostics",
 					"heal-network.sh",
 				);
 				const child = spawn("bash", [scriptPath], {

@@ -10,7 +10,7 @@
 		"giggle_playing": "🗣️ Playing giggle (belly touch).",
 		"purr_playing": "🗣️ Playing purr (head touch).",
 		"aplay_exit": "🗣️ aplay exited with code {code} (check file path and device: aplay -l).",
-		"module_not_found": "Audio module not found (dist/sounds/ts/audio.js). Head touch will not play sound. Sync sounds/ts/ to Pi and run: rm -rf dist && npm run build:pi."
+		"module_not_found": "Audio module not found (dist/voice/ts/audio.js). Head touch will not play sound. Sync voice/ts/ to Pi and run: rm -rf dist && npm run build:pi."
 	},
 	"eye_bridge": {
 		"error": "Eye Bridge Error: {message}"

@@ -1,27 +1,80 @@
 # Scripts
 
-## Run these
+## Layout
+
+```
+scripts/
+├── wake-furbacca.sh             # Main entry point (eyes + nervous system)
+├── fe-restart.sh                # Quick panic-button reset (UDP restart_both)
+├── README.md                    # This file
+│
+├── setup/                       # Installation & environment
+│   ├── setup-fresh.sh
+│   ├── fetch-eye-graphics.sh
+│   └── fetch-gc9a01py.sh
+│
+├── diagnostics/                 # Health checks & hardware tests (the "Vet")
+│   ├── audio-check.sh
+│   ├── monitor-zram.sh
+│   ├── heal-network.sh
+│   └── test-fan.ts
+│
+├── matter/                      # Smart home / ecosystem utilities
+│   ├── show-matter-pairing.sh
+│   └── matter-factory-reset.sh
+│
+├── vision/                      # Tools for the optical system
+│   ├── run-eyes.sh              # Headless/standalone eye execution
+│   ├── eye-command.sh           # UDP command sender
+│   └── eye-track.sh             # Picamera2 execution
+│
+└── systemd/                     # OS-level service definitions
+    ├── furbacca.service
+    └── furbacca-eyes.service
+```
+
+## Root scripts
 
 | Script | When to use |
 |--------|-------------|
-| **wake-furbacca.sh** | Start everything: eyes + nervous system (touch, sounds, UDP). On the Pi, **eye-tracking** starts by default; use **`--no-eye-track`** or **`FURBACCA_EYE_TRACK=0`** to disable. Run from repo root or alias: `alias wake-furbacca='~/furbacca/scripts/wake-furbacca.sh'`. See README § Troubleshooting if "vision/eyes.py: No such file". |
-| **run-eyes.sh** | Eyes only (vision/py/eyes.py). Use when you want eyes in one terminal and nervous system in another. |
-| **eye-command.sh** | Send commands to eyes (blink, shape, type) while eyes are running. On Pi: `./scripts/eye-command.sh shape sharp`. From Mac: `./scripts/eye-command.sh furbacca.local type dragon`. |
-| **eye-track.sh** | Start/stop/run eye tracking (AI camera → eyes follow you). On Pi: `./scripts/eye-track.sh on` \| `off` \| `status`; `./scripts/eye-track.sh run --print-every 30` for foreground. From Mac: `./scripts/eye-track.sh furbacca.local on`. **eye-track** alias (setup-fresh.sh) runs this script; you can also alias as **fe-track**. Sends UDP to nervous system (127.0.0.1:5006) when tracking is turned on/off. |
-| **show-matter-pairing.sh** | Show Matter passcode, manual pairing code, and QR URL from service logs. On Pi: `./scripts/show-matter-pairing.sh`. From Mac: `./scripts/show-matter-pairing.sh furbacca.local` (SSH to Pi). |
-| **setup-fresh.sh** | Full Furbacca setup on the Pi (after a wipe): Node.js v20 64-bit if missing, SPI enable, memory tuning, **pigpio + pigpiod** (fan PWM at startup), venv, pip deps, gc9a01py, eye graphics, npm install/build, wake-furbacca alias, and furbacca systemd service (installed, not enabled at boot by default — start manually until stable). Run from repo root: `cd ~/furbacca && bash scripts/setup-fresh.sh`. Idempotent. |
+| **wake-furbacca.sh** | Start everything: eyes + nervous system (touch, voice, UDP). On the Pi, **eye-tracking** starts by default; use **`--no-eye-track`** or **`FURBACCA_EYE_TRACK=0`** to disable. Run from repo root or alias: `alias wake-furbacca='~/furbacca/scripts/wake-furbacca.sh'`. |
+| **fe-restart.sh** | Send UDP `restart_both` to eyes (full hardware re-init). On Pi: `./scripts/fe-restart.sh`. From Mac: `./scripts/fe-restart.sh furbacca.local`. Same as head + belly 5 s. |
 
-## Used by setup (don’t run directly unless needed)
+## setup/
 
-| Script | Called by | Purpose |
-|--------|-----------|---------|
-| **setup/fetch-gc9a01py.sh** | setup-fresh.sh | Clone russhughes/gc9a01py into vision/py/gc9a01py. Run manually only if lib/ is missing or you want to refresh the driver. |
-| **setup/fetch-eye-graphics.sh** | setup-fresh.sh | Download eye assets (iris, sclera) from Adafruit Pi_Eyes into vision/py/graphics. Run manually to refresh assets. |
+| Script | Purpose |
+|--------|---------|
+| **setup-fresh.sh** | Full Furbacca setup on the Pi (after a wipe): Node.js v20 64-bit if missing, SPI, memory tuning, pigpio + pigpiod, venv, pip deps, gc9a01py, eye graphics, npm install/build, wake-furbacca alias, furbacca systemd service (installed, not enabled at boot). Run: `cd ~/furbacca && bash scripts/setup/setup-fresh.sh`. Idempotent. |
+| **fetch-gc9a01py.sh** | Clone russhughes/gc9a01py into vision/py/gc9a01py. Run manually if lib/ is missing. |
+| **fetch-eye-graphics.sh** | Download eye assets into vision/py/assets/graphics. Run manually to refresh. |
 
-## Other
+## diagnostics/
+
+| Script | Purpose |
+|--------|---------|
+| **audio-check.sh** | On the Pi: check I2S DAC config and list ALSA devices. Run: `./scripts/diagnostics/audio-check.sh`. |
+| **monitor-zram.sh** | Live zRAM and swap monitor. On Pi: `./scripts/diagnostics/monitor-zram.sh`. From Mac: `./scripts/diagnostics/monitor-zram.sh furbacca.local`. |
+| **heal-network.sh** | Emergency network repair (head + belly 30 s triggers from nervous system). Run manually: `./scripts/diagnostics/heal-network.sh`. |
+| **test-fan.ts** | Test fan on BCM 24. After build: `node dist/scripts/diagnostics/test-fan.js`. |
+
+## matter/
+
+| Script | Purpose |
+|--------|---------|
+| **show-matter-pairing.sh** | Show Matter passcode, manual pairing code, QR URL from service logs. On Pi: `./scripts/matter/show-matter-pairing.sh`. From Mac: `./scripts/matter/show-matter-pairing.sh furbacca.local`. |
+| **matter-factory-reset.sh** | Clear `.matter/` so device appears uncommissioned. Run: `./scripts/matter/matter-factory-reset.sh [-y]`. |
+
+## vision/
+
+| Script | Purpose |
+|--------|---------|
+| **run-eyes.sh** | Eyes only (vision/py/main_eyes.py). Use when you want eyes in one terminal and nervous system in another. Run: `./scripts/vision/run-eyes.sh`. |
+| **eye-command.sh** | Send UDP commands to eyes (blink, shape, type). On Pi: `./scripts/vision/eye-command.sh shape sharp`. From Mac: `./scripts/vision/eye-command.sh furbacca.local type dragon`. |
+| **eye-track.sh** | Start/stop/run eye tracking (AI camera). On Pi: `./scripts/vision/eye-track.sh on` \| `off` \| `status`; foreground: `./scripts/vision/eye-track.sh run --print-every 30`. From Mac: `./scripts/vision/eye-track.sh furbacca.local on`. **eye-track** alias (setup-fresh) runs this. Sends UDP to NS (127.0.0.1:5006) when on/off. |
+
+## systemd/
 
 | File | Purpose |
 |------|---------|
-| **audio-check.sh** | On the Pi: check I2S DAC config (dtoverlay=max98357a or hifiberry-dac in /boot/firmware/config.txt or /boot/config.txt) and list ALSA devices (**aplay -l**). Run: `./scripts/audio-check.sh`. |
-| **furbacca.service** | Systemd unit for full stack (wake-furbacca) at boot. Copy to `/etc/systemd/system/`, edit User/WorkingDirectory/ExecStart, then `sudo systemctl enable --now furbacca`. |
-| **furbacca-eyes.service** | Systemd unit (eyes only). Use if you want eyes as a service and run the nervous system manually. |
+| **furbacca.service** | Full stack (wake-furbacca) at boot. setup-fresh installs it (not enabled by default). Manual: `sudo cp scripts/systemd/furbacca.service /etc/systemd/system/`, edit User/WorkingDirectory/ExecStart, then `sudo systemctl daemon-reload && sudo systemctl enable --now furbacca`. |
+| **furbacca-eyes.service** | Eyes only. Use if you run the nervous system manually. |

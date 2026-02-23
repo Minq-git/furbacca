@@ -4,7 +4,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import config
+from assets import config
 
 print(json.dumps({
     "EYE_WARMUP_STEPS": config.EYE_WARMUP_STEPS,
