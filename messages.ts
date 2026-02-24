@@ -90,6 +90,16 @@ export const msg = raw as {
 		purr_playing: string;
 		aplay_exit: string;
 	};
+	hearing: {
+		mic_initializing: string;
+		mic_stopping: string;
+		alsa_error: string;
+		arecord_failed: string;
+		arecord_exit: string;
+		arecord_stopped: string;
+		cortex_starting: string;
+		loud_noise_detected: string;
+	};
 	eyes: {
 		display_init_failed: string;
 		udp_bind: string;

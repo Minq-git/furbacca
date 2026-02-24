@@ -178,6 +178,14 @@ if [[ "$UNAME_S" == "Linux" ]]; then
   sudo apt-get full-upgrade -y
   sudo apt-get install -y imx500-all python3-picamera2 python3-opencv
   echo "AI camera (imx500-all), python3-picamera2, and python3-opencv installed. Reboot once so IMX500 firmware loads (see https://www.raspberrypi.com/documentation/accessories/ai-camera.html)."
+
+  # Adafruit SPH0645 I2S microphone (shares I2S bus with DAC)
+  sudo apt-get install -y python3-pip wget
+  sudo pip3 install --upgrade adafruit-python-shell
+  wget https://raw.githubusercontent.com/adafruit/Raspberry-Pi-Installer-Scripts/master/i2smic.py -O /tmp/i2smic.py
+  echo "⚠ I2S microphone installer downloaded to /tmp/i2smic.py"
+  echo "  Run manually: sudo python3 /tmp/i2smic.py"
+  echo "  Note: this script is interactive and will force a reboot."
 fi
 
 # 2. Python venv

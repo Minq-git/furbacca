@@ -1,6 +1,8 @@
 import { Reflexes } from "./brain/ts/cortex/reflexes.js";
 import { VisualCortex } from "./brain/ts/cortex/visual_cortex.js";
 import { startMatterIfEnabled } from "./brain/ts/matter/matter_boot.js";
+import { MicStream } from "./hearing/ts/hardware/mic_stream.js";
+import { AuditoryCortex } from "./hearing/ts/processing/auditory_cortex.js";
 import { Brainstem } from "./homeostasis/brainstem.js";
 import { msg, substitute } from "./messages.js";
 import { TouchSenses } from "./senses/touch";
@@ -13,6 +15,9 @@ async function main(): Promise<void> {
 	const brainstem = new Brainstem(eyes);
 	const cortex = new VisualCortex(eyes);
 	const reflexes = new Reflexes(eyes, touch, brainstem.getReflexesConfig());
+
+	const mic = new MicStream(process.env.FURBACCA_MIC_CARD ?? "1");
+	const hearing = new AuditoryCortex(mic);
 
 	await brainstem.boot();
 	console.log(msg.nervous_system.header);
@@ -33,7 +38,10 @@ async function main(): Promise<void> {
 		console.log(msg.nervous_system.eye_tracker_starting);
 	}
 
-	cortex.startListening();
+	await Promise.all([
+		Promise.resolve(cortex.startListening()),
+		Promise.resolve(hearing.startListening()),
+	]);
 	const { usingTouchEvents, usingMotionEvents } = reflexes.startListening();
 
 	brainstem.advanceWarmup(1); // NS / Voice
@@ -72,7 +80,11 @@ async function main(): Promise<void> {
 	process.on("SIGINT", () => {
 		void brainstem.shutdown(async () => {
 			await matterForShutdown?.close();
-			await Promise.all([reflexes.stopListening(), cortex.stopListening()]);
+			await Promise.all([
+				reflexes.stopListening(),
+				cortex.stopListening(),
+				Promise.resolve(hearing.stopListening()),
+			]);
 		});
 	});
 

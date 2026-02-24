@@ -12,6 +12,16 @@
 		"aplay_exit": "🗣️ aplay exited with code {code} (check file path and device: aplay -l).",
 		"module_not_found": "Audio module not found (dist/voice/ts/audio.js). Head touch will not play sound. Sync voice/ts/ to Pi and run: rm -rf dist && npm run build:pi."
 	},
+	"hearing": {
+		"mic_initializing": "👂 Hearing: Initializing microphone on card {card}...",
+		"mic_stopping": "👂 Hearing: Stopping microphone stream...",
+		"alsa_error": "👂 Hearing (ALSA): {message}",
+		"arecord_failed": "👂 Hearing: arecord failed: {message}",
+		"arecord_exit": "👂 Hearing: arecord exited with code {code}",
+		"arecord_stopped": "👂 Hearing: arecord stopped ({signal})",
+		"cortex_starting": "👂 Hearing: Starting auditory cortex...",
+		"loud_noise_detected": "💥 👂 LOUD NOISE DETECTED! (Peak: {peak})"
+	},
 	"eye_bridge": { "error": "Eye Bridge Error: {message}" },
 	"eyes": {
 		"animation": "  🎬 Animation: {name}",
