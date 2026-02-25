@@ -31,8 +31,10 @@ const MAX_GAIN = Math.max(
 );
 
 let volumeInitialized = false;
-/** Skip starting another aplay while one is running (avoids device busy / exit 1 on rapid head touches). */
-let currentPlayback: ReturnType<typeof spawn> | null = null;
+/** Persistent aplay process: kept open to avoid start/stop clicks; format may change between files. */
+let persistentAplay: ReturnType<typeof spawn> | null = null;
+/** Format the current persistent pipe was started with (so we restart if next WAV differs). */
+let persistentAplayFormat: { sampleRate: number; channels: number } | null = null;
 
 /**
  * Set ALSA volume to 60% (hardware cap for 4 Ω 2W pair + TP4056). Runs once on first play.
@@ -139,8 +141,45 @@ function resolveSoundPath(filename: string): string {
 	return fs.existsSync(repoPath) ? repoPath : distPath; // try dist first; fallback repo; else return dist for clear error
 }
 
+function startPersistentAplay(sampleRate: number, channels: number): void {
+	if (persistentAplay && !persistentAplay.killed) persistentAplay.kill();
+	persistentAplay = spawn(
+		"aplay",
+		[
+			"-D",
+			APLAY_DEVICE,
+			"-f",
+			"S16_LE",
+			"-r",
+			String(sampleRate),
+			"-c",
+			String(channels),
+			"-q",
+		],
+		{ stdio: ["pipe", "ignore", "ignore"] },
+	);
+	persistentAplayFormat = { sampleRate, channels };
+	persistentAplay.stdin?.on("error", () => {
+		if (persistentAplay) {
+			persistentAplay = null;
+			persistentAplayFormat = null;
+		}
+	});
+	persistentAplay.on("error", (err) => {
+		console.error(substitute(msg.audio.aplay_failed, { message: err.message }));
+		persistentAplay = null;
+		persistentAplayFormat = null;
+	});
+	persistentAplay.on("exit", (code) => {
+		persistentAplay = null;
+		persistentAplayFormat = null;
+		if (code !== 0 && code !== null)
+			console.error(substitute(msg.audio.aplay_exit, { code: String(code) }));
+	});
+	persistentAplay.unref();
+}
+
 export function playWav(filename: string, maxDurationSeconds?: number): void {
-	if (currentPlayback !== null) return; // one at a time to avoid device busy (exit 1) on rapid touches
 	setVolumeFor4Ohm2W();
 	const filepath = resolveSoundPath(filename);
 	let buffer: Buffer;
@@ -155,7 +194,6 @@ export function playWav(filename: string, maxDurationSeconds?: number): void {
 	const header = parseWavHeader(buffer);
 	if (!header) {
 		// Not 16-bit PCM or invalid WAV — fall back to direct aplay (no software limit).
-		// Use aplay's native duration cutoff so we don't play the full file.
 		const args = ["-D", APLAY_DEVICE, "-q"];
 		if (maxDurationSeconds != null && maxDurationSeconds > 0) {
 			args.push("-d", String(Math.round(maxDurationSeconds)));
@@ -165,22 +203,19 @@ export function playWav(filename: string, maxDurationSeconds?: number): void {
 			detached: true,
 			stdio: "ignore",
 		});
-		currentPlayback = fallbackChild;
 		fallbackChild.on("error", (err) => {
-			currentPlayback = null;
 			console.error(
 				substitute(msg.audio.aplay_failed, { message: err.message }),
 			);
 		});
 		fallbackChild.on("exit", (code) => {
-			currentPlayback = null;
 			if (code !== 0 && code !== null)
 				console.error(substitute(msg.audio.aplay_exit, { code: String(code) }));
 		});
 		fallbackChild.unref();
 		return;
 	}
-	const bytesPerSample = 2; // 16-bit
+	const bytesPerSample = 2;
 	const maxBytes =
 		maxDurationSeconds != null && maxDurationSeconds > 0
 			? Math.min(
@@ -189,40 +224,25 @@ export function playWav(filename: string, maxDurationSeconds?: number): void {
 						bytesPerSample,
 				)
 			: header.dataLength;
-	applyVolumeLimit(buffer, header.dataOffset, header.dataLength);
-	const rawPcm = Buffer.from(
-		buffer.subarray(header.dataOffset, header.dataOffset + maxBytes),
-	);
-	const child = spawn(
-		"aplay",
-		[
-			"-D",
-			APLAY_DEVICE,
-			"-f",
-			"S16_LE",
-			"-r",
-			String(header.sampleRate),
-			"-c",
-			String(header.channels),
-			"-q",
-		],
-		{ stdio: ["pipe", "ignore", "ignore"] },
-	);
-	currentPlayback = child;
-	child.stdin?.on("error", () => {});
-	child.stdin?.write(rawPcm, (err) => {
-		if (!err) child.stdin?.end();
-	});
-	child.on("error", (err) => {
-		currentPlayback = null;
-		console.error(substitute(msg.audio.aplay_failed, { message: err.message }));
-	});
-	child.on("exit", (code) => {
-		currentPlayback = null;
-		if (code !== 0 && code !== null)
-			console.error(substitute(msg.audio.aplay_exit, { code: String(code) }));
-	});
-	child.unref();
+	// Start or restart persistent aplay if needed (missing or format changed).
+	const needFormat = { sampleRate: header.sampleRate, channels: header.channels };
+	if (
+		!persistentAplay ||
+		persistentAplay.killed ||
+		!persistentAplayFormat ||
+		persistentAplayFormat.sampleRate !== needFormat.sampleRate ||
+		persistentAplayFormat.channels !== needFormat.channels
+	) {
+		startPersistentAplay(needFormat.sampleRate, needFormat.channels);
+	}
+	applyVolumeLimit(buffer, header.dataOffset, maxBytes);
+	const rawPcm = buffer.subarray(header.dataOffset, header.dataOffset + maxBytes);
+	try {
+		persistentAplay?.stdin?.write(rawPcm);
+	} catch {
+		persistentAplay = null;
+		persistentAplayFormat = null;
+	}
 }
 
 /**
