@@ -9,8 +9,11 @@
 #   ./.scripts/vision/eye-command.sh type dragon
 #   ./.scripts/vision/eye-command.sh furbacca.local anim shiver   # from Mac (fe anim shiver)
 set -e
-PORT="${EYE_UDP_PORT:-5005}"
-HOST="127.0.0.1"
+SCRIPT_DIR_EC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR_EC="$(cd "$SCRIPT_DIR_EC/../.." && pwd)"
+[[ -f "$REPO_DIR_EC/.env" ]] && { set -a; source "$REPO_DIR_EC/.env"; set +a; }
+PORT="${VISION_PORT:-5005}"
+HOST="${VISION_HOST:-127.0.0.1}"
 CMD=""
 SHAPE=""
 
@@ -53,7 +56,7 @@ case "$1" in
     ;;
   *)
     echo "Usage: $0 [host] <command> [arg]" >&2
-    echo "  host    optional; e.g. furbacca.local (default 127.0.0.1)" >&2
+    echo "  host    optional; e.g. furbacca.local (default from VISION_HOST or 127.0.0.1)" >&2
     echo "  command one of: cycle_eye_shape, shape <shape>, blink, cycle_eye_type, type <type>, anim <name>, nervous_look, shiver" >&2
     echo "  anim    anim <name> — nervous_look, shiver (or use nervous_look / shiver directly)" >&2
     echo "  shapes  round, sharp, half_moon, bean, oval, tilted, dome, pill, anime, concern, glare, gemini, heart, kawaii, stern, sus" >&2

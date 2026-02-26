@@ -14,6 +14,7 @@ Furbacca's codebase is structured around physical systems, bridging a Node.js/Ty
 * **`vision/` (Py/TS):** Dual GC9A01 circular LCDs via SPI (`optic_nerve`), NumPy matrix rendering (`visual_cortex`), and Picamera2 IMX500 tracking (`retina`).
 * **`senses/` (TS):** GPIO polling and event-driven monitoring for touch and spatial awareness.
 * **`voice/` (TS):** ALSA audio mixing, sound playback, and vocalizations (I2S DAC).
+* **`hearing/` (TS/Py):** Keyword wake phrase (“Hey Furbacca”) via Vosk (offline speech recognition); opens eyes when detected. See `hearing/README.md` and optional env vars in `.env.example`.
 * **`homeostasis/` (TS):** Thermal watchdogs and software PWM fan control (libgpiod).
 * **`synapses/` (Shared):** The JSON schema/data contract layer bridging TS and Python via UDP (`5005`, `5006`).
 
@@ -69,6 +70,10 @@ You can manually send commands to the eyes from the Pi or your local Mac:
 
 *(Note: To send from a remote machine, pass the host as the first argument, e.g., `./.scripts/vision/eye-command.sh furbacca.local shape sharp`)*
 
+### Wake phrase (“Hey Furbacca”)
+
+Say **“Hey Furbacca”** (or “furbacca” / “fur-bah-kah”) to wake Furbacca: the nervous system listens in short windows (no persistent mic stream), runs Vosk for keyword detection, and opens the eyes when the phrase is heard. Optional: set `VOSK_MODEL`, `FURBACCA_WAKE_RECORD_MS`, and `FURBACCA_WAKE_PAUSE_MS` in `.env`; see `hearing/README.md` and `.env.example`.
+
 ---
 
 ## 🔌 Hardware & Pinout
@@ -119,15 +124,35 @@ Add this alias to your local Mac's `~/.zshrc` to safely push code updates:
 alias push-furbacca='rsync -avz --delete --exclude node_modules --exclude .git --exclude env --exclude dist --exclude vision/py/gc9a01py /Users/YOUR_PATH/furbacca/ minqz@furbacca.local:~/furbacca/'
 ```
 
-### 3. Code Quality (Biome & Ruff)
+### 3. Code Quality (Biome, Ruff, Basedpyright & Markdownlint)
 
-Furbacca uses **Biome** (TypeScript) and **Ruff** (Python) for ultra-fast linting and formatting.
+Furbacca uses **Biome** (TypeScript) and **Ruff** (Python) for linting and formatting, **Basedpyright** for Python type checking, and **Markdownlint** for Markdown style.
 
 ```bash
 # Format & Lint everything (run locally)
 npx @biomejs/biome check --write
 ruff check --fix .
+
+# Python type checking (basedpyright)
+basedpyright .
 ```
+
+To use the **project Python** (venv) for Ruff and Basedpyright, either:
+
+* **Activate the venv once** — then `ruff` and `basedpyright` use the venv:
+
+  ```bash
+  source env/bin/activate
+  ruff check --fix .
+  basedpyright .
+  ```
+
+* **Or run the venv binaries directly** (no activation):
+
+  ```bash
+  ./env/bin/ruff check --fix .
+  ./env/bin/basedpyright .
+  ```
 
 ---
 

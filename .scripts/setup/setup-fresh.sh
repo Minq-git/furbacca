@@ -185,7 +185,7 @@ fi
 if [[ "$UNAME_S" == "Linux" ]]; then
   echo "Ensuring Python dev headers, build tools, git, and libgpiod..."
   sudo apt-get update -qq
-  sudo apt-get install -y python3-dev python3-setuptools build-essential git
+  sudo apt-get install -y python3-dev python3-setuptools build-essential git unzip
   # libgpiod: GPIO character device for cooling fan (BCM 26). Debian Trixie: gpiod + libgpiod-dev.
   sudo apt-get install -y gpiod libgpiod-dev
   # Raspberry Pi AI Camera (IMX500): latest system + firmware so CSI camera works (face/object tracking).
@@ -217,6 +217,7 @@ echo "Installing pip packages (spidev/RPi.GPIO may take a few minutes to compile
 source env/bin/activate
 pip install --quiet --upgrade pip
 pip install spidev RPi.GPIO Pillow numpy
+pip install vosk
 
 # 4. Fetch gc9a01py driver (required for vision/py/main_eyes.py)
 echo "Fetching gc9a01py driver..."
@@ -225,6 +226,10 @@ bash .scripts/setup/fetch-gc9a01py.sh
 # 5. Fetch eye graphics (iris.jpg, eye.svg, sclera.png, etc. into vision/py/graphics)
 echo "Fetching eye graphics..."
 bash .scripts/setup/fetch-eye-graphics.sh
+
+# 5b. Vosk small English model (wake phrase "Hey Furbacca")
+echo "Fetching Vosk small English model..."
+bash .scripts/setup/fetch-vosk-model.sh
 
 # 6. Node deps (nervous system)
 echo "Installing npm deps and building..."

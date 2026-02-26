@@ -1,8 +1,6 @@
 import * as dgram from "node:dgram";
 import { msg, substitute } from "../../messages.js";
 
-const PORT = 5005;
-
 /** Pre-allocated buffers for high-frequency commands to avoid JSON.stringify + Buffer alloc on every call (reduces GC on Pi). */
 const PAYLOAD_IMPULSE = Buffer.from(JSON.stringify({ action: "impulse" }));
 const PAYLOAD_BLINK = Buffer.from(JSON.stringify({ action: "blink" }));
@@ -29,11 +27,12 @@ function getAnimationPayload(name: string, replace: boolean): Buffer {
 
 export class EyeBridge {
 	private client = dgram.createSocket("udp4");
-	private HOST = process.env.VISION_HOST ?? "127.0.0.1";
+	private readonly HOST = process.env.VISION_HOST ?? "127.0.0.1";
+	private readonly PORT = parseInt(process.env.VISION_PORT ?? "5005", 10);
 
 	/** Send a raw payload (uses pre-allocated buffer when possible). */
 	private send(payload: Buffer): void {
-		this.client.send(payload, PORT, this.HOST, (err) => {
+		this.client.send(payload, this.PORT, this.HOST, (err) => {
 			if (err)
 				console.error(
 					substitute(msg.eye_bridge.error, { message: err.message }),

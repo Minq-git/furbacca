@@ -1,42 +1,72 @@
-import { msg, substitute } from "../../../messages.js";
+import { EventEmitter } from "node:events";
+import { msg } from "../../../messages.js";
 import type { MicStream } from "../hardware/mic_stream.js";
+import { detectWakeWord } from "./wake_keyword.js";
 
-export class AuditoryCortex {
+const RECORD_MS = Math.max(
+	1000,
+	Math.min(
+		10000,
+		parseInt(process.env.FURBACCA_WAKE_RECORD_MS ?? "3000", 10) || 3000,
+	),
+);
+const PAUSE_MS = Math.max(
+	500,
+	Math.min(
+		10000,
+		parseInt(process.env.FURBACCA_WAKE_PAUSE_MS ?? "2000", 10) || 2000,
+	),
+);
+
+export class AuditoryCortex extends EventEmitter {
 	private mic: MicStream;
-	private onAudio: ((chunk: Buffer) => void) | null = null;
+	private onWake: (() => void) | null = null;
+	private running = false;
+	private loopTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	constructor(mic: MicStream) {
+		super();
 		this.mic = mic;
 	}
 
+	public setOnWake(cb: () => void): void {
+		this.onWake = cb;
+	}
+
 	public startListening(): void {
-		if (this.onAudio) return;
-
+		if (this.running) return;
+		this.running = true;
 		console.log(msg.hearing.cortex_starting);
-		this.mic.start();
+		this.runLoop();
+	}
 
-		this.onAudio = (chunk: Buffer) => {
-			let peak = 0;
-			for (let i = 0; i + 1 < chunk.length; i += 2) {
-				const sample = chunk.readInt16LE(i);
-				const abs = Math.abs(sample);
-				if (abs > peak) peak = abs;
-			}
-			if (peak > 15000) {
-				console.log(
-					substitute(msg.hearing.loud_noise_detected, { peak: String(peak) }),
-				);
-			}
-		};
+	private runLoop(): void {
+		if (!this.running) return;
+		this.recordAndCheck()
+			.catch(() => {})
+			.finally(() => {
+				if (!this.running) return;
+				this.loopTimeout = setTimeout(() => this.runLoop(), PAUSE_MS);
+				this.loopTimeout?.unref?.();
+			});
+	}
 
-		this.mic.on("audio", this.onAudio);
+	private async recordAndCheck(): Promise<void> {
+		const pcm = await this.mic.recordChunk(RECORD_MS);
+		if (!this.running || !pcm.length) return;
+		const woke = await detectWakeWord(pcm);
+		if (woke) {
+			console.log(msg.hearing.wake_detected);
+			this.emit("wake");
+			this.onWake?.();
+		}
 	}
 
 	public stopListening(): void {
-		if (this.onAudio) {
-			this.mic.off("audio", this.onAudio);
-			this.onAudio = null;
+		this.running = false;
+		if (this.loopTimeout) {
+			clearTimeout(this.loopTimeout);
+			this.loopTimeout = null;
 		}
-		this.mic.stop();
 	}
 }

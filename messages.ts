@@ -99,7 +99,7 @@ export const msg = raw as {
 		arecord_no_device_hint: string;
 		arecord_stopped: string;
 		cortex_starting: string;
-		loud_noise_detected: string;
+		wake_detected: string;
 	};
 	eyes: {
 		display_init_failed: string;

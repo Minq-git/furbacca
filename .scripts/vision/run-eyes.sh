@@ -8,6 +8,8 @@
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=/dev/null
+[[ -f "$REPO_DIR/.env" ]] && { set -a; source "$REPO_DIR/.env"; set +a; }
 
 cd "$REPO_DIR"
 
@@ -15,7 +17,8 @@ trap 'python3 -m vision.py.blank_displays' EXIT
 
 # Bind 0.0.0.0 so remote commands (e.g. fe from Mac) work; override with UDP_BIND=127.0.0.1 for local-only
 export UDP_BIND="${UDP_BIND:-0.0.0.0}"
-echo "Eyes starting (UDP 5005, bind $UDP_BIND). In another terminal: $SCRIPT_DIR/eye-command.sh cycle_eye_shape  # or shape sharp, blink, etc."
+VISION_PORT="${VISION_PORT:-5005}"
+echo "Eyes starting (UDP $VISION_PORT, bind $UDP_BIND). In another terminal: $SCRIPT_DIR/eye-command.sh cycle_eye_shape  # or shape sharp, blink, etc."
 exec python3 -m vision.py.main_eyes
 
 

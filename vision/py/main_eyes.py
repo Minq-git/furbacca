@@ -41,7 +41,7 @@ set_eye_type = config.set_eye_type
 
 # UDP bridge (receiver binds in run_eyes)
 UDP_BIND = os.environ.get("UDP_BIND", "127.0.0.1").strip() or "127.0.0.1"
-UDP_PORT = 5005
+UDP_PORT = int(os.environ.get("VISION_PORT", "5005"), 10)
 
 
 def run_eyes() -> None:

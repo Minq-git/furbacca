@@ -8,6 +8,7 @@ from __future__ import annotations
 # ruff: noqa: I001
 
 import argparse
+import os
 import socket
 import sys
 import time
@@ -31,8 +32,9 @@ except ImportError as e:
     print(f"  ImportError: {e}", file=sys.stderr)
     sys.exit(1)
 
-UDP_PORT = 5005
-NS_EVENTS_PORT = 5006  # nervous system: looking_started / looking_stopped
+UDP_PORT = int(os.environ.get("VISION_PORT", "5005"), 10)
+NS_EVENTS_PORT = int(os.environ.get("VISION_UDP_PORT", "5006"), 10)
+NS_EVENTS_HOST = os.environ.get("VISION_EYE_TRACK_HOST", "127.0.0.1").strip() or "127.0.0.1"
 # COCO: 0 = person (prefer for tracking)
 PERSON_CLASS_ID = 0
 
@@ -167,7 +169,11 @@ def main() -> None:
         default="/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk",
         help="IMX500 model (.rpk)",
     )
-    _ = ap.add_argument("--host", default="127.0.0.1", help="UDP host for eyes (default 127.0.0.1)")
+    _ = ap.add_argument(
+        "--host",
+        default=os.environ.get("VISION_HOST", "127.0.0.1"),
+        help="UDP host for eyes (default from VISION_HOST or 127.0.0.1)",
+    )
     _ = ap.add_argument("--port", type=int, default=UDP_PORT, help=f"UDP port (default {UDP_PORT})")
     _ = ap.add_argument("--threshold", type=float, default=0.5, help="Detection confidence threshold")
     _ = ap.add_argument("--smooth", type=float, default=0.25, help="EMA smoothing 0..1 (0=no smooth, 1=no movement)")
@@ -246,7 +252,7 @@ def main() -> None:
                 if was_looking:
                     try:
                         ev = EyeTrackingEvent(event="looking_stopped")
-                        _ = sock.sendto(ev.to_json().encode(), ("127.0.0.1", NS_EVENTS_PORT))
+                        _ = sock.sendto(ev.to_json().encode(), (NS_EVENTS_HOST, NS_EVENTS_PORT))
                     except OSError:
                         pass
                     was_looking = False
@@ -258,7 +264,7 @@ def main() -> None:
             if not was_looking:
                 try:
                     ev = EyeTrackingEvent(event="looking_started")
-                    _ = sock.sendto(ev.to_json().encode(), ("127.0.0.1", NS_EVENTS_PORT))
+                    _ = sock.sendto(ev.to_json().encode(), (NS_EVENTS_HOST, NS_EVENTS_PORT))
                 except OSError:
                     pass
                 was_looking = True
@@ -281,7 +287,7 @@ def main() -> None:
                         x=float(int(round(cx))),
                         y=float(int(round(cy))),
                     )
-                    _ = sock.sendto(ev.to_json().encode(), ("127.0.0.1", NS_EVENTS_PORT))
+                    _ = sock.sendto(ev.to_json().encode(), (NS_EVENTS_HOST, NS_EVENTS_PORT))
             except OSError:
                 pass
     except KeyboardInterrupt:

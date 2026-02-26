@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { Reflexes } from "./brain/ts/cortex/reflexes.js";
 import { VisualCortex } from "./brain/ts/cortex/visual_cortex.js";
 import { startMatterIfEnabled } from "./brain/ts/matter/matter_boot.js";
@@ -18,13 +19,20 @@ async function main(): Promise<void> {
 
 	const mic = new MicStream(process.env.FURBACCA_MIC_CARD ?? "0");
 	const hearing = new AuditoryCortex(mic);
+	hearing.setOnWake(() => {
+		eyes.openEyes();
+	});
 
 	await brainstem.boot();
 	console.log(msg.nervous_system.header);
 
 	const visionHost = process.env.VISION_HOST ?? "127.0.0.1";
+	const visionPort = process.env.VISION_PORT ?? "5005";
 	console.log(
-		substitute(msg.nervous_system.eyes_listening, { host: visionHost }),
+		substitute(msg.nervous_system.eyes_listening, {
+			host: visionHost,
+			port: visionPort,
+		}),
 	);
 	console.log(
 		substitute(msg.nervous_system.voice_ready, {
@@ -33,7 +41,8 @@ async function main(): Promise<void> {
 	);
 	if (
 		process.platform === "linux" &&
-		(process.env.FURBACCA_EYE_TRACK ?? "1") !== "0"
+		(process.env.FURBACCA_EYE_TRACK ?? process.env.VISION_EYE_TRACK ?? "1") !==
+			"0"
 	) {
 		console.log(msg.nervous_system.eye_tracker_starting);
 	}

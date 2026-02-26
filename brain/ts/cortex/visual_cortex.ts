@@ -5,7 +5,8 @@ import type { EyeTrackingEvent } from "../../../synapses/ts/vision_messages.js";
 import type { EyeBridge } from "../../../vision/ts/eye_bridge.js";
 
 /** UDP port for local events (e.g. eye-track.sh notifies when tracking starts/stops). */
-const NS_EVENTS_PORT = 5006;
+const NS_EVENTS_PORT = parseInt(process.env.VISION_UDP_PORT ?? "5006", 10);
+const NS_EVENTS_BIND = process.env.VISION_EYE_TRACK_HOST ?? "127.0.0.1";
 
 /** Throttle "in view" / "left view" logs (camera can flicker at frame edge). */
 const LOOKING_LOG_INTERVAL_MS = 4000;
@@ -25,7 +26,7 @@ export class VisualCortex {
 		const sock = dgram.createSocket("udp4");
 		this.socket = sock;
 
-		sock.bind(NS_EVENTS_PORT, "127.0.0.1", () => {
+		sock.bind(NS_EVENTS_PORT, NS_EVENTS_BIND, () => {
 			sock.on("message", (buf: Buffer) => {
 				try {
 					const payload = JSON.parse(buf.toString()) as EyeTrackingEvent;

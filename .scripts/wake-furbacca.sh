@@ -17,15 +17,19 @@ done
 
 cd "$REPO_DIR"
 
+# Load .env so Node and child processes get VISION_* etc.
+if [[ -f .env ]]; then set -a; source .env; set +a; fi
+
 # Refactor check: eyes live in vision/py/ (pull latest if missing)
 if [[ ! -f vision/py/main_eyes.py ]]; then
   echo "❌ vision/py/main_eyes.py not found. Sync from your Mac: push-furbacca"
   exit 1
 fi
 
-# If something else is on 5005 (e.g. old systemd), remote + touch won't work
-if command -v ss &>/dev/null && ss -ulnp 2>/dev/null | grep -q ':5005 '; then
-  echo "⚠ Port 5005 already in use. Stop other eyes first: sudo systemctl stop furbacca-eyes"
+# If something else is on the eyes port (e.g. old systemd), remote + touch won't work
+VISION_PORT="${VISION_PORT:-5005}"
+if command -v ss &>/dev/null && ss -ulnp 2>/dev/null | grep -q ":${VISION_PORT} "; then
+  echo "⚠ Port $VISION_PORT already in use. Stop other eyes first: sudo systemctl stop furbacca-eyes"
   echo "  Then run wake-furbacca again."
   exit 1
 fi
@@ -39,7 +43,7 @@ cleanup() {
   fi
   # Close eyelids and blank displays on exit (nervous system kills eyes process; this helps if eyes still respond)
   if command -v python3 >/dev/null 2>&1; then
-    EYE_CMD='{"action":"eyes_close"}' EYE_HOST="${EYE_UDP_HOST:-127.0.0.1}" EYE_PORT="${EYE_UDP_PORT:-5005}" python3 -c '
+    EYE_CMD='{"action":"eyes_close"}' EYE_HOST="${VISION_HOST:-127.0.0.1}" EYE_PORT="${VISION_PORT:-5005}" python3 -c '
 import socket, os
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.sendto(os.environ.get("EYE_CMD", "{}").encode(), (os.environ["EYE_HOST"], int(os.environ["EYE_PORT"])))
