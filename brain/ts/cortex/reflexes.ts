@@ -265,7 +265,7 @@ export class Reflexes {
 			this.eyes.blink();
 			this.eyes.playAnimation("nervous_look", { replace: true });
 			console.log(msg.audio.purr_playing);
-			playWav("pet.wav", 3);
+			playWav("pet.wav", 3.5);
 		} else if (sensor === "belly") {
 			this.handleBellyTouch();
 		} else if (sensor === "shiver") {
