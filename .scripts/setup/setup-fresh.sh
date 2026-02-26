@@ -137,7 +137,7 @@ ZRAMEOF
       echo "gpu_mem=32" | sudo tee -a "$BOOT_CFG" >/dev/null
       NEED_REBOOT=true
     fi
-    # Audio: dtparam=audio=off so I2S DAC is default; max98357a with no-sdmode so BCM 4 free for PIR
+    # Audio: dtparam=audio=off so I2S DAC is default
     if ! grep -qE '^dtparam=audio=off' "$BOOT_CFG" 2>/dev/null; then
       if grep -qE '^dtparam=audio=' "$BOOT_CFG" 2>/dev/null; then
         echo "Setting dtparam=audio=off in $BOOT_CFG (I2S default)..."
@@ -148,13 +148,29 @@ ZRAMEOF
       fi
       NEED_REBOOT=true
     fi
-    if ! grep -qE 'dtoverlay=(max98357a|hifiberry-dac)' "$BOOT_CFG" 2>/dev/null; then
-      echo "Adding dtoverlay=max98357a,no-sdmode to $BOOT_CFG (BCLK 18, LRC 19, DIN 21; BCM 4 free for PIR)..."
-      echo "dtoverlay=max98357a,no-sdmode" | sudo tee -a "$BOOT_CFG" >/dev/null
+    # I2S bus: enable explicitly (shared DAC + mic)
+    if grep -qE '^#\s*dtparam=i2s' "$BOOT_CFG" 2>/dev/null; then
+      echo "Enabling dtparam=i2s=on in $BOOT_CFG..."
+      sudo sed -i -e 's/^#\s*dtparam=i2s.*/dtparam=i2s=on/' "$BOOT_CFG"
       NEED_REBOOT=true
-    elif grep 'dtoverlay=max98357a' "$BOOT_CFG" 2>/dev/null | grep -qv 'no-sdmode'; then
-      echo "Replacing max98357a overlay with no-sdmode in $BOOT_CFG (free BCM 4 for PIR)..."
-      sudo sed -i 's/^dtoverlay=max98357a.*/dtoverlay=max98357a,no-sdmode/' "$BOOT_CFG"
+    elif ! grep -qE '^dtparam=i2s' "$BOOT_CFG" 2>/dev/null; then
+      echo "Adding dtparam=i2s=on to $BOOT_CFG..."
+      echo "dtparam=i2s=on" | sudo tee -a "$BOOT_CFG" >/dev/null
+      NEED_REBOOT=true
+    fi
+    # Audio overlay: use a single overlay. googlevoicehat-soundcard = DAC + mic on one card (for hearing).
+    # Duplicate overlays often come from: README/audio-check.sh previously suggesting max98357a, or an old setup run.
+    # If both are present, remove max98357a so the mic is exposed.
+    if grep -qE '^dtoverlay=googlevoicehat-soundcard' "$BOOT_CFG" 2>/dev/null && grep -qE '^dtoverlay=max98357a' "$BOOT_CFG" 2>/dev/null; then
+      echo "Removing dtoverlay=max98357a (keep googlevoicehat-soundcard only so mic works)..."
+      sudo sed -i -E '/^dtoverlay=max98357a/d' "$BOOT_CFG"
+      NEED_REBOOT=true
+    elif grep -qE '^dtoverlay=(max98357a|googlevoicehat-soundcard|hifiberry-dac|furbacca-audio)' "$BOOT_CFG" 2>/dev/null; then
+      # Single audio overlay already present; leave it
+      :
+    else
+      echo "Adding dtoverlay=googlevoicehat-soundcard to $BOOT_CFG (I2S DAC + mic, one card)..."
+      echo "dtoverlay=googlevoicehat-soundcard" | sudo tee -a "$BOOT_CFG" >/dev/null
       NEED_REBOOT=true
     fi
   fi
@@ -179,13 +195,12 @@ if [[ "$UNAME_S" == "Linux" ]]; then
   sudo apt-get install -y imx500-all python3-picamera2 python3-opencv
   echo "AI camera (imx500-all), python3-picamera2, and python3-opencv installed. Reboot once so IMX500 firmware loads (see https://www.raspberrypi.com/documentation/accessories/ai-camera.html)."
 
-  # Adafruit SPH0645 I2S microphone (shares I2S bus with DAC)
-  sudo apt-get install -y python3-pip wget
-  sudo pip3 install --upgrade adafruit-python-shell
-  wget https://raw.githubusercontent.com/adafruit/Raspberry-Pi-Installer-Scripts/master/i2smic.py -O /tmp/i2smic.py
-  echo "⚠ I2S microphone installer downloaded to /tmp/i2smic.py"
-  echo "  Run manually: sudo python3 /tmp/i2smic.py"
-  echo "  Note: this script is interactive and will force a reboot."
+  # I2S mic: googlevoicehat-soundcard overlay (above) provides DAC + mic on one card; no extra installer needed.
+  # Optional: Adafruit i2smic.py for a different mic setup (Debian blocks system-wide pip — use a venv or run manually).
+  if command -v wget &>/dev/null; then
+    wget -q https://raw.githubusercontent.com/adafruit/Raspberry-Pi-Installer-Scripts/master/i2smic.py -O /tmp/i2smic.py 2>/dev/null && \
+      echo "Optional: I2S mic installer at /tmp/i2smic.py (run manually if not using googlevoicehat-soundcard)." || true
+  fi
 fi
 
 # 2. Python venv
@@ -355,5 +370,4 @@ fi
 echo ""
 echo "=== Setup complete ==="
 echo "Run: ./.scripts/wake-furbacca.sh   (or: wake-furbacca   after opening a new shell)"
-echo "Re-run full setup: setup-furbacca   (alias added to your shell rc)"
-echo "SPI / pinout: instruction.md §3.1."
+echo "SPI / pinout: see README.md"

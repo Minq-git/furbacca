@@ -7,7 +7,7 @@ export class MicStream extends EventEmitter {
 	public readonly card: string;
 	private proc: ChildProcessWithoutNullStreams | null = null;
 
-	constructor(card: string = "1") {
+	constructor(card: string = "0") {
 		super();
 		this.card = card;
 	}
@@ -56,6 +56,9 @@ export class MicStream extends EventEmitter {
 				console.error(
 					substitute(msg.hearing.arecord_exit, { code: String(code) }),
 				);
+				if (code === 1) {
+					console.error(msg.hearing.arecord_no_device_hint);
+				}
 			} else if (signal) {
 				console.log(
 					substitute(msg.hearing.arecord_stopped, { signal: String(signal) }),

@@ -96,6 +96,7 @@ export const msg = raw as {
 		alsa_error: string;
 		arecord_failed: string;
 		arecord_exit: string;
+		arecord_no_device_hint: string;
 		arecord_stopped: string;
 		cortex_starting: string;
 		loud_noise_detected: string;

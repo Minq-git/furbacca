@@ -149,10 +149,10 @@ Check the logs during startup for the QR code URL and manual pairing code, or ru
 
 ## 📝 Troubleshooting
 
-**Audio/I2S is dead or crackling:**
+**Audio/I2S is dead or no mic (arecord -l empty):**
 
 * Run `./.scripts/diagnostics/audio-check.sh`.
-* Ensure `/boot/firmware/config.txt` contains `dtparam=audio=off` and `dtoverlay=max98357a,no-sdmode`.
+* Use **one** audio overlay only. For DAC + mic (hearing), use `dtoverlay=googlevoicehat-soundcard`. Ensure `dtparam=audio=off` and `dtparam=i2s=on`. Do **not** add both `googlevoicehat-soundcard` and `max98357a` — that leaves no capture device. Setup-fresh adds the correct overlay; if you have both, remove the max98357a line and reboot.
 
 **One or both displays are black / corrupted:**
 
