@@ -34,7 +34,8 @@ let volumeInitialized = false;
 /** Persistent aplay process: kept open to avoid start/stop clicks; format may change between files. */
 let persistentAplay: ReturnType<typeof spawn> | null = null;
 /** Format the current persistent pipe was started with (so we restart if next WAV differs). */
-let persistentAplayFormat: { sampleRate: number; channels: number } | null = null;
+let persistentAplayFormat: { sampleRate: number; channels: number } | null =
+	null;
 
 /**
  * Set ALSA volume to 60% (hardware cap for 4 Ω 2W pair + TP4056). Runs once on first play.
@@ -225,7 +226,10 @@ export function playWav(filename: string, maxDurationSeconds?: number): void {
 				)
 			: header.dataLength;
 	// Start or restart persistent aplay if needed (missing or format changed).
-	const needFormat = { sampleRate: header.sampleRate, channels: header.channels };
+	const needFormat = {
+		sampleRate: header.sampleRate,
+		channels: header.channels,
+	};
 	if (
 		!persistentAplay ||
 		persistentAplay.killed ||
@@ -236,7 +240,10 @@ export function playWav(filename: string, maxDurationSeconds?: number): void {
 		startPersistentAplay(needFormat.sampleRate, needFormat.channels);
 	}
 	applyVolumeLimit(buffer, header.dataOffset, maxBytes);
-	const rawPcm = buffer.subarray(header.dataOffset, header.dataOffset + maxBytes);
+	const rawPcm = buffer.subarray(
+		header.dataOffset,
+		header.dataOffset + maxBytes,
+	);
 	try {
 		persistentAplay?.stdin?.write(rawPcm);
 	} catch {
