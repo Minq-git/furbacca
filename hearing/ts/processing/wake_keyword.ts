@@ -15,7 +15,8 @@ export function detectWakeWord(pcm: Buffer): Promise<boolean> {
 		const scriptPath = path.join(process.cwd(), "hearing", "py", SCRIPT_NAME);
 		const pyCmd = fs.existsSync(VENV_PYTHON) ? VENV_PYTHON : "python3";
 		const py = spawn(pyCmd, [scriptPath], {
-			stdio: ["pipe", "pipe", "ignore"],
+			cwd: process.cwd(),
+			stdio: ["pipe", "pipe", "pipe"],
 			env: {
 				...process.env,
 				VOSK_MODEL:
@@ -25,6 +26,9 @@ export function detectWakeWord(pcm: Buffer): Promise<boolean> {
 		let out = "";
 		py.stdout?.on("data", (c: Buffer) => {
 			out += c.toString("utf8");
+		});
+		py.stderr?.on("data", (c: Buffer) => {
+			process.stderr.write(c);
 		});
 		py.on("error", () => resolve(false));
 		py.on("exit", () => {

@@ -16,6 +16,5 @@ Keyword detection uses **Vosk** (offline speech recognition). If Vosk is not ins
 ## Env vars
 
 - `FURBACCA_MIC_CARD` — ALSA capture card (default `0`).
-- `FURBACCA_WAKE_RECORD_MS` — Recording window length in ms (default `3000`).
-- `FURBACCA_WAKE_PAUSE_MS` — Pause between windows in ms (default `2000`).
+- `FURBACCA_WAKE_RECORD_MS` — Recording window length in ms (default `3000`). No pause between windows; eye sleep is handled elsewhere (e.g. motion timeout).
 - `VOSK_MODEL` — Path to Vosk model directory (default `voice/models/vosk-model-small-en-us-0.15`).

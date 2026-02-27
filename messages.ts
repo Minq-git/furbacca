@@ -91,15 +91,19 @@ export const msg = raw as {
 		aplay_exit: string;
 	};
 	hearing: {
-		mic_initializing: string;
-		mic_stopping: string;
 		alsa_error: string;
-		arecord_failed: string;
 		arecord_exit: string;
+		arecord_failed: string;
 		arecord_no_device_hint: string;
 		arecord_stopped: string;
 		cortex_starting: string;
+		listening_heartbeat: string;
+		mic_initializing: string;
+		mic_stopping: string;
+		no_audio_chunk: string;
+		wake_check_failed: string;
 		wake_detected: string;
+		wake_word_triggered: string;
 	};
 	eyes: {
 		display_init_failed: string;

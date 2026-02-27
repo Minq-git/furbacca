@@ -34,9 +34,13 @@
 		"arecord_no_device_hint": "  ⚠️👂 Run 'arecord -l' on the Pi; if no capture device, add dtoverlay=googlevoicehat-soundcard to /boot/firmware/config.txt and reboot.",
 		"arecord_stopped": "  ⚠️👂 Hearing: arecord stopped ({signal})",
 		"cortex_starting": "  👂  Hearing: Listening for \"Hey Furbacca\" (keyword only, no persistent stream).",
+		"listening_heartbeat": "  👂  Hearing: listening (chunk {n}, {bytes} bytes).",
 		"mic_initializing": "  👂  Hearing: Initializing microphone on card {card}...",
 		"mic_stopping": "  👂  Hearing: Stopping microphone stream...",
-		"wake_detected": "  👂  \"Hey Furbacca\" heard — opening up."
+		"no_audio_chunk": "  ⚠️👂 Hearing: no audio from arecord (check mic / plughw).",
+		"wake_check_failed": "  ⚠️👂 Hearing: wake check failed: {message}",
+		"wake_detected": "  👂  \"Hey Furbacca\" heard — opening up.",
+		"wake_word_triggered": "  👂  Wake word triggered."
 	},
 	"matter_lobe": {
 		"brightness_set": "  🧠  Matter: Brightness/Level set to {level}",

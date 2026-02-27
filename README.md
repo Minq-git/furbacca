@@ -72,7 +72,7 @@ You can manually send commands to the eyes from the Pi or your local Mac:
 
 ### Wake phrase (“Hey Furbacca”)
 
-Say **“Hey Furbacca”** (or “furbacca” / “fur-bah-kah”) to wake Furbacca: the nervous system listens in short windows (no persistent mic stream), runs Vosk for keyword detection, and opens the eyes when the phrase is heard. Optional: set `VOSK_MODEL`, `FURBACCA_WAKE_RECORD_MS`, and `FURBACCA_WAKE_PAUSE_MS` in `.env`; see `hearing/README.md` and `.env.example`.
+Say **“Hey Furbacca”** (or “furbacca” / “fur-bah-kah”) to wake Furbacca: the nervous system listens in short windows (no persistent mic stream), runs Vosk for keyword detection, and opens the eyes when the phrase is heard. Optional: set `VOSK_MODEL` and `FURBACCA_WAKE_RECORD_MS` in `.env`; see `hearing/README.md` and `.env.example`.
 
 ---
 
@@ -121,7 +121,7 @@ bash .scripts/setup/setup-fresh.sh
 Add this alias to your local Mac's `~/.zshrc` to safely push code updates:
 
 ```bash
-alias push-furbacca='rsync -avz --delete --exclude node_modules --exclude .git --exclude env --exclude dist --exclude vision/py/gc9a01py /Users/YOUR_PATH/furbacca/ minqz@furbacca.local:~/furbacca/'
+alias push-furbacca='rsync -avz --delete --exclude node_modules --exclude .git --exclude env --exclude dist --exclude voice/models --exclude vision/py/gc9a01py /Users/YOUR_PATH/furbacca/ minqz@furbacca.local:~/furbacca/'
 ```
 
 ### 3. Code Quality (Biome, Ruff, Basedpyright & Markdownlint)
@@ -194,3 +194,7 @@ Check the logs during startup for the QR code URL and manual pairing code, or ru
 **Network drops under heavy load:**
 
 * Hold **Belly** for 15 seconds. The nervous system will trigger `./.scripts/diagnostics/heal-network.sh` to restart the Wi-Fi stack and recover connection.
+
+**Wake word not working / “model not found” (Vosk):**
+
+* `setup-fresh.sh` downloads the Vosk model on the Pi automatically. The `push-furbacca` rsync excludes `voice/models` so that syncing from the Mac does **not** delete the Pi’s downloaded model (the Mac usually doesn’t have it). If the model is missing (e.g. fresh clone or an older sync without the exclude), on the Pi run: `cd ~/furbacca && bash .scripts/setup/fetch-vosk-model.sh`.

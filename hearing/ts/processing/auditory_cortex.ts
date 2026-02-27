@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { msg } from "../../../messages.js";
+import { msg, substitute } from "../../../messages.js";
 import type { MicStream } from "../hardware/mic_stream.js";
 import { detectWakeWord } from "./wake_keyword.js";
 
@@ -10,19 +10,13 @@ const RECORD_MS = Math.max(
 		parseInt(process.env.FURBACCA_WAKE_RECORD_MS ?? "3000", 10) || 3000,
 	),
 );
-const PAUSE_MS = Math.max(
-	500,
-	Math.min(
-		10000,
-		parseInt(process.env.FURBACCA_WAKE_PAUSE_MS ?? "2000", 10) || 2000,
-	),
-);
 
 export class AuditoryCortex extends EventEmitter {
 	private mic: MicStream;
 	private onWake: (() => void) | null = null;
 	private running = false;
 	private loopTimeout: ReturnType<typeof setTimeout> | null = null;
+	private chunkCount = 0;
 
 	constructor(mic: MicStream) {
 		super();
@@ -43,19 +37,42 @@ export class AuditoryCortex extends EventEmitter {
 	private runLoop(): void {
 		if (!this.running) return;
 		this.recordAndCheck()
-			.catch(() => {})
+			.catch((err) => {
+				console.warn(
+					substitute(msg.hearing.wake_check_failed, {
+						message: String(err?.message ?? err),
+					}),
+				);
+			})
 			.finally(() => {
 				if (!this.running) return;
-				this.loopTimeout = setTimeout(() => this.runLoop(), PAUSE_MS);
+				// No sleep between windows — eye sleep is handled elsewhere (e.g. motion timeout).
+				this.loopTimeout = setTimeout(() => this.runLoop(), 0);
 				this.loopTimeout?.unref?.();
 			});
 	}
 
 	private async recordAndCheck(): Promise<void> {
 		const pcm = await this.mic.recordChunk(RECORD_MS);
-		if (!this.running || !pcm.length) return;
+		if (!this.running) return;
+		this.chunkCount++;
+		if (!pcm.length) {
+			if (this.chunkCount % 10 === 1) {
+				console.warn(msg.hearing.no_audio_chunk);
+			}
+			return;
+		}
+		if (this.chunkCount % 20 === 1) {
+			console.log(
+				substitute(msg.hearing.listening_heartbeat, {
+					n: String(this.chunkCount),
+					bytes: String(pcm.length),
+				}),
+			);
+		}
 		const woke = await detectWakeWord(pcm);
 		if (woke) {
+			console.log(msg.hearing.wake_word_triggered);
 			console.log(msg.hearing.wake_detected);
 			this.emit("wake");
 			this.onWake?.();
