@@ -92,6 +92,12 @@ You can manually send commands to the eyes from the Pi or your local Mac:
 | **Audio LRC** | 19 | 35 | MAX98357A I2S DAC |
 | **Audio DIN** | 21 | 40 | MAX98357A I2S DAC |
 
+### Schematic
+
+*Furbacca — The Edge AI Animatronic (Rev 1.2, 07 Feb 2026).*
+
+![Furbacca schematic](.docs/Furbacca_schem_v1.2.png)
+
 ---
 
 ## 🔧 Installation & Setup
