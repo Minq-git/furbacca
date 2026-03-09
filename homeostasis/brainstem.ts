@@ -102,7 +102,7 @@ export class Brainstem {
 			"Ready",
 		];
 
-		// First: prevent fan from floating (BCM 24 LOW) before any other GPIO or heavy work
+		// First: prevent fan from floating (BCM 26 LOW) before any other GPIO or heavy work
 		fanControl.init();
 	}
 
@@ -281,7 +281,7 @@ export class Brainstem {
 			"| MAX98357A   | Voice (I2S)         | 18,19,21 | " +
 				this.statusCell(voiceState()) +
 				" |",
-			"| Cooling     | Fan (BCM 24)        | 24       | " +
+			"| Cooling     | Fan (BCM 26)        | 26       | " +
 				this.statusCell(fanState()) +
 				" |",
 		];

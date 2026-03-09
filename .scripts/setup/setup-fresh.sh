@@ -170,7 +170,7 @@ if [[ "$UNAME_S" == "Linux" ]]; then
   echo "Ensuring Python dev headers, build tools, git, and libgpiod..."
   sudo apt-get update -qq
   sudo apt-get install -y python3-dev python3-setuptools build-essential git
-  # libgpiod: GPIO character device for cooling fan (BCM 24). Debian Trixie: gpiod + libgpiod-dev.
+  # libgpiod: GPIO character device for cooling fan (BCM 26). Debian Trixie: gpiod + libgpiod-dev.
   sudo apt-get install -y gpiod libgpiod-dev
   # Raspberry Pi AI Camera (IMX500): latest system + firmware so CSI camera works (face/object tracking).
   echo "Ensuring Raspberry Pi AI Camera deps (apt full-upgrade + imx500-all)..."

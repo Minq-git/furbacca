@@ -87,7 +87,7 @@ You can manually send commands to the eyes from the Pi or your local Mac:
 | **Eye RST** | 27 | 13 | GC9A01 |
 | **Eye CS (Left)** | 8 | 24 | Display 1 |
 | **Eye CS (Right)** | 7 | 26 | Display 2 |
-| **Cooling Fan** | 24 | 18 | 2N2222 NPN (Active-High PWM) |
+| **Cooling Fan** | 26 | 37 | 2N2222 NPN (Active-High PWM) |
 | **Audio BCLK** | 18 | 12 | MAX98357A I2S DAC |
 | **Audio LRC** | 19 | 35 | MAX98357A I2S DAC |
 | **Audio DIN** | 21 | 40 | MAX98357A I2S DAC |

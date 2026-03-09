@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Test fan on BCM 24: init, soft-start to 100%, hold 5s, then off.
+ * Test fan on BCM 26: init, soft-start to 100%, hold 5s, then off.
  * Run from repo root on the Pi (after build):
  *   npm run build:pi && node dist/.scripts/diagnostics/test-fan.js
  * (Use build:pi on Pi to avoid tsc OOM; if already built, just: node dist/.scripts/diagnostics/test-fan.js)
@@ -24,7 +24,7 @@ async function main(): Promise<void> {
 			"  - GPIO access: sudo usermod -aG gpio $USER (then log out/in) or run with sudo",
 		);
 		console.error(
-			"  - BCM 24 (physical pin 18) wiring: 1kΩ → 2N2222 base, fan 5V→collector, emitter GND",
+			"  - BCM 26 (physical pin 37) wiring: 1kΩ → 2N2222 base, fan 5V→collector, emitter GND",
 		);
 		process.exit(1);
 	}
