@@ -7,6 +7,10 @@ import { msg, substitute } from "../../../messages.js";
 export const RECORD_CHUNK_RATE = 16000;
 export const RECORD_CHUNK_CHANNELS = 1;
 
+/** Throttle ALSA stderr from arecord when no capture device (max once per 30s). */
+const ALSA_ERROR_INTERVAL_MS = 30_000;
+let lastAlsaErrorTime = 0;
+
 export class MicStream extends EventEmitter {
 	public readonly card: string;
 	private proc: ChildProcessWithoutNullStreams | null = null;
@@ -40,11 +44,24 @@ export class MicStream extends EventEmitter {
 				stdio: ["ignore", "pipe", "pipe"],
 			});
 			const chunks: Buffer[] = [];
+			let stderrBuf = "";
 			child.stdout?.on("data", (c: Buffer) => chunks.push(c));
 			child.stderr?.on("data", (data: Buffer) => {
-				const line = data.toString("utf8").trim();
-				if (line)
-					console.error(substitute(msg.hearing.alsa_error, { message: line }));
+				stderrBuf += data.toString("utf8");
+				const lines = stderrBuf.split("\n");
+				stderrBuf = lines.pop() ?? "";
+				for (const line of lines) {
+					const trimmed = line.trim();
+					if (trimmed) {
+						const now = Date.now();
+						if (now - lastAlsaErrorTime >= ALSA_ERROR_INTERVAL_MS) {
+							lastAlsaErrorTime = now;
+							console.error(
+								substitute(msg.hearing.alsa_error, { message: trimmed }),
+							);
+						}
+					}
+				}
 			});
 			child.on("error", (err) => reject(err));
 			child.on("exit", (code) => {

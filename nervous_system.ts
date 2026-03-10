@@ -17,11 +17,21 @@ async function main(): Promise<void> {
 	const cortex = new VisualCortex(eyes);
 	const reflexes = new Reflexes(eyes, touch, brainstem.getReflexesConfig());
 
+	const hearingEnabled =
+		process.env.FURBACCA_HEARING !== "0" &&
+		process.env.FURBACCA_HEARING !== "false";
 	const mic = new MicStream(process.env.FURBACCA_MIC_CARD ?? "0");
-	const hearing = new AuditoryCortex(mic);
-	hearing.setOnWake(() => {
-		eyes.openEyes();
-	});
+	const hearing = hearingEnabled
+		? (() => {
+				const cortex = new AuditoryCortex(mic);
+				cortex.setOnWake(() => eyes.openEyes());
+				return cortex;
+			})()
+		: {
+				startListening() {},
+				stopListening() {},
+			};
+	if (!hearingEnabled) console.log(msg.hearing.hearing_disabled);
 
 	await brainstem.boot();
 	console.log(msg.nervous_system.header);

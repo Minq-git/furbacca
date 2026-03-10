@@ -1,7 +1,22 @@
+import { execSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { msg, substitute } from "../../../messages.js";
 import type { MicStream } from "../hardware/mic_stream.js";
 import { detectWakeWord } from "./wake_keyword.js";
+
+/** Return true if the given ALSA card number has a capture device (from arecord -l). */
+function cardHasCapture(card: string): boolean {
+	try {
+		const out = execSync("arecord -l", {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+		});
+		const captureSection = out.split("CAPTURE Hardware Devices")[1] ?? "";
+		return new RegExp(`card\\s+${card}\\s*:`).test(captureSection);
+	} catch {
+		return false;
+	}
+}
 
 const RECORD_MS = Math.max(
 	1000,
@@ -11,12 +26,21 @@ const RECORD_MS = Math.max(
 	),
 );
 
+/** Throttle repeated "wake check failed" logs when mic/card missing (max once per 30s). */
+const WAKE_CHECK_WARN_INTERVAL_MS = 30_000;
+let lastWakeCheckWarnTime = 0;
+
+/** After this many consecutive record failures, wait BACKOFF_MS before retrying (stops log flood when no mic). */
+const CONSECUTIVE_FAILURES_BEFORE_BACKOFF = 5;
+const BACKOFF_MS = 60_000;
+
 export class AuditoryCortex extends EventEmitter {
 	private mic: MicStream;
 	private onWake: (() => void) | null = null;
 	private running = false;
 	private loopTimeout: ReturnType<typeof setTimeout> | null = null;
 	private chunkCount = 0;
+	private consecutiveFailures = 0;
 
 	constructor(mic: MicStream) {
 		super();
@@ -31,6 +55,11 @@ export class AuditoryCortex extends EventEmitter {
 		if (this.running) return;
 		this.running = true;
 		console.log(msg.hearing.cortex_starting);
+		if (!cardHasCapture(this.mic.card)) {
+			console.log(
+				substitute(msg.hearing.capture_card_hint, { card: this.mic.card }),
+			);
+		}
 		this.runLoop();
 	}
 
@@ -38,16 +67,29 @@ export class AuditoryCortex extends EventEmitter {
 		if (!this.running) return;
 		this.recordAndCheck()
 			.catch((err) => {
-				console.warn(
-					substitute(msg.hearing.wake_check_failed, {
-						message: String(err?.message ?? err),
-					}),
-				);
+				this.consecutiveFailures++;
+				const now = Date.now();
+				if (now - lastWakeCheckWarnTime >= WAKE_CHECK_WARN_INTERVAL_MS) {
+					lastWakeCheckWarnTime = now;
+					console.warn(
+						substitute(msg.hearing.wake_check_failed, {
+							message: String(err?.message ?? err),
+						}),
+					);
+				}
 			})
 			.finally(() => {
 				if (!this.running) return;
-				// No sleep between windows — eye sleep is handled elsewhere (e.g. motion timeout).
-				this.loopTimeout = setTimeout(() => this.runLoop(), 0);
+				const delay =
+					this.consecutiveFailures >= CONSECUTIVE_FAILURES_BEFORE_BACKOFF
+						? (() => {
+								if (this.consecutiveFailures === CONSECUTIVE_FAILURES_BEFORE_BACKOFF) {
+									console.log(msg.hearing.backoff_no_device);
+								}
+								return BACKOFF_MS;
+							})()
+						: 0;
+				this.loopTimeout = setTimeout(() => this.runLoop(), delay);
 				this.loopTimeout?.unref?.();
 			});
 	}
@@ -55,6 +97,7 @@ export class AuditoryCortex extends EventEmitter {
 	private async recordAndCheck(): Promise<void> {
 		const pcm = await this.mic.recordChunk(RECORD_MS);
 		if (!this.running) return;
+		this.consecutiveFailures = 0; // success
 		this.chunkCount++;
 		if (!pcm.length) {
 			if (this.chunkCount % 10 === 1) {

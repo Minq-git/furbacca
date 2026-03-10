@@ -17,7 +17,7 @@
 │   ├── audio-check.sh
 │   ├── monitor-zram.sh
 │   ├── heal-network.sh
-│   └── test-fan.ts
+│   └── (test-fan: see homeostasis/test-fan.ts)
 │
 ├── matter/                      # Smart home / ecosystem utilities
 │   ├── show-matter-pairing.sh
@@ -55,7 +55,7 @@
 | **audio-check.sh** | On the Pi: check I2S DAC config and list ALSA devices. Run: `./.scripts/diagnostics/audio-check.sh`. |
 | **monitor-zram.sh** | Live zRAM and swap monitor. On Pi: `./.scripts/diagnostics/monitor-zram.sh`. From Mac: `./.scripts/diagnostics/monitor-zram.sh furbacca.local`. |
 | **heal-network.sh** | Emergency network repair (belly 15 s triggers from nervous system). Run manually: `./.scripts/diagnostics/heal-network.sh`. |
-| **test-fan.ts** | Test fan on BCM 26. After build: `node dist/.scripts/diagnostics/test-fan.js`. |
+| **test-fan** | Test fan on BCM 26. After build: `npm run test-fan` or `node dist/homeostasis/test-fan.js`. Source: `homeostasis/test-fan.ts`. |
 
 ## matter/
 

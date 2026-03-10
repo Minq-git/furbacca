@@ -158,20 +158,16 @@ ZRAMEOF
       echo "dtparam=i2s=on" | sudo tee -a "$BOOT_CFG" >/dev/null
       NEED_REBOOT=true
     fi
-    # Audio overlay: use a single overlay. googlevoicehat-soundcard = DAC + mic on one card (for hearing).
-    # Duplicate overlays often come from: README/audio-check.sh previously suggesting max98357a, or an old setup run.
-    # If both are present, remove max98357a so the mic is exposed.
+    # Audio: Furbacca uses MAX98357A (DAC) + Adafruit I2S mic (shared BCLK/LRC, separate data). One overlay must expose both.
     if grep -qE '^dtoverlay=googlevoicehat-soundcard' "$BOOT_CFG" 2>/dev/null && grep -qE '^dtoverlay=max98357a' "$BOOT_CFG" 2>/dev/null; then
-      echo "Removing dtoverlay=max98357a (keep googlevoicehat-soundcard only so mic works)..."
-      sudo sed -i -E '/^dtoverlay=max98357a/d' "$BOOT_CFG"
-      NEED_REBOOT=true
+      echo "Two I2S overlays present; only one will work. Remove one or use a combined overlay for MAX98357A + I2S mic (see README)."
+      # Do not auto-remove; user may have custom setup.
     elif grep -qE '^dtoverlay=(max98357a|googlevoicehat-soundcard|hifiberry-dac|furbacca-audio)' "$BOOT_CFG" 2>/dev/null; then
-      # Single audio overlay already present; leave it
+      # At least one audio overlay present; leave config as-is.
       :
     else
-      echo "Adding dtoverlay=googlevoicehat-soundcard to $BOOT_CFG (I2S DAC + mic, one card)..."
-      echo "dtoverlay=googlevoicehat-soundcard" | sudo tee -a "$BOOT_CFG" >/dev/null
-      NEED_REBOOT=true
+      echo "No I2S overlay found. Add an overlay that exposes both MAX98357A (playback) and I2S mic (capture); see README."
+      # Do not auto-add googlevoicehat; Furbacca hardware is MAX98357A + Adafruit I2S mic.
     fi
   fi
   if [[ "$NEED_REBOOT" == "true" ]]; then
@@ -195,11 +191,10 @@ if [[ "$UNAME_S" == "Linux" ]]; then
   sudo apt-get install -y imx500-all python3-picamera2 python3-opencv
   echo "AI camera (imx500-all), python3-picamera2, and python3-opencv installed. Reboot once so IMX500 firmware loads (see https://www.raspberrypi.com/documentation/accessories/ai-camera.html)."
 
-  # I2S mic: googlevoicehat-soundcard overlay (above) provides DAC + mic on one card; no extra installer needed.
-  # Optional: Adafruit i2smic.py for a different mic setup (Debian blocks system-wide pip — use a venv or run manually).
+  # I2S: Furbacca uses MAX98357A (DAC) + Adafruit I2S mic; overlay must expose both. Optional Adafruit i2smic.py reference.
   if command -v wget &>/dev/null; then
     wget -q https://raw.githubusercontent.com/adafruit/Raspberry-Pi-Installer-Scripts/master/i2smic.py -O /tmp/i2smic.py 2>/dev/null && \
-      echo "Optional: I2S mic installer at /tmp/i2smic.py (run manually if not using googlevoicehat-soundcard)." || true
+      echo "Optional: Adafruit I2S mic reference at /tmp/i2smic.py (Furbacca needs a combined overlay for MAX98357A + mic; see README)." || true
   fi
 fi
 

@@ -93,9 +93,12 @@ Say **“Hey Furbacca”** (or “furbacca” / “fur-bah-kah”) to wake Furba
 | **Eye CS (Left)** | 8 | 24 | Display 1 |
 | **Eye CS (Right)** | 7 | 26 | Display 2 |
 | **Cooling Fan** | 26 | 37 | 2N2222 NPN (Active-High PWM) |
-| **Audio BCLK** | 18 | 12 | MAX98357A I2S DAC |
-| **Audio LRC** | 19 | 35 | MAX98357A I2S DAC |
-| **Audio DIN** | 21 | 40 | MAX98357A I2S DAC |
+| **Audio BCLK** | 18 | 12 | Shared: MAX98357A DAC + Adafruit I2S mic |
+| **Audio LRC** | 19 | 35 | Shared: MAX98357A DAC + Adafruit I2S mic |
+| **Audio DIN (out)** | 21 | 40 | MAX98357A I2S DAC (playback) |
+| **Audio DOUT (in)** | (see schematic) | — | Adafruit I2S MEMS mic (capture); separate data line from DAC |
+
+Audio playback uses the MAX98357A; the wake phrase (“Hey Furbacca”) uses an Adafruit I2S microphone. They share BCLK and LRC (word select) but use separate data lines. The Pi needs a device tree overlay that exposes **both** as one ALSA card (playback + capture)—e.g. a custom `simple-audio-card` overlay or a combined overlay for this wiring. Standard single-device overlays (e.g. `max98357a` alone) only expose playback.
 
 ### Schematic
 
@@ -177,7 +180,13 @@ Check the logs during startup for the QR code URL and manual pairing code, or ru
 **Audio/I2S is dead or no mic (arecord -l empty):**
 
 * Run `./.scripts/diagnostics/audio-check.sh`.
-* Use **one** audio overlay only. For DAC + mic (hearing), use `dtoverlay=googlevoicehat-soundcard`. Ensure `dtparam=audio=off` and `dtparam=i2s=on`. Do **not** add both `googlevoicehat-soundcard` and `max98357a` — that leaves no capture device. Setup-fresh adds the correct overlay; if you have both, remove the max98357a line and reboot.
+* Furbacca uses a **MAX98357A** (DAC) and an **Adafruit I2S mic** on the same I2S bus (shared BCLK/LRC, separate data lines). You need a device tree overlay that exposes **both** playback and capture (e.g. a custom `simple-audio-card` overlay for this wiring). The stock `max98357a` overlay is playback-only, so `arecord` will fail until a combined overlay is used. Ensure `dtparam=audio=off` and `dtparam=i2s=on`. Run `arecord -l` to confirm a capture device; set `FURBACCA_MIC_CARD` if the mic is not on card 0.
+
+**aplay exits with code 1 (no sound on touch):**
+
+* Confirm playback device: `aplay -l` should list card 0 (MAX98357A). Test manually: `aplay -D plughw:0,0 -q voice/assets/giggle.wav` from repo root.
+* Ensure WAVs are present: `ls dist/voice/assets/` (wake-furbacca runs `npm run sync-sounds`).
+* If aplay works from the shell but not from the app, try **`FURBACCA_SKIP_AMIXER=1`** (some I2S DACs have no volume control and amixer can put the device in a bad state).
 
 **One or both displays are black / corrupted:**
 

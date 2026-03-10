@@ -95,8 +95,11 @@ export const msg = raw as {
 		arecord_exit: string;
 		arecord_failed: string;
 		arecord_no_device_hint: string;
+		capture_card_hint: string;
 		arecord_stopped: string;
+		backoff_no_device: string;
 		cortex_starting: string;
+		hearing_disabled: string;
 		listening_heartbeat: string;
 		mic_initializing: string;
 		mic_stopping: string;

@@ -54,11 +54,17 @@ export class Reflexes {
 	private readonly HEAD_BELLY_HOLD_MS = 5000;
 	private readonly BELLY_HEAL_HOLD_MS = 15000;
 	private readonly HEAD_BELLY_SHUTDOWN_HOLD_MS = 30000;
+	/** Ignore head/belly touch actions (sounds, blink, cycle) for this long after startListening to avoid spurious giggle/purr from GPIO glitch when gpiomon or ALSA init. */
+	private readonly TOUCH_GRACE_MS = 2000;
+	/** Min ms between belly tap actions (giggle + cycle). Stops spam from TTP223B bounce/noise. */
+	private readonly BELLY_ACTION_COOLDOWN_MS = 800;
 	private headBellyHoldTimer: ReturnType<typeof setTimeout> | null = null;
 	private headBellyShutdownTimer: ReturnType<typeof setTimeout> | null = null;
 	private bellyHealTimer: ReturnType<typeof setTimeout> | null = null;
 	private headBellyHoldCooldown = false;
 	private bellyHealCooldown = false;
+	private touchArmedAt = 0;
+	private lastBellyActionAt = 0;
 
 	// Motion state
 	private motionSleepTimer: ReturnType<typeof setTimeout> | null = null;
@@ -94,6 +100,7 @@ export class Reflexes {
 		usingMotionEvents: boolean;
 	} {
 		initAudio(); // set ALSA volume once at startup (or no-op if not available / FURBACCA_SKIP_AMIXER=1)
+		this.touchArmedAt = Date.now();
 
 		if (this.stopTouchWatch || this.pollInterval || this.stopMotionWatch) {
 			return {
@@ -260,6 +267,12 @@ export class Reflexes {
 		}
 
 		if (!active) return;
+		// Avoid spurious giggle/purr from GPIO glitch when gpiomon opens the line or ALSA/hearing init causes noise (e.g. on feat/hearing branch).
+		if (
+			(sensor === "head" || sensor === "belly") &&
+			Date.now() - this.touchArmedAt < this.TOUCH_GRACE_MS
+		)
+			return;
 		if (sensor === "head") {
 			console.log(msg.nervous_system.head_touch);
 			this.eyes.blink();
@@ -267,6 +280,9 @@ export class Reflexes {
 			console.log(msg.audio.purr_playing);
 			playWav("pet.wav", 3.5);
 		} else if (sensor === "belly") {
+			const now = Date.now();
+			if (now - this.lastBellyActionAt < this.BELLY_ACTION_COOLDOWN_MS) return;
+			this.lastBellyActionAt = now;
 			this.handleBellyTouch();
 		} else if (sensor === "shiver") {
 			console.log(

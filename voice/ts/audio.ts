@@ -31,6 +31,9 @@ const MAX_GAIN = Math.max(
 );
 
 let volumeInitialized = false;
+/** Throttle repeated aplay exit warnings (e.g. device open failure) to at most once per 30s. */
+const APLAY_EXIT_WARN_INTERVAL_MS = 30_000;
+let lastAplayExitWarnTime = 0;
 /** Persistent aplay process: kept open to avoid start/stop clicks; format may change between files. */
 let persistentAplay: ReturnType<typeof spawn> | null = null;
 /** Format the current persistent pipe was started with (so we restart if next WAV differs). */
@@ -174,8 +177,14 @@ function startPersistentAplay(sampleRate: number, channels: number): void {
 	persistentAplay.on("exit", (code) => {
 		persistentAplay = null;
 		persistentAplayFormat = null;
-		if (code !== 0 && code !== null)
-			console.error(substitute(msg.audio.aplay_exit, { code: String(code) }));
+		// aplay often exits 1 after playing stdin data (stream done); playback still succeeded. Only log other failures.
+		if (code !== 0 && code !== 1 && code !== null) {
+			const now = Date.now();
+			if (now - lastAplayExitWarnTime >= APLAY_EXIT_WARN_INTERVAL_MS) {
+				lastAplayExitWarnTime = now;
+				console.error(substitute(msg.audio.aplay_exit, { code: String(code) }));
+			}
+		}
 	});
 	persistentAplay.unref();
 }
@@ -210,8 +219,13 @@ export function playWav(filename: string, maxDurationSeconds?: number): void {
 			);
 		});
 		fallbackChild.on("exit", (code) => {
-			if (code !== 0 && code !== null)
-				console.error(substitute(msg.audio.aplay_exit, { code: String(code) }));
+			if (code !== 0 && code !== null) {
+				const now = Date.now();
+				if (now - lastAplayExitWarnTime >= APLAY_EXIT_WARN_INTERVAL_MS) {
+					lastAplayExitWarnTime = now;
+					console.error(substitute(msg.audio.aplay_exit, { code: String(code) }));
+				}
+			}
 		});
 		fallbackChild.unref();
 		return;

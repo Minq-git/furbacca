@@ -12,29 +12,25 @@ if [[ -f "$CONFIG" ]]; then
   else
     echo "Tip: dtparam=audio=off avoids on-board 3.5mm taking default; add if using I2S DAC only."
   fi
-  # Prefer one overlay only. googlevoicehat = DAC + mic (for hearing); max98357a = DAC only.
+  # Furbacca: MAX98357A (DAC) + Adafruit I2S mic, shared BCLK/LRC. Need one overlay that exposes both (playback + capture).
   if grep -qE "dtoverlay=googlevoicehat-soundcard" "$CONFIG" 2>/dev/null && grep -qE "dtoverlay=max98357a" "$CONFIG" 2>/dev/null; then
-    echo "⚠ Two I2S overlays present (googlevoicehat + max98357a) — mic will not work. Use only one:"
-    echo "  sudo sed -i -E '/^dtoverlay=max98357a/d' $CONFIG"
-    echo "  sudo reboot"
+    echo "⚠ Two I2S overlays present — only one will take effect. Use a single overlay (e.g. combined MAX98357A + I2S mic). See README."
     grep -E "dtoverlay=(max98357a|googlevoicehat)" "$CONFIG"
-  elif grep -qE "dtoverlay=(max98357a|googlevoicehat-soundcard|hifiberry-dac)" "$CONFIG" 2>/dev/null; then
+  elif grep -qE "dtoverlay=(max98357a|googlevoicehat-soundcard|hifiberry-dac|furbacca-audio)" "$CONFIG" 2>/dev/null; then
     echo "I2S overlay found:"
-    grep -E "dtoverlay=(max98357a|googlevoicehat-soundcard|hifiberry-dac)" "$CONFIG"
-    if grep -qE "dtoverlay=max98357a" "$CONFIG" 2>/dev/null && ! grep -qE "dtoverlay=googlevoicehat" "$CONFIG" 2>/dev/null; then
-      echo "  (max98357a = DAC only; no mic. For hearing, use googlevoicehat-soundcard instead.)"
+    grep -E "dtoverlay=(max98357a|googlevoicehat-soundcard|hifiberry-dac|furbacca-audio)" "$CONFIG" 2>/dev/null || true
+    if grep -qE "dtoverlay=max98357a" "$CONFIG" 2>/dev/null && ! grep -qE "dtoverlay=(googlevoicehat|furbacca-audio)" "$CONFIG" 2>/dev/null; then
+      echo "  (max98357a = playback only. For hearing, use an overlay that exposes both MAX98357A and I2S mic; see README.)"
     fi
   else
-    echo "No I2S overlay found. For DAC + mic (hearing), add:"
-    echo "  echo 'dtoverlay=googlevoicehat-soundcard' | sudo tee -a $CONFIG"
-    echo "Then reboot: sudo reboot"
+    echo "No I2S overlay found. Add an overlay that exposes both playback (MAX98357A) and capture (I2S mic); see README."
   fi
   if grep -q "dtoverlay=max98357a[^,]*$" "$CONFIG" 2>/dev/null; then
     echo ""
-    echo "Note: max98357a without no-sdmode uses BCM 4 (conflicts with PIR). Add ,no-sdmode or use googlevoicehat-soundcard for DAC+mic."
+    echo "Note: max98357a without no-sdmode uses BCM 4 (conflicts with PIR). Add ,no-sdmode if needed."
   fi
 else
-  echo "Config file not found. Add dtparam=i2s=on and dtoverlay=googlevoicehat-soundcard to your boot config and reboot."
+  echo "Config file not found. Add dtparam=i2s=on and your audio overlay (MAX98357A + I2S mic); see README."
 fi
 
 echo ""
@@ -44,7 +40,7 @@ echo ""
 echo "=== ALSA capture (arecord -l) — needed for hearing ==="
 arecord -l 2>/dev/null || echo "arecord -l failed (no capture device or no permission)."
 if ! arecord -l 2>/dev/null | grep -q "card.*device"; then
-  echo "  No capture device listed — add dtoverlay=googlevoicehat-soundcard (and remove max98357a if both were present), then reboot."
+  echo "  No capture device — use an overlay that exposes both MAX98357A and I2S mic (see README / hearing/README.md)."
 fi
 
 echo ""
