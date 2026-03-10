@@ -3,16 +3,74 @@
 """Read raw PCM (S16_LE 16 kHz mono) from stdin; run Vosk; print WAKE if "hey furbacca" or "furbacca" in transcript.
 Model path: VOSK_MODEL env, or voice/models/vosk-model-small-en-us-0.15.
 Install: pip install vosk. Download model: https://alphacephei.com/vosk/models (e.g. vosk-model-small-en-us-0.15).
+
+Modes:
+  One-shot: read all stdin, process once, print WAKE or nothing.
+  Daemon (--daemon): read 4-byte LE length then N bytes in a loop; print WAKE or empty line per chunk. Loads model once.
 """
+
 import json
 import os
+import struct
 import sys
+from typing import Any
+
+
+def is_wake(text: str) -> bool:
+    t = text.strip().lower()
+    return bool(t and ("furbacca" in t or "fur bah kah" in t or "fur-bah-kah" in t))
+
+
+def process_chunk(rec: Any, pcm: bytes, debug: bool) -> bool:
+    rec.AcceptWaveform(pcm)
+    result = json.loads(rec.FinalResult())
+    text = (result.get("text") or "").strip().lower()
+    if debug and text:
+        print(f"Hearing (Vosk): transcript = {text!r}", file=sys.stderr, flush=True)
+    return is_wake(text)
+
+
+def run_daemon(model_path: str) -> None:
+    try:
+        from vosk import KaldiRecognizer, Model  # pyright: ignore[reportMissingImports]
+    except ImportError as e:
+        print(f"Hearing (Vosk): import failed: {e}", file=sys.stderr, flush=True)
+        return
+    model = Model(model_path)
+    debug = os.environ.get("FURBACCA_HEARING_DEBUG", "").strip().lower() in ("1", "true", "yes")
+    buf = sys.stdin.buffer
+    while True:
+        len_buf = buf.read(4)
+        if not len_buf or len(len_buf) < 4:
+            break
+        (size,) = struct.unpack("<I", len_buf)
+        pcm = buf.read(size)
+        if len(pcm) < size:
+            break
+        try:
+            rec = KaldiRecognizer(model, 16000)
+            woke = process_chunk(rec, pcm, debug)
+            print("WAKE" if woke else "", flush=True)
+        except Exception as e:
+            print("", flush=True)
+            if debug:
+                print(f"Hearing (Vosk): {e}", file=sys.stderr, flush=True)
+
+
+def run_oneshot(model_path: str, pcm: bytes) -> None:
+    try:
+        from vosk import KaldiRecognizer, Model  # pyright: ignore[reportMissingImports]
+    except ImportError as e:
+        print(f"Hearing (Vosk): import failed: {e}", file=sys.stderr, flush=True)
+        return
+    model = Model(model_path)
+    rec = KaldiRecognizer(model, 16000)
+    debug = os.environ.get("FURBACCA_HEARING_DEBUG", "").strip().lower() in ("1", "true", "yes")
+    if process_chunk(rec, pcm, debug):
+        print("WAKE", flush=True)
 
 
 def main() -> None:
-    pcm = sys.stdin.buffer.read()
-    if not pcm:
-        return
     model_path = os.environ.get("VOSK_MODEL", "voice/models/vosk-model-small-en-us-0.15")
     if not os.path.isabs(model_path):
         model_path = os.path.abspath(model_path)
@@ -28,23 +86,14 @@ def main() -> None:
             flush=True,
         )
         return
-    try:
-        from vosk import KaldiRecognizer, Model  # pyright: ignore[reportMissingImports]
-    except ImportError as e:
-        print(f"Hearing (Vosk): import failed: {e}", file=sys.stderr, flush=True)
+    if "--daemon" in sys.argv:
+        run_daemon(model_path)
         return
-    model = Model(model_path)
-    rec = KaldiRecognizer(model, 16000)
-    rec.AcceptWaveform(pcm)
-    result = json.loads(rec.FinalResult())
-    text = (result.get("text") or "").strip().lower()
-    if not text:
+    pcm = sys.stdin.buffer.read()
+    if not pcm:
         return
-    debug = os.environ.get("FURBACCA_HEARING_DEBUG", "").strip().lower() in ("1", "true", "yes")
-    if debug:
-        print(f"Hearing (Vosk): transcript = {text!r}", file=sys.stderr, flush=True)
-    if "furbacca" in text or "fur bah kah" in text or "fur-bah-kah" in text:
-        print("WAKE", flush=True)
+    run_oneshot(model_path, pcm)
+
 
 if __name__ == "__main__":
     main()

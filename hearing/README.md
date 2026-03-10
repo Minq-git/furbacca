@@ -24,8 +24,8 @@ Keyword detection uses **Vosk** (offline speech recognition). If Vosk is not ins
 
 We open **`plughw:CARD,0`** for capture; **CARD** defaults to **0**.
 
-Furbacca’s audio hardware is a **MAX98357A** (I2S DAC, playback) and an **Adafruit I2S MEMS mic** (capture), sharing **BCLK** and **LRC** but using **separate data lines**. The Raspberry Pi needs a **single device tree overlay** that exposes both as one ALSA card (playback + capture). The stock **`max98357a`** overlay is **playback-only**, so with only that overlay there is no capture device and `plughw:0,0` fails with "No such file or directory".
+Furbacca’s audio hardware is a **MAX98357A** (I2S DAC, playback) and an **Adafruit I2S MEMS Microphone Breakout – SPH0645LM4H (#3421)** (capture), with mic data on **BCM 20 (Pin 38)**. They share **BCLK** and **LRC** but use **separate data lines**. The stock **`max98357a`** overlay is **playback-only**, so with only that overlay there is no capture device and `plughw:0,0` fails.
 
-**Fix:** Use an overlay that defines both the DAC and the I2S mic (e.g. a custom **simple-audio-card** overlay for your wiring). Then run **`arecord -l`** and confirm a capture device appears. If the mic is on a different card than 0, set **`FURBACCA_MIC_CARD`** to that card number.
+**Fix (easiest on a fresh Pi):** Add **`dtoverlay=googlevoicehat-soundcard`** in `/boot/firmware/config.txt` (or `/boot/config.txt`) below your DAC line. That overlay exposes I2S capture on GPIO 20 (generic “simple-audio-card” used for mics like the SPH0645). Reboot, run **`arecord -l`**, and if the capture device is on card 1 (or another card), set **`FURBACCA_MIC_CARD`** to that number. Alternatively use a custom overlay that defines both DAC and mic.
 
 At startup, if the configured card has no capture device, the nervous system logs a one-line hint.

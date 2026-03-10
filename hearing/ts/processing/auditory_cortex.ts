@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { msg, substitute } from "../../../messages.js";
 import type { MicStream } from "../hardware/mic_stream.js";
-import { detectWakeWord } from "./wake_keyword.js";
+import { createWakeDetector } from "./wake_keyword.js";
 
 /** Return true if the given ALSA card number has a capture device (from arecord -l). */
 function cardHasCapture(card: string): boolean {
@@ -41,6 +41,7 @@ export class AuditoryCortex extends EventEmitter {
 	private loopTimeout: ReturnType<typeof setTimeout> | null = null;
 	private chunkCount = 0;
 	private consecutiveFailures = 0;
+	private wakeDetector: ReturnType<typeof createWakeDetector> | null = null;
 
 	constructor(mic: MicStream) {
 		super();
@@ -54,6 +55,7 @@ export class AuditoryCortex extends EventEmitter {
 	public startListening(): void {
 		if (this.running) return;
 		this.running = true;
+		this.wakeDetector = createWakeDetector();
 		console.log(msg.hearing.cortex_starting);
 		if (!cardHasCapture(this.mic.card)) {
 			console.log(
@@ -113,7 +115,8 @@ export class AuditoryCortex extends EventEmitter {
 				}),
 			);
 		}
-		const woke = await detectWakeWord(pcm);
+		if (!this.wakeDetector) return;
+		const woke = await this.wakeDetector.checkChunk(pcm);
 		if (woke) {
 			console.log(msg.hearing.wake_word_triggered);
 			console.log(msg.hearing.wake_detected);
@@ -128,5 +131,7 @@ export class AuditoryCortex extends EventEmitter {
 			clearTimeout(this.loopTimeout);
 			this.loopTimeout = null;
 		}
+		this.wakeDetector?.close();
+		this.wakeDetector = null;
 	}
 }

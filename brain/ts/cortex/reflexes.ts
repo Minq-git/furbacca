@@ -65,6 +65,8 @@ export class Reflexes {
 	private bellyHealCooldown = false;
 	private touchArmedAt = 0;
 	private lastBellyActionAt = 0;
+	/** Require belly to go inactive before the next press counts (stops bouncy/stuck line from repeating). */
+	private bellyReleasedSinceLastAction = true;
 
 	// Motion state
 	private motionSleepTimer: ReturnType<typeof setTimeout> | null = null;
@@ -198,7 +200,10 @@ export class Reflexes {
 
 	private onTouch(sensor: TouchSensor, active: boolean): void {
 		if (sensor === "head") this.headActive = active;
-		else if (sensor === "belly") this.bellyActive = active;
+		else if (sensor === "belly") {
+			this.bellyActive = active;
+			if (!active) this.bellyReleasedSinceLastAction = true;
+		}
 
 		this.matter?.notifyTouch(sensor, active);
 
@@ -280,8 +285,10 @@ export class Reflexes {
 			console.log(msg.audio.purr_playing);
 			playWav("pet.wav", 3.5);
 		} else if (sensor === "belly") {
+			if (!this.bellyReleasedSinceLastAction) return; // require release before next press (stops bouncy line)
 			const now = Date.now();
 			if (now - this.lastBellyActionAt < this.BELLY_ACTION_COOLDOWN_MS) return;
+			this.bellyReleasedSinceLastAction = false;
 			this.lastBellyActionAt = now;
 			this.handleBellyTouch();
 		} else if (sensor === "shiver") {

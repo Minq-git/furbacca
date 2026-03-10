@@ -12,18 +12,18 @@ if [[ -f "$CONFIG" ]]; then
   else
     echo "Tip: dtparam=audio=off avoids on-board 3.5mm taking default; add if using I2S DAC only."
   fi
-  # Furbacca: MAX98357A (DAC) + Adafruit I2S mic, shared BCLK/LRC. Need one overlay that exposes both (playback + capture).
-  if grep -qE "dtoverlay=googlevoicehat-soundcard" "$CONFIG" 2>/dev/null && grep -qE "dtoverlay=max98357a" "$CONFIG" 2>/dev/null; then
-    echo "⚠ Two I2S overlays present — only one will take effect. Use a single overlay (e.g. combined MAX98357A + I2S mic). See README."
-    grep -E "dtoverlay=(max98357a|googlevoicehat)" "$CONFIG"
-  elif grep -qE "dtoverlay=(max98357a|googlevoicehat-soundcard|hifiberry-dac|furbacca-audio)" "$CONFIG" 2>/dev/null; then
+  # Furbacca: MAX98357A (DAC) + I2S mic on GPIO 20 (e.g. SPH0645). Common: max98357a or asoc-simple-card for DAC, googlevoicehat-soundcard for mic.
+  if grep -qE "dtoverlay=googlevoicehat-soundcard" "$CONFIG" 2>/dev/null && grep -qE "dtoverlay=(max98357a|asoc-simple-card)" "$CONFIG" 2>/dev/null; then
+    echo "I2S overlays: DAC (max98357a or asoc-simple-card) + googlevoicehat-soundcard (mic on GPIO 20). Run arecord -l; set FURBACCA_MIC_CARD if capture is not on card 0."
+    grep -E "dtoverlay=(max98357a|googlevoicehat|asoc-simple-card)" "$CONFIG"
+  elif grep -qE "dtoverlay=(max98357a|asoc-simple-card|googlevoicehat-soundcard|hifiberry-dac|furbacca-audio)" "$CONFIG" 2>/dev/null; then
     echo "I2S overlay found:"
-    grep -E "dtoverlay=(max98357a|googlevoicehat-soundcard|hifiberry-dac|furbacca-audio)" "$CONFIG" 2>/dev/null || true
-    if grep -qE "dtoverlay=max98357a" "$CONFIG" 2>/dev/null && ! grep -qE "dtoverlay=(googlevoicehat|furbacca-audio)" "$CONFIG" 2>/dev/null; then
-      echo "  (max98357a = playback only. For hearing, use an overlay that exposes both MAX98357A and I2S mic; see README.)"
+    grep -E "dtoverlay=(max98357a|asoc-simple-card|googlevoicehat-soundcard|hifiberry-dac|furbacca-audio)" "$CONFIG" 2>/dev/null || true
+    if grep -qE "dtoverlay=(max98357a|asoc-simple-card)" "$CONFIG" 2>/dev/null && ! grep -qE "dtoverlay=(googlevoicehat|furbacca-audio)" "$CONFIG" 2>/dev/null; then
+      echo "  (DAC only. For hearing, add dtoverlay=googlevoicehat-soundcard for I2S mic on GPIO 20; see README.)"
     fi
   else
-    echo "No I2S overlay found. Add an overlay that exposes both playback (MAX98357A) and capture (I2S mic); see README."
+    echo "No I2S overlay found. Add DAC overlay and dtoverlay=googlevoicehat-soundcard for mic; see README."
   fi
   if grep -q "dtoverlay=max98357a[^,]*$" "$CONFIG" 2>/dev/null; then
     echo ""
@@ -40,7 +40,7 @@ echo ""
 echo "=== ALSA capture (arecord -l) — needed for hearing ==="
 arecord -l 2>/dev/null || echo "arecord -l failed (no capture device or no permission)."
 if ! arecord -l 2>/dev/null | grep -q "card.*device"; then
-  echo "  No capture device — use an overlay that exposes both MAX98357A and I2S mic (see README / hearing/README.md)."
+  echo "  No capture device — add dtoverlay=googlevoicehat-soundcard for I2S mic on GPIO 20 (see README), or use a combined overlay."
 fi
 
 echo ""

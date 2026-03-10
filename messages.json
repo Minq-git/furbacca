@@ -32,7 +32,7 @@
 		"arecord_exit": "  ⚠️👂 Hearing: arecord exited with code {code}",
 		"arecord_failed": "  ⚠️👂 Hearing: arecord failed: {message}",
 		"arecord_no_device_hint": "  ⚠️👂 Run 'arecord -l' on the Pi. If no capture device: use an overlay that exposes both MAX98357A and I2S mic (see README / hearing/README.md).",
-		"capture_card_hint": "  👂  Hearing: Card {card} has no capture. MAX98357A + Adafruit I2S mic need one overlay that exposes both (playback + capture). Run: arecord -l. Set FURBACCA_MIC_CARD if mic is on another card.",
+		"capture_card_hint": "  👂  Hearing: Card {card} has no capture. MAX98357A + Adafruit I2S MEMS mic (SPH0645, data BCM 20) need one overlay that exposes both (playback + capture). Run: arecord -l. Set FURBACCA_MIC_CARD if mic is on another card.",
 		"arecord_stopped": "  ⚠️👂 Hearing: arecord stopped ({signal})",
 		"backoff_no_device": "  👂  Hearing: no capture device, backing off 60s (set FURBACCA_HEARING=0 to disable).",
 		"cortex_starting": "  👂  Hearing: Listening for \"Hey Furbacca\" (keyword only, no persistent stream).",

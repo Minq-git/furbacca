@@ -21,12 +21,17 @@ export type TouchSensor = "head" | "belly" | "shiver";
 
 export type TouchCallback = (sensor: TouchSensor, active: boolean) => void;
 
+const TOUCH_DEBOUNCE_MS = 80;
+
 export class TouchSenses {
 	private chipNum: number;
-	private lastHead: number = 0;
-	private lastBelly: number = 0;
 	private lastVibe: number = 1;
 	private gpiomonProcess: ChildProcess | null = null;
+	// Debounce state for poll mode (head/belly only)
+	private pollEmittedHead: boolean = false;
+	private pollEmittedBelly: boolean = false;
+	private pollTimerHead: ReturnType<typeof setTimeout> | null = null;
+	private pollTimerBelly: ReturnType<typeof setTimeout> | null = null;
 
 	constructor(chip: number) {
 		this.chipNum = chip;
@@ -118,13 +123,30 @@ export class TouchSenses {
 	}
 
 	/**
-	 * Start event-driven watch using gpiomon. Calls callback immediately on GPIO edges.
+	 * Start event-driven watch using gpiomon. Head and belly are debounced (only report after line stable 80ms) to avoid TTP223B bounce/noise spam.
 	 * Returns a stop function that returns a Promise resolved when gpiomon has exited (so GPIO is released). If gpiomon is not available, returns null (use poll() instead).
 	 */
 	startEventWatch(callback: TouchCallback): (() => Promise<void>) | null {
 		if (!TouchSenses.hasGpiomon()) {
 			return null;
 		}
+		const timers: Partial<Record<"head" | "belly", ReturnType<typeof setTimeout>>> = {};
+		const debounced: TouchCallback = (sensor, active) => {
+			if (sensor === "shiver") {
+				callback(sensor, active);
+				return;
+			}
+			const key = sensor;
+			const t = timers[key];
+			if (t) {
+				clearTimeout(t);
+				timers[key] = undefined;
+			}
+			timers[key] = setTimeout(() => {
+				timers[key] = undefined;
+				callback(sensor, active);
+			}, TOUCH_DEBOUNCE_MS);
+		};
 		const proc = spawn(
 			"gpiomon",
 			[
@@ -154,7 +176,7 @@ export class TouchSenses {
 					const sensor = this.offsetToSensor(offset);
 					if (sensor) {
 						const active = this.edgeToActive(sensor, edge);
-						callback(sensor, active);
+						debounced(sensor, active);
 					}
 				}
 			}
@@ -167,6 +189,9 @@ export class TouchSenses {
 			this.gpiomonProcess = null;
 		});
 		return () => {
+			if (timers.head) clearTimeout(timers.head);
+			if (timers.belly) clearTimeout(timers.belly);
+			timers.head = timers.belly = undefined;
 			const p = this.gpiomonProcess;
 			this.gpiomonProcess = null;
 			if (!p) return Promise.resolve();
@@ -219,16 +244,28 @@ export class TouchSenses {
 		}
 	}
 
-	/** Polling mode: call each tick to detect changes. Use when gpiomon is not available. */
+	/** Polling mode: call each tick to detect changes. Head and belly debounced (80ms) like event watch. Use when gpiomon is not available. */
 	public poll(callback: TouchCallback): void {
 		const [head, belly, vibe] = this.readPins();
-		if (head !== this.lastHead) {
-			this.lastHead = head;
-			callback("head", !!head);
+		const headActive = !!head;
+		const bellyActive = !!belly;
+		if (headActive !== this.pollEmittedHead) {
+			if (this.pollTimerHead) clearTimeout(this.pollTimerHead);
+			const value = headActive;
+			this.pollTimerHead = setTimeout(() => {
+				this.pollTimerHead = null;
+				this.pollEmittedHead = value;
+				callback("head", value);
+			}, TOUCH_DEBOUNCE_MS);
 		}
-		if (belly !== this.lastBelly) {
-			this.lastBelly = belly;
-			callback("belly", !!belly);
+		if (bellyActive !== this.pollEmittedBelly) {
+			if (this.pollTimerBelly) clearTimeout(this.pollTimerBelly);
+			const value = bellyActive;
+			this.pollTimerBelly = setTimeout(() => {
+				this.pollTimerBelly = null;
+				this.pollEmittedBelly = value;
+				callback("belly", value);
+			}, TOUCH_DEBOUNCE_MS);
 		}
 		if (vibe !== this.lastVibe) {
 			this.lastVibe = vibe;

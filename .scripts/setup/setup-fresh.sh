@@ -158,16 +158,14 @@ ZRAMEOF
       echo "dtparam=i2s=on" | sudo tee -a "$BOOT_CFG" >/dev/null
       NEED_REBOOT=true
     fi
-    # Audio: Furbacca uses MAX98357A (DAC) + Adafruit I2S mic (shared BCLK/LRC, separate data). One overlay must expose both.
+    # Audio: MAX98357A (DAC) + I2S mic on GPIO 20. Common: max98357a for DAC, googlevoicehat-soundcard for mic capture.
     if grep -qE '^dtoverlay=googlevoicehat-soundcard' "$BOOT_CFG" 2>/dev/null && grep -qE '^dtoverlay=max98357a' "$BOOT_CFG" 2>/dev/null; then
-      echo "Two I2S overlays present; only one will work. Remove one or use a combined overlay for MAX98357A + I2S mic (see README)."
-      # Do not auto-remove; user may have custom setup.
+      echo "I2S: max98357a (DAC) + googlevoicehat-soundcard (mic). Run arecord -l; set FURBACCA_MIC_CARD if capture is not card 0."
     elif grep -qE '^dtoverlay=(max98357a|googlevoicehat-soundcard|hifiberry-dac|furbacca-audio)' "$BOOT_CFG" 2>/dev/null; then
       # At least one audio overlay present; leave config as-is.
       :
     else
-      echo "No I2S overlay found. Add an overlay that exposes both MAX98357A (playback) and I2S mic (capture); see README."
-      # Do not auto-add googlevoicehat; Furbacca hardware is MAX98357A + Adafruit I2S mic.
+      echo "No I2S overlay found. Add dtoverlay=max98357a for DAC and dtoverlay=googlevoicehat-soundcard for I2S mic (GPIO 20); see README."
     fi
   fi
   if [[ "$NEED_REBOOT" == "true" ]]; then
@@ -191,10 +189,10 @@ if [[ "$UNAME_S" == "Linux" ]]; then
   sudo apt-get install -y imx500-all python3-picamera2 python3-opencv
   echo "AI camera (imx500-all), python3-picamera2, and python3-opencv installed. Reboot once so IMX500 firmware loads (see https://www.raspberrypi.com/documentation/accessories/ai-camera.html)."
 
-  # I2S: Furbacca uses MAX98357A (DAC) + Adafruit I2S mic; overlay must expose both. Optional Adafruit i2smic.py reference.
+  # I2S: MAX98357A (DAC) + I2S mic on GPIO 20. Add googlevoicehat-soundcard for capture; see README.
   if command -v wget &>/dev/null; then
     wget -q https://raw.githubusercontent.com/adafruit/Raspberry-Pi-Installer-Scripts/master/i2smic.py -O /tmp/i2smic.py 2>/dev/null && \
-      echo "Optional: Adafruit I2S mic reference at /tmp/i2smic.py (Furbacca needs a combined overlay for MAX98357A + mic; see README)." || true
+      echo "Optional: Adafruit I2S mic reference at /tmp/i2smic.py (Furbacca: add dtoverlay=googlevoicehat-soundcard for mic on GPIO 20; see README)." || true
   fi
 fi
 

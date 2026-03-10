@@ -96,9 +96,9 @@ Say **“Hey Furbacca”** (or “furbacca” / “fur-bah-kah”) to wake Furba
 | **Audio BCLK** | 18 | 12 | Shared: MAX98357A DAC + Adafruit I2S mic |
 | **Audio LRC** | 19 | 35 | Shared: MAX98357A DAC + Adafruit I2S mic |
 | **Audio DIN (out)** | 21 | 40 | MAX98357A I2S DAC (playback) |
-| **Audio DOUT (in)** | (see schematic) | — | Adafruit I2S MEMS mic (capture); separate data line from DAC |
+| **Audio DOUT (in)** | 20 | 38 | Adafruit I2S MEMS Mic SPH0645LM4H #3421 (capture); separate data line from DAC |
 
-Audio playback uses the MAX98357A; the wake phrase (“Hey Furbacca”) uses an Adafruit I2S microphone. They share BCLK and LRC (word select) but use separate data lines. The Pi needs a device tree overlay that exposes **both** as one ALSA card (playback + capture)—e.g. a custom `simple-audio-card` overlay or a combined overlay for this wiring. Standard single-device overlays (e.g. `max98357a` alone) only expose playback.
+Audio playback uses the MAX98357A; the wake phrase (“Hey Furbacca”) uses an **Adafruit I2S MEMS Microphone Breakout – SPH0645LM4H (product #3421)** with data on **BCM 20 (Pin 38)**. They share BCLK and LRC (word select) but use separate data lines. The Pi needs a device tree overlay that exposes **both** as one ALSA card (playback + capture)—e.g. a custom `simple-audio-card` overlay for this wiring. Standard single-device overlays (e.g. `max98357a` alone) only expose playback.
 
 ### Schematic
 
@@ -179,8 +179,15 @@ Check the logs during startup for the QR code URL and manual pairing code, or ru
 
 **Audio/I2S is dead or no mic (arecord -l empty):**
 
-* Run `./.scripts/diagnostics/audio-check.sh`.
-* Furbacca uses a **MAX98357A** (DAC) and an **Adafruit I2S mic** on the same I2S bus (shared BCLK/LRC, separate data lines). You need a device tree overlay that exposes **both** playback and capture (e.g. a custom `simple-audio-card` overlay for this wiring). The stock `max98357a` overlay is playback-only, so `arecord` will fail until a combined overlay is used. Ensure `dtparam=audio=off` and `dtparam=i2s=on`. Run `arecord -l` to confirm a capture device; set `FURBACCA_MIC_CARD` if the mic is not on card 0.
+* **Why it’s empty:** Your boot config has an I2S overlay that creates the MAX98357A **playback** device (so `aplay -l` shows card 0). That overlay does **not** define an I2S **capture** device, so ALSA has no microphone. You need to enable capture (e.g. add an overlay that exposes I2S mic on GPIO 20).
+* **Easiest fix (fresh Pi):** Add the **Google Voice HAT** overlay so the Pi listens for I2S mic data on **GPIO 20** (same BCLK/LRC as your DAC, separate data line). In `/boot/firmware/config.txt` (or `/boot/config.txt`) add **below** your DAC line:
+  ```ini
+  dtoverlay=googlevoicehat-soundcard
+  ```
+  Reboot, then run `arecord -l`. You should see a capture device. If capture is on card 1 (or another card), set `FURBACCA_MIC_CARD` to that number in `.env`. The Voice HAT overlay is a generic “simple-audio-card” that expects an I2S mic on GPIO 20 (e.g. SPH0645 / Adafruit #3421).
+* **Alternative (same BCLK/LRC, two overlays):** Use `asoc-simple-card` for the DAC and Voice HAT for the mic, e.g. in config: `dtoverlay=asoc-simple-card,card-name="FurbaccaAudio",codec-name="max98357a"` and `dtoverlay=googlevoicehat-soundcard`. Reboot, then `arecord -l`; set `FURBACCA_MIC_CARD` if capture is not card 0.
+* If that conflicts or doesn’t work, use a single custom overlay that defines both MAX98357A (playback) and SPH0645 (capture on BCM 20). Run `./.scripts/diagnostics/audio-check.sh` for a summary.
+* Ensure `dtparam=audio=off` and `dtparam=i2s=on` in config. After changing overlays, **reboot** and run `arecord -l` to confirm; set `FURBACCA_MIC_CARD` if the mic is not on card 0.
 
 **aplay exits with code 1 (no sound on touch):**
 
@@ -199,6 +206,15 @@ Check the logs during startup for the QR code URL and manual pairing code, or ru
 **Touch sensors are unresponsive (`Device or resource busy`):**
 
 * Another process is locking the `gpiomon` pins. Stop all services (`sudo systemctl stop furbacca-eyes`), kill zombie processes (`sudo killall gpiomon`), and restart `wake-furbacca`.
+
+**Belly (or head) triggering on its own — phantom touch (TTP223B):**
+
+Capacitive sensors are sensitive to EMI, bad baselines, and power sag. The codebase already uses **80 ms debounce** (touch layer), **800 ms cooldown** between belly actions, and **require release before next press** to reduce software false triggers. If **only one** sensor (e.g. belly, not head) phantom-triggers, the cause is likely specific to that sensor: its **location** (closer to fan/I2S/DAC), **wire route** (e.g. BCM 22 running next to noisy lines), **that module’s** sensitivity/calibration, or something conductive near that pad. If belly still cycles without touch:
+
+* **Wiring:** Keep touch sensor wires **twisted with their own GND**, and away from I2S (pins 18/19) and fan wiring to avoid induced voltage.
+* **Baseline:** TTP223B calibrates at power-on. If the sensor was pressed against fur or plastic during boot, it can set a bad baseline and then "rapid-fire" as temp or position changes. Tape the sensor firmly so it isn't wobbling.
+* **Sensitivity:** Many TTP223B modules have a small capacitor (C1)—adding 0–50 pF can reduce sensitivity. Avoid conductive foil or metal near the pad.
+* **Power sag:** If the DAC draws a spike when playing sound and the 3.3 V rail dips, the sensor can glitch (e.g. giggle → giggle loop). Improve power wiring or add a small bulk cap near the sensor if you see that pattern.
 
 **Network drops under heavy load:**
 
