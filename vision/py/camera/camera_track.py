@@ -8,6 +8,7 @@ from __future__ import annotations
 # ruff: noqa: I001
 
 import argparse
+import os
 import socket
 import sys
 import time
@@ -35,6 +36,9 @@ UDP_PORT = 5005
 NS_EVENTS_PORT = 5006  # nervous system: looking_started / looking_stopped
 # COCO: 0 = person (prefer for tracking)
 PERSON_CLASS_ID = 0
+# Gaze invert: displays are blit-flipped 180° so "person left" must become "eyes look left"
+TRACKING_INVERT_X = os.environ.get("FURBACCA_TRACKING_INVERT_X", "1").strip().lower() in ("1", "true", "yes")
+TRACKING_INVERT_Y = os.environ.get("FURBACCA_TRACKING_INVERT_Y", "1").strip().lower() in ("1", "true", "yes")
 
 Detection = tuple[float, float, int, float]  # (cx, cy, class_id, confidence)
 Target = tuple[float, float, float, int]  # (cx, cy, conf, cls)
@@ -225,7 +229,7 @@ def main() -> None:
     was_looking = False
     last_looking_at_sent = 0.0  # throttle "looking_at" events to NS (~every 2s)
     print(
-        f"Camera tracking → UDP {host}:{port} (smooth={smooth}, threshold={threshold})",
+        f"Camera tracking → UDP {host}:{port} (smooth={smooth}, threshold={threshold}, invert_x={TRACKING_INVERT_X}, invert_y={TRACKING_INVERT_Y})",
         file=sys.stderr,
     )
     print("Ctrl+C to stop.", file=sys.stderr)
@@ -268,7 +272,9 @@ def main() -> None:
             smooth_x = alpha * smooth_x + (1 - alpha) * nx
             smooth_y = alpha * smooth_y + (1 - alpha) * ny
 
-            look = LookCommand(action="look", x=round(smooth_x, 4), y=round(smooth_y, 4))
+            send_x = -smooth_x if TRACKING_INVERT_X else smooth_x
+            send_y = -smooth_y if TRACKING_INVERT_Y else smooth_y
+            look = LookCommand(action="look", x=round(send_x, 4), y=round(send_y, 4))
             _ = sock.sendto(look.to_json().encode(), (host, port))
             try:
                 now = time.monotonic()
