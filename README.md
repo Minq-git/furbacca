@@ -113,10 +113,10 @@ bash .scripts/setup/setup-fresh.sh
 
 ### 2. Code Synchronization (Mac to Pi)
 
-Add this alias to your local Mac's `~/.zshrc` to safely push code updates:
+Add this alias to your local Mac's `~/.zshrc` to safely push code updates. The Pi's `.env` (pupil offsets, etc.) is excluded from the sync and protected from deletion so a push never overwrites or removes it.
 
 ```bash
-alias push-furbacca='rsync -avz --delete --exclude node_modules --exclude .git --exclude env --exclude dist --exclude vision/py/gc9a01py /Users/YOUR_PATH/furbacca/ minqz@furbacca.local:~/furbacca/'
+alias push-furbacca='rsync -avz --delete --exclude node_modules --exclude .git --exclude env --exclude dist --exclude vision/py/gc9a01py --exclude .env -f "P .env" /Users/YOUR_PATH/furbacca/ minqz@furbacca.local:~/furbacca/'
 ```
 
 ### 3. Code Quality (Biome & Ruff)

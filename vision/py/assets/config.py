@@ -43,7 +43,7 @@ IDLE_LOOK_TIMEOUT_S = 0.2
 MOVE_DURATION_MIN_S = 0.072
 MOVE_DURATION_MAX_S = 0.144
 HOLD_DURATION_MAX_S = 3.0
-PUPIL_EASE_FACTOR = 0.48
+PUPIL_EASE_FACTOR = 0.4
 FOCUS_HOLD_S = 0.35
 PUPIL_TRANSITION_S = 0.5
 PUPIL_TRANSITION_ANIM_S = 0.06
@@ -79,6 +79,10 @@ PUPIL_OFFSET_LEFT_X = float(os.environ.get("FURBACCA_PUPIL_OFFSET_LEFT_X", "0"))
 PUPIL_OFFSET_LEFT_Y = float(os.environ.get("FURBACCA_PUPIL_OFFSET_LEFT_Y", "0"))
 PUPIL_OFFSET_RIGHT_X = float(os.environ.get("FURBACCA_PUPIL_OFFSET_RIGHT_X", "0"))
 PUPIL_OFFSET_RIGHT_Y = float(os.environ.get("FURBACCA_PUPIL_OFFSET_RIGHT_Y", "0"))
+
+# Finer gaze cache when chassis offsets are set to reduce snap/jitter during tracking
+if PUPIL_OFFSET_LEFT_X != 0 or PUPIL_OFFSET_LEFT_Y != 0 or PUPIL_OFFSET_RIGHT_X != 0 or PUPIL_OFFSET_RIGHT_Y != 0:
+    EYE_GAZE_CACHE_STEP = 0.05
 
 # Eye shape mask — layer above sclera/iris/pupil
 _eye_shape_raw = os.environ.get("EYE_SHAPE", "round").strip().lower()

@@ -170,7 +170,7 @@ def main() -> None:
     _ = ap.add_argument("--host", default="127.0.0.1", help="UDP host for eyes (default 127.0.0.1)")
     _ = ap.add_argument("--port", type=int, default=UDP_PORT, help=f"UDP port (default {UDP_PORT})")
     _ = ap.add_argument("--threshold", type=float, default=0.5, help="Detection confidence threshold")
-    _ = ap.add_argument("--smooth", type=float, default=0.25, help="EMA smoothing 0..1 (0=no smooth, 1=no movement)")
+    _ = ap.add_argument("--smooth", type=float, default=0.5, help="EMA smoothing 0..1 (0=no smooth, 1=no movement)")
     _ = ap.add_argument("--print-every", type=int, default=0, help="Print detections every N frames (0=off)")
     _ = ap.add_argument("--no-preview", action="store_true", default=True, help="No display (default on)")
     args = ap.parse_args()
