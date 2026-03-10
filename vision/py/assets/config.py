@@ -72,6 +72,14 @@ MOTION_SLEEP_MS = 120000  # No motion for this long → sleep close (2 min)
 MOTION_RESPONSE_COOLDOWN_MS = 5000  # Ignore repeat motion events for this long (one response per movement)
 MOTION_CLEAR_DEBOUNCE_MS = 10000  # Only treat as "area clear" after no motion for this long (reduces PIR noise)
 
+# Chassis alignment: per-eye pupil offset (same units as pupil_x/pupil_y; +x = right, +y = down).
+# Use when displays are mounted in Furby chassis and pupils appear skewed (e.g. "up and out").
+# Tune so forward gaze looks centered in each physical display.
+PUPIL_OFFSET_LEFT_X = float(os.environ.get("FURBACCA_PUPIL_OFFSET_LEFT_X", "0"))
+PUPIL_OFFSET_LEFT_Y = float(os.environ.get("FURBACCA_PUPIL_OFFSET_LEFT_Y", "0"))
+PUPIL_OFFSET_RIGHT_X = float(os.environ.get("FURBACCA_PUPIL_OFFSET_RIGHT_X", "0"))
+PUPIL_OFFSET_RIGHT_Y = float(os.environ.get("FURBACCA_PUPIL_OFFSET_RIGHT_Y", "0"))
+
 # Eye shape mask — layer above sclera/iris/pupil
 _eye_shape_raw = os.environ.get("EYE_SHAPE", "round").strip().lower()
 _current_eye_shape: str | None = None

@@ -158,6 +158,14 @@ Check the logs during startup for the QR code URL and manual pairing code, or ru
 
 * Shared SPI buses can occasionally glitch during high-load startups. Trigger a hardware reset by running `./.scripts/fe-restart.sh` or by holding the **Head + Belly** sensors together for 5 seconds.
 
+**Pupils look skewed (e.g. “up and out”) inside the Furby chassis:**
+
+* When the eye displays are mounted in the chassis instead of flat on a breadboard, the pupils can appear shifted. Set per-eye offsets (same units as gaze; +x = right, +y = down) so forward gaze looks centered:
+  * `FURBACCA_PUPIL_OFFSET_LEFT_X`, `FURBACCA_PUPIL_OFFSET_LEFT_Y` — left display
+  * `FURBACCA_PUPIL_OFFSET_RIGHT_X`, `FURBACCA_PUPIL_OFFSET_RIGHT_Y` — right display
+  * Example: if the left pupil appears too far up and left, try `FURBACCA_PUPIL_OFFSET_LEFT_X=0.15` and `FURBACCA_PUPIL_OFFSET_LEFT_Y=0.1`; tune by eye.
+  * **Live tuning:** Stop the nervous system (Ctrl+C), then from repo root run `python3 -m vision.py.tune_eyes` to adjust offsets on the SPI displays and have it print the final `.env` lines.
+
 **Matter fails to start or crashes:**
 
 * Corrupt pairing states can halt the Node.js process. Factory reset the Matter node by running `./.scripts/matter/matter-factory-reset.sh` (or `rm -rf .matter`), then re-pair the device.
