@@ -43,17 +43,28 @@ class RenderEngine:
             overlay_r = render.render_blink_overlay(mirror=True)
             return FramePlan(left=overlay_l, right=overlay_r, outside_in=intent.outside_in)
 
-        # intent.kind == "open"
-        eye_frame = render.render_animated_frame(
+        # intent.kind == "open" — per-eye chassis alignment (displays skewed/closer in Furby chassis)
+        lx = state.pupil_x + config.PUPIL_OFFSET_LEFT_X
+        ly = state.pupil_y + config.PUPIL_OFFSET_LEFT_Y
+        rx = state.pupil_x + config.PUPIL_OFFSET_RIGHT_X
+        ry = state.pupil_y + config.PUPIL_OFFSET_RIGHT_Y
+        eye_frame_left = render.render_animated_frame(
             self._cached_eye_base_240,
-            state.pupil_x,
-            state.pupil_y,
+            lx,
+            ly,
+            "open",
+            pupil_radius=state.pupil_radius_current,
+        )
+        eye_frame_right = render.render_animated_frame(
+            self._cached_eye_base_240,
+            rx,
+            ry,
             "open",
             pupil_radius=state.pupil_radius_current,
         )
         return FramePlan(
-            left=eye_frame,
-            right=eye_frame,
+            left=eye_frame_left,
+            right=eye_frame_right,
             inside_out=intent.inside_out,
             outside_in=intent.outside_in,
         )
