@@ -1,11 +1,11 @@
 /**
- * Dual-fan cooling harness control (BCM 24 via 2N2222 NPN).
+ * Dual-fan cooling harness control (BCM 26 via 2N2222 NPN).
  * Uses libgpiod (easy-gpiod, libgpiod 2.x) and software PWM so fans run without a daemon.
  *
- * Wiring: BCM 24 (Physical 18) → 1kΩ → transistor base. Emitter to GND, fan between 5V and collector.
+ * Wiring: BCM 26 (Physical 37) → 1kΩ → transistor base. Emitter to GND, fan between 5V and collector.
  * 1N4001 flyback diode across fan (cathode to 5V). Active-high: HIGH = fans on.
  *
- * BCM 24 has no hardware PWM on Pi Zero 2; PWM is software (fixed period, duty in userspace).
+ * BCM 26 has no hardware PWM on Pi Zero 2; PWM is software (fixed period, duty in userspace).
  * Soft-start ramps 0%→100% over 2 s to avoid voltage brownout.
  *
  * Thermal watchdog: polls vcgencmd measure_temp and sets fan 50% when idle (cool), 100% when hot
@@ -17,7 +17,7 @@
 
 import { execSync } from "node:child_process";
 
-const FAN_BCM = 24;
+const FAN_BCM = 26;
 const SOFT_START_MS = 2000;
 /** Software PWM period (ms). ~100 Hz to keep timing stable under SPI/CPU load. */
 const PWM_PERIOD_MS = 10;
@@ -127,7 +127,7 @@ function stopPwm(): void {
 
 /**
  * Call first, before any other GPIO or heavy work.
- * Sets BCM 24 to OUTPUT and LOW immediately so the fans don't float or flicker.
+ * Sets BCM 26 to OUTPUT and LOW immediately so the fans don't float or flicker.
  */
 export function init(): void {
 	if (initialized) return;

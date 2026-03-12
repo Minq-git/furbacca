@@ -87,7 +87,7 @@ You can manually send commands to the eyes from the Pi or your local Mac:
 | **Eye RST** | 27 | 13 | GC9A01 |
 | **Eye CS (Left)** | 8 | 24 | Display 1 |
 | **Eye CS (Right)** | 7 | 26 | Display 2 |
-| **Cooling Fan** | 24 | 18 | 2N2222 NPN (Active-High PWM) |
+| **Cooling Fan** | 26 | 37 | 2N2222 NPN (Active-High PWM) |
 | **Audio BCLK** | 18 | 12 | MAX98357A I2S DAC |
 | **Audio LRC** | 19 | 35 | MAX98357A I2S DAC |
 | **Audio DIN** | 21 | 40 | MAX98357A I2S DAC |
@@ -113,10 +113,10 @@ bash .scripts/setup/setup-fresh.sh
 
 ### 2. Code Synchronization (Mac to Pi)
 
-Add this alias to your local Mac's `~/.zshrc` to safely push code updates:
+Add this alias to your local Mac's `~/.zshrc` to safely push code updates. The Pi's `.env` (pupil offsets, etc.) is excluded from the sync and protected from deletion so a push never overwrites or removes it.
 
 ```bash
-alias push-furbacca='rsync -avz --delete --exclude node_modules --exclude .git --exclude env --exclude dist --exclude vision/py/gc9a01py /Users/YOUR_PATH/furbacca/ minqz@furbacca.local:~/furbacca/'
+alias push-furbacca='rsync -avz --delete --exclude node_modules --exclude .git --exclude env --exclude dist --exclude vision/py/gc9a01py --exclude .env -f "P .env" /Users/YOUR_PATH/furbacca/ minqz@furbacca.local:~/furbacca/'
 ```
 
 ### 3. Code Quality (Biome & Ruff)
@@ -157,6 +157,14 @@ Check the logs during startup for the QR code URL and manual pairing code, or ru
 **One or both displays are black / corrupted:**
 
 * Shared SPI buses can occasionally glitch during high-load startups. Trigger a hardware reset by running `./.scripts/fe-restart.sh` or by holding the **Head + Belly** sensors together for 5 seconds.
+
+**Pupils look skewed (e.g. “up and out”) inside the Furby chassis:**
+
+* When the eye displays are mounted in the chassis instead of flat on a breadboard, the pupils can appear shifted. Set per-eye offsets (same units as gaze; +x = right, +y = down) so forward gaze looks centered:
+  * `FURBACCA_PUPIL_OFFSET_LEFT_X`, `FURBACCA_PUPIL_OFFSET_LEFT_Y` — left display
+  * `FURBACCA_PUPIL_OFFSET_RIGHT_X`, `FURBACCA_PUPIL_OFFSET_RIGHT_Y` — right display
+  * Example: if the left pupil appears too far up and left, try `FURBACCA_PUPIL_OFFSET_LEFT_X=0.15` and `FURBACCA_PUPIL_OFFSET_LEFT_Y=0.1`; tune by eye.
+  * **Live tuning:** Stop the nervous system (Ctrl+C), then from repo root run `python3 -m vision.py.tune_eyes` to adjust offsets on the SPI displays and have it print the final `.env` lines.
 
 **Matter fails to start or crashes:**
 

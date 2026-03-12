@@ -2,6 +2,7 @@
 .nvmrc
 .vscode
 .DS_Store
+.env
 .furbacca-hardware.json
 .ruff_cache/
 stills

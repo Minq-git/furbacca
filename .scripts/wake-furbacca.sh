@@ -17,6 +17,14 @@ done
 
 cd "$REPO_DIR"
 
+# Load optional overrides from .env (pupil offsets, FURBACCA_*, etc.)
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  . .env
+  set +a
+fi
+
 # Refactor check: eyes live in vision/py/ (pull latest if missing)
 if [[ ! -f vision/py/main_eyes.py ]]; then
   echo "❌ vision/py/main_eyes.py not found. Sync from your Mac: push-furbacca"
