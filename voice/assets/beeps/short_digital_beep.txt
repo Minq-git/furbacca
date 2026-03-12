@@ -1,0 +1,1 @@
+A single, short, high-pitched digital beep.
