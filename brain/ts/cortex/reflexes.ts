@@ -11,7 +11,6 @@ import {
 } from "../../../senses/touch";
 import type { EyeBridge } from "../../../vision/ts/eye_bridge.js";
 
-// Optional: load at runtime so Pi can start even if dist/voice/ts/audio.js wasn't built (e.g. voice/ts not synced)
 let initAudio: () => void = () => {};
 let playWav: (filename: string, maxDurationSeconds?: number) => void = () => {};
 try {
@@ -44,6 +43,15 @@ export class Reflexes {
 	// Touch state
 	private headActive = false;
 	private bellyActive = false;
+
+	// --- DEBOUNCE TRACKING ---
+	// Prevents rapid-fire "ghost touches" from electrical noise
+	private lastTouchTimes: Record<string, number> = {
+		head: 0,
+		belly: 0,
+		shiver: 0,
+	};
+	private readonly TOUCH_COOLDOWN_MS = 1500;
 
 	/**
 	 * Holds:
@@ -190,6 +198,7 @@ export class Reflexes {
 	}
 
 	private onTouch(sensor: TouchSensor, active: boolean): void {
+		// Update hardware state instantly (needed for hold timers)
 		if (sensor === "head") this.headActive = active;
 		else if (sensor === "belly") this.bellyActive = active;
 
@@ -260,6 +269,18 @@ export class Reflexes {
 		}
 
 		if (!active) return;
+
+		// --- DEBOUNCE FILTER ---
+		// We only reach this point on a touch DOWN event.
+		// Check if the current time is too close to the last trigger.
+		const now = Date.now();
+		if (now - this.lastTouchTimes[sensor] < this.TOUCH_COOLDOWN_MS) {
+			return; // Drop the event, it's electrical noise
+		}
+		// Register the valid touch time
+		this.lastTouchTimes[sensor] = now;
+		// -----------------------
+
 		if (sensor === "head") {
 			console.log(msg.nervous_system.head_touch);
 			this.eyes.blink();
