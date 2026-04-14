@@ -1,1 +1,0 @@
-A single, short, high-pitched electronic beep sound, commonly used for notifications or system alerts.
