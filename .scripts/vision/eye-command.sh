@@ -7,14 +7,15 @@
 #   ./.scripts/vision/eye-command.sh blink
 #   ./.scripts/vision/eye-command.sh shape sharp
 #   ./.scripts/vision/eye-command.sh type dragon
-#   ./.scripts/vision/eye-command.sh furbacca.local anim shiver   # from Mac (fe anim shiver)
+#   ./.scripts/vision/eye-command.sh furbacca-v2.local anim shiver   # from Mac (fe anim shiver), or export FURBACCA_HOST
 set -e
 PORT="${EYE_UDP_PORT:-5005}"
-HOST="127.0.0.1"
+# Default: localhost (Pi). From Mac, set FURBACCA_HOST (e.g. furbacca-v2.local) or pass host as first arg.
+HOST="${FURBACCA_HOST:-127.0.0.1}"
 CMD=""
 SHAPE=""
 
-# Optional: first arg can be host (e.g. furbacca.local)
+# Optional: first arg can be host (e.g. furbacca.local, furbacca-v2.local, or an IP)
 if [[ -n "$1" && "$1" == *.* ]]; then
   HOST="$1"
   shift
@@ -53,7 +54,7 @@ case "$1" in
     ;;
   *)
     echo "Usage: $0 [host] <command> [arg]" >&2
-    echo "  host    optional; e.g. furbacca.local (default 127.0.0.1)" >&2
+    echo "  host    optional; e.g. furbacca-v2.local (default: FURBACCA_HOST or 127.0.0.1)" >&2
     echo "  command one of: cycle_eye_shape, shape <shape>, blink, cycle_eye_type, type <type>, anim <name>, nervous_look, shiver" >&2
     echo "  anim    anim <name> — nervous_look, shiver (or use nervous_look / shiver directly)" >&2
     echo "  shapes  round, sharp, half_moon, bean, oval, tilted, dome, pill, anime, concern, glare, gemini, heart, kawaii, stern, sus" >&2
@@ -62,7 +63,7 @@ case "$1" in
     echo "  $0 anim nervous_look" >&2
     echo "  $0 anim shiver" >&2
     echo "  $0 blink" >&2
-    echo "  $0 furbacca.local shape bean" >&2
+    echo "  $0 furbacca-v2.local shape bean" >&2
     exit 1
     ;;
 esac
